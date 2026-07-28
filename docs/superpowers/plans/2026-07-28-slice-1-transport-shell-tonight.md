@@ -1778,10 +1778,24 @@ describe('TopBar', () => {
     expect(screen.getByText('mcp 0.1.0')).toBeInTheDocument()
   })
 
-  it('never shows a healthy connection dot before telemetry is routed', () => {
-    const { container } = render(<TopBar site={site} replay={false} />)
-    expect(container.querySelectorAll('[data-dot="pass"]')).toHaveLength(0)
+  it('never shows fabricated connection telemetry', () => {
+    render(<TopBar site={site} replay={false} />)
+    // Assert on the design's literal pill copy, which is what a regression
+    // would actually reintroduce. An earlier version of this test queried
+    // [data-dot="pass"] — an attribute nothing in the codebase sets — so it
+    // passed vacuously and would have missed a dot added any other way.
+    expect(screen.queryByText(/bridge/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/fw \d/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/alt-az/i)).not.toBeInTheDocument()
     expect(screen.getByText(/slice 3/)).toBeInTheDocument()
+  })
+
+  it('renders the site name and Bortle from the profile', () => {
+    // The facts row is the only branch with property access; a typo'd field
+    // name would otherwise render blank with every test still green.
+    render(<TopBar site={site} replay={false} />)
+    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory (scope GPS)')
+    expect(screen.getByTestId('fact-bortle')).toHaveTextContent('8')
   })
 
   it('surfaces replay mode so fixtures are never mistaken for live data', () => {
@@ -1881,7 +1895,7 @@ Expected: FAIL — cannot resolve `./TopBar`
 import type { SiteProfile } from '../api/schemas'
 import styles from './TopBar.module.css'
 
-interface Props {
+export interface TopBarProps {
   site: SiteProfile | null
   replay: boolean
 }
@@ -1892,7 +1906,7 @@ interface Props {
  * that "a stale green dot on a dead bridge is worse than no dot" — so we render
  * an honest placeholder rather than a decorative healthy state.
  */
-export function TopBar({ site, replay }: Props) {
+export function TopBar({ site, replay }: TopBarProps) {
   return (
     <header className={styles.bar}>
       <div className={styles.brand}>
@@ -1904,10 +1918,10 @@ export function TopBar({ site, replay }: Props) {
       <div className={styles.spacer} />
       {site && (
         <div className={styles.facts}>
-          <span>
+          <span data-testid="fact-site">
             site <span className={styles.factValue}>{site.profile.name}</span>
           </span>
-          <span>
+          <span data-testid="fact-bortle">
             bortle{' '}
             <span className={styles.factValue}>{site.profile.bortle ?? '—'}</span>
           </span>
@@ -1936,17 +1950,100 @@ git commit -m "feat(web): top bar with honest placeholders for unrouted telemetr
 ## Task 10: Sidebar
 
 **Files:**
+- Create: `web/src/ui/Dot.tsx`, `web/src/ui/Dot.module.css`, `web/src/ui/Dot.test.tsx`
 - Create: `web/src/shell/Sidebar.tsx`, `web/src/shell/Sidebar.module.css`, `web/src/shell/Sidebar.test.tsx`
 
 **Interfaces:**
-- Consumes: `SiteProfile` (Task 6), `Verdict` (Task 7)
-- Produces: `<Sidebar site={SiteProfile | null} verdict={Verdict | null} />`
+- Consumes: `SiteProfile` (Task 6), `Verdict`/`verdictTone` (Task 7)
+- Produces: `<Dot tone={DotTone} size?={'sm' | 'md'} />` and `type DotTone`; `<Sidebar site={SiteProfile | null} verdict={Verdict | null} />`
+
+**Why `Dot` exists.** This is the first component to render status dots, and dots
+recur through every later slice — guardrail rows, the chat header, chips. The
+Task 9 review found a guard test querying `[data-dot="pass"]` when nothing in the
+codebase set that attribute: it passed vacuously and would have missed a dot
+added any other way. Routing every dot through one component makes `data-dot` a
+**guarantee** rather than a convention an author can forget, so "no healthy dot
+is on screen" becomes a claim a test can actually make.
 
 **Spec** (§ Sidebar): 214px wide, `border-right: 1px solid var(--border-subtle)`, `background: var(--bg-chrome)`, `padding: 14px 10px`, column flex. Eyebrow `Session` (Mono 500/10px/`.12em`/uppercase/`text/fainter`), `padding: 0 8px 10px`. Nav buttons: full width, `9px 8px`, radius 6px, `2px` bottom margin, `gap: 10px`, Sans 500/12.5px, left-aligned; active = `--bg-hover` + `--text-primary`, inactive = transparent + `--text-dim`. Layout `[6px dot] [label flex:1] [meta Mono 400 10px --text-fainter]`.
 
 **Slice-1 states.** Only Tonight is implemented; the other three render disabled with meta `slice 2–4`. The Tonight dot takes the verdict tone. The Site profile block must reflect **real** data: `min_altitude_deg` and `field_rotation_ceiling_deg` come from the profile, never hardcoded; `horizon_mask: []` renders `mask off`, not "3 arcs"; and `location.matched === null` turns the confident `pass` row into a `marginal` warning carrying `location.warning` verbatim.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the Dot primitive and its test**
+
+`web/src/ui/Dot.test.tsx`:
+
+```tsx
+import { render, screen } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { Dot } from './Dot'
+
+describe('Dot', () => {
+  it('tags every tone with data-dot so tests can assert on dots', () => {
+    const { rerender } = render(<Dot tone="pass" />)
+    expect(screen.getByTestId('dot')).toHaveAttribute('data-dot', 'pass')
+    rerender(<Dot tone="reject" />)
+    expect(screen.getByTestId('dot')).toHaveAttribute('data-dot', 'reject')
+  })
+
+  it('supports the two sizes the design uses', () => {
+    const { rerender } = render(<Dot tone="pass" />)
+    const md = screen.getByTestId('dot').className
+    rerender(<Dot tone="pass" size="sm" />)
+    expect(screen.getByTestId('dot').className).not.toBe(md)
+  })
+})
+```
+
+`web/src/ui/Dot.module.css`:
+
+```css
+.dot { border-radius: 50%; flex: 0 0 auto; }
+.md { width: 6px; height: 6px; }
+.sm { width: 5px; height: 5px; }
+.pass { background: var(--pass); }
+.marginal { background: var(--marginal); }
+.reject { background: var(--reject); }
+.accent { background: var(--accent); }
+.idle { background: var(--text-ghost); }
+```
+
+`web/src/ui/Dot.tsx`:
+
+```tsx
+import styles from './Dot.module.css'
+
+export type DotTone = 'pass' | 'marginal' | 'reject' | 'accent' | 'idle'
+
+export interface DotProps {
+  tone: DotTone
+  /** 6px in headers and nav, 5px in guardrail rows and chips. */
+  size?: 'sm' | 'md'
+}
+
+/**
+ * Every status dot renders through here.
+ *
+ * `data-dot` is not decoration. It is the only reliable way for a test to
+ * assert that no dot of a given tone is on screen — and a guard that queried
+ * that attribute while nothing set it passed vacuously for a whole task. One
+ * component makes the attribute a guarantee rather than a convention.
+ */
+export function Dot({ tone, size = 'md' }: DotProps) {
+  return (
+    <span
+      data-testid="dot"
+      data-dot={tone}
+      className={`${styles.dot} ${styles[size]} ${styles[tone]}`}
+    />
+  )
+}
+```
+
+Run: `cd web && npm test -- Dot`
+Expected: PASS — 2 tests
+
+- [ ] **Step 2: Write the failing Sidebar test**
 
 `web/src/shell/Sidebar.test.tsx`:
 
@@ -1989,6 +2086,26 @@ describe('Sidebar', () => {
   it('renders without a profile', () => {
     render(<Sidebar site={null} verdict={null} />)
     expect(screen.getByText('Session')).toBeInTheDocument()
+  })
+
+  it('gives the Tonight dot the verdict tone and leaves the rest idle', () => {
+    // This assertion is only possible because every dot routes through <Dot>,
+    // which guarantees data-dot. The Task 9 review found a guard querying that
+    // attribute when nothing set it — it passed vacuously for a whole task.
+    render(<Sidebar site={site} verdict="NO-GO" />)
+    const dots = screen.getAllByTestId('dot')
+    expect(dots).toHaveLength(4)
+    expect(dots[0]).toHaveAttribute('data-dot', 'reject')
+    expect(dots.slice(1).every((d) => d.getAttribute('data-dot') === 'idle')).toBe(true)
+  })
+
+  it('shows a pass dot only when the night is a GO', () => {
+    const { rerender } = render(<Sidebar site={site} verdict="NO-GO" />)
+    expect(screen.queryAllByTestId('dot').filter(
+      (d) => d.getAttribute('data-dot') === 'pass',
+    )).toHaveLength(0)
+    rerender(<Sidebar site={site} verdict="GO" />)
+    expect(screen.getAllByTestId('dot')[0]).toHaveAttribute('data-dot', 'pass')
   })
 })
 ```
@@ -2045,11 +2162,8 @@ Expected: FAIL — cannot resolve `./Sidebar`
 .navActive { background: var(--bg-hover); color: var(--text-primary); }
 .nav:disabled { cursor: default; opacity: 0.55; }
 
-.dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
-.dotPass { background: var(--pass); }
-.dotReject { background: var(--reject); }
-.dotMarginal { background: var(--marginal); }
-.dotIdle { background: var(--text-ghost); }
+/* Dot styling lives in ui/Dot.module.css — every dot in the app renders
+   through that component so `data-dot` is guaranteed, not conventional. */
 
 .label { flex: 1; }
 
@@ -2098,29 +2212,23 @@ Expected: FAIL — cannot resolve `./Sidebar`
 ```tsx
 import type { SiteProfile } from '../api/schemas'
 import { verdictTone, type Verdict } from '../api/verdict'
+import { Dot } from '../ui/Dot'
 import styles from './Sidebar.module.css'
 
-interface Props {
+export interface SidebarProps {
   site: SiteProfile | null
   verdict: Verdict | null
 }
 
-const TONE_CLASS = {
-  pass: styles.dotPass,
-  reject: styles.dotReject,
-  marginal: styles.dotMarginal,
-} as const
-
-export function Sidebar({ site, verdict }: Props) {
+export function Sidebar({ site, verdict }: SidebarProps) {
   const profile = site?.profile
-  const tone = verdict ? TONE_CLASS[verdictTone(verdict)] : styles.dotIdle
 
   return (
     <nav className={styles.rail}>
       <div className={styles.eyebrow}>Session</div>
 
       <button className={`${styles.nav} ${styles.navActive}`}>
-        <span className={`${styles.dot} ${tone}`} />
+        <Dot tone={verdict ? verdictTone(verdict) : 'idle'} />
         <span className={styles.label}>Tonight's plan</span>
         <span className={styles.meta}>{verdict ?? '—'}</span>
       </button>
@@ -2131,7 +2239,7 @@ export function Sidebar({ site, verdict }: Props) {
         ['Projects', 'slice 2'],
       ].map(([label, meta]) => (
         <button key={label} className={styles.nav} disabled>
-          <span className={`${styles.dot} ${styles.dotIdle}`} />
+          <Dot tone="idle" />
           <span className={styles.label}>{label}</span>
           <span className={styles.meta}>{meta}</span>
         </button>
