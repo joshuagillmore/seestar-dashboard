@@ -281,7 +281,7 @@ git commit -m "feat(sidecar): allowlist-gated FastAPI skeleton with health endpo
 
 **Files:**
 - Create: `sidecar/seestar_sidecar/mcp_proxy.py`, `sidecar/tests/stub_mcp_server.py`, `sidecar/tests/test_proxy.py`
-- Modify: `sidecar/seestar_sidecar/main.py` (add lifespan)
+- Do **not** modify `sidecar/seestar_sidecar/main.py`. Task 4 Step 5 replaces it wholesale, lifespan wiring included; adding it here would only be overwritten.
 
 **Interfaces:**
 - Consumes: nothing from Task 1 beyond `create_app`
