@@ -33,8 +33,23 @@ async def whoami() -> dict:
 
 @mcp.tool()
 async def failing_tool() -> dict:
-    """Always raises, to exercise tool-level failure."""
+    """Raise inside a HEALTHY server, to exercise tool-level failure.
+
+    Comes back to the client as CallToolResult(isError=True) — the session
+    survives. Contrast crash_the_server below.
+    """
     raise RuntimeError("stub failure")
+
+
+@mcp.tool()
+async def crash_the_server() -> dict:
+    """Kill this process mid-call, breaking the pipe.
+
+    This is the only way to exercise call()'s except branch and its _reset():
+    a tool that merely raises is caught by the isError check and never touches
+    the session, so it cannot stand in for a genuine transport failure.
+    """
+    os._exit(1)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from seestar_sidecar.mcp_proxy import McpConnection, ProxyTransportError
+from tests.stub_mcp_server import CANNED_PROFILE
 
 STUB = str(Path(__file__).parent / "stub_mcp_server.py")
 
@@ -17,8 +18,6 @@ async def connection():
 
 
 async def test_call_returns_the_tools_dict_verbatim(connection):
-    from tests.stub_mcp_server import CANNED_PROFILE
-
     assert await connection.call("get_site_profile", {}) == CANNED_PROFILE
 
 
@@ -53,9 +52,34 @@ async def test_tool_level_failure_surfaces_as_transport_error(connection):
         await connection.call("failing_tool", {})
 
 
-async def test_session_recovers_after_a_failed_call(connection):
+async def test_a_raising_tool_leaves_the_session_intact(connection):
+    """isError is not a transport failure — the subprocess is still healthy.
+
+    Deliberately NOT named "recovers": nothing was reset, so there is nothing
+    to recover from. Conflating this with the reset path is how the reset path
+    went untested in the first place.
+    """
     with pytest.raises(ProxyTransportError):
         await connection.call("failing_tool", {})
-    from tests.stub_mcp_server import CANNED_PROFILE
-
+    assert connection.is_started
     assert await connection.call("get_site_profile", {}) == CANNED_PROFILE
+
+
+async def test_transport_failure_mid_call_resets_the_session(connection):
+    """The subprocess dies, so call_tool() itself raises.
+
+    This is the ONLY path that reaches call()'s except branch and its
+    _reset(). It is what recovers the connection when the MCP server dies
+    mid-session — the failure a night-long polling dashboard will actually
+    hit — so it must be covered.
+    """
+    with pytest.raises(ProxyTransportError):
+        await connection.call("crash_the_server", {})
+    assert not connection.is_started
+
+
+async def test_session_restarts_after_a_transport_failure(connection):
+    with pytest.raises(ProxyTransportError):
+        await connection.call("crash_the_server", {})
+    assert await connection.call("get_site_profile", {}) == CANNED_PROFILE
+    assert connection.is_started
