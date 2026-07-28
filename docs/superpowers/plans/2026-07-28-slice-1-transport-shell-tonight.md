@@ -1022,6 +1022,14 @@ Transcribe **every row** of the Color table in `docs/design/README.md` (52 rows,
   --radius-card: 10px;
   --radius-control: 6px;
   --radius-chip: 4px;
+
+  /* The twilight strip's gradient — darkness deepens toward the middle. The
+     handoff specifies it in the timeline section rather than the token table,
+     but it lives here so tokens.css stays the only file with hex literals. */
+  --twilight-strip: linear-gradient(
+    90deg, #1b1f24 0%, #171b20 25%, #0f1215 32%,
+    #0f1215 85%, #171b20 90%, #1b1f24 100%
+  );
 }
 
 @keyframes livePulse {
@@ -1084,7 +1092,7 @@ git commit -m "feat(web): Vite scaffold with the 52-token design system and guar
 
 **Interfaces:**
 - Consumes: `fixtures/` (Task 3)
-- Produces: `ConditionsSchema`, `PlanTargetsSchema`, `SiteProfileSchema`, and the inferred types `Conditions`, `PlanTargets`, `PlanTarget`, `SiteProfile`
+- Produces: `ConditionsSchema`, `PlanTargetsSchema`, `SiteProfileSchema`, `HealthSchema`, and the inferred types `Conditions`, `PlanTargets`, `PlanTarget`, `SiteProfile`, `Health`
 
 - [ ] **Step 1: Write the fixture loader**
 
@@ -1243,10 +1251,16 @@ export const SiteProfileSchema = z.object({
   }),
 })
 
+export const HealthSchema = z.object({
+  ok: z.boolean(),
+  replay: z.boolean(),
+})
+
 export type Conditions = z.infer<typeof ConditionsSchema>
 export type PlanTargets = z.infer<typeof PlanTargetsSchema>
 export type PlanTarget = z.infer<typeof PlanTargetSchema>
 export type SiteProfile = z.infer<typeof SiteProfileSchema>
+export type Health = z.infer<typeof HealthSchema>
 ```
 
 - [ ] **Step 5: Run and confirm it passes**
@@ -1352,7 +1366,7 @@ git commit -m "feat(web): verdict mapping with CONDITIONAL deliberately unrender
 
 **Interfaces:**
 - Consumes: schemas (Task 6)
-- Produces: `fetchConditions()`, `fetchPlan(limit?)`, `fetchSite()`, each `Promise<T>`; `ApiError`
+- Produces: `fetchConditions()`, `fetchPlan(limit?)`, `fetchSite()`, `fetchHealth()`, each `Promise<T>`; `ApiError`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1403,9 +1417,11 @@ Expected: FAIL — cannot resolve `./client`
 import type { ZodType } from 'zod'
 import {
   ConditionsSchema,
+  HealthSchema,
   PlanTargetsSchema,
   SiteProfileSchema,
   type Conditions,
+  type Health,
   type PlanTargets,
   type SiteProfile,
 } from './schemas'
@@ -1443,6 +1459,9 @@ export const fetchPlan = (limit = 3): Promise<PlanTargets> =>
 
 export const fetchSite = (): Promise<SiteProfile> =>
   get('/api/get_site_profile', SiteProfileSchema)
+
+/** Drives the top bar's "fixtures — not live" indicator. */
+export const fetchHealth = (): Promise<Health> => get('/api/health', HealthSchema)
 ```
 
 - [ ] **Step 4: Run and confirm it passes**
@@ -2004,7 +2023,11 @@ Expected: FAIL — cannot resolve `./VerdictBanner`
   color: var(--marginal);
 }
 
-.stats { display: grid; grid-template-columns: repeat(4, auto); gap: 0 26px; }
+/* The handoff specifies `repeat(4,auto)` with `gap: 0 26px`. A flex row of
+   label/value columns is visually identical and avoids relying on grid
+   auto-placement to interleave eight children into two rows correctly. */
+.stats { display: flex; gap: 26px; }
+.stat { display: flex; flex-direction: column; }
 
 .statLabel {
   font-family: var(--font-mono);
@@ -2039,11 +2062,10 @@ function Stat({ id, label, value, tone }: {
 }) {
   const absent = value === null
   return (
-    <>
-      <div className={styles.statLabel} style={{ gridRow: 1 }}>{label}</div>
+    <div className={styles.stat}>
+      <div className={styles.statLabel}>{label}</div>
       <div
         data-testid={`stat-${id}`}
-        style={{ gridRow: 2 }}
         className={`${styles.statValue} ${absent ? styles.statAbsent : ''} ${
           tone === 'pass' && !absent ? styles.statPass : ''
         }`}
@@ -2051,7 +2073,7 @@ function Stat({ id, label, value, tone }: {
       >
         {value ?? '—'}
       </div>
-    </>
+    </div>
   )
 }
 
@@ -2279,7 +2301,7 @@ describe('SweetBandTimeline', () => {
   position: relative;
   height: 14px;
   border-radius: 3px;
-  background: linear-gradient(90deg, #1b1f24 0%, #171b20 25%, #0f1215 32%, #0f1215 85%, #171b20 90%, #1b1f24 100%);
+  background: var(--twilight-strip);
 }
 
 .bracket { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--chart-rail-empty); border-right: 1px solid var(--chart-rail-empty); }
@@ -2609,6 +2631,7 @@ function stubApi(overrides: Record<string, unknown> = {}) {
     '/api/assess_conditions': recordedConditions(),
     '/api/plan_targets?limit=3': recordedPlan(),
     '/api/get_site_profile': recordedSite(),
+    '/api/health': { ok: true, replay: false },
     ...overrides,
   }
   vi.stubGlobal(
@@ -2663,8 +2686,8 @@ describe('TonightScreen', () => {
 
 ```tsx
 import { useEffect, useState } from 'react'
-import { fetchConditions, fetchPlan, fetchSite } from '../../api/client'
-import type { Conditions, PlanTargets, SiteProfile } from '../../api/schemas'
+import { fetchConditions, fetchHealth, fetchPlan, fetchSite } from '../../api/client'
+import type { Conditions, Health, PlanTargets, SiteProfile } from '../../api/schemas'
 import { verdictFor } from '../../api/verdict'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
@@ -2678,6 +2701,7 @@ interface Data {
   conditions: Conditions
   plan: PlanTargets
   site: SiteProfile
+  health: Health
 }
 
 export function TonightScreen() {
@@ -2686,9 +2710,9 @@ export function TonightScreen() {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetchConditions(), fetchPlan(3), fetchSite()])
-      .then(([conditions, plan, site]) => {
-        if (!cancelled) setData({ conditions, plan, site })
+    Promise.all([fetchConditions(), fetchPlan(3), fetchSite(), fetchHealth()])
+      .then(([conditions, plan, site, health]) => {
+        if (!cancelled) setData({ conditions, plan, site, health })
       })
       .catch((cause: Error) => {
         if (!cancelled) setError(cause.message)
@@ -2702,7 +2726,7 @@ export function TonightScreen() {
 
   return (
     <AppShell
-      topBar={<TopBar site={data?.site ?? null} replay={false} />}
+      topBar={<TopBar site={data?.site ?? null} replay={data?.health.replay ?? false} />}
       sidebar={<Sidebar site={data?.site ?? null} verdict={verdict} />}
     >
       <div className={styles.screen}>
