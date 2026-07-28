@@ -46,7 +46,11 @@ export function Sidebar({ site, verdict, gpsWarning }: SidebarProps) {
           <div className={styles.eyebrow}>Site profile</div>
           <div className={styles.siteName}>{profile.name}</div>
           <div className={styles.siteMeta}>
-            {profile.lat_deg.toFixed(3)} N · {Math.abs(profile.lon_deg).toFixed(3)} W
+            {/* The sign carries the hemisphere; it must be read from the
+                payload, not assumed. lat_deg/lon_deg are signed floats — a
+                southern or eastern site must not render "N"/"W" regardless. */}
+            {Math.abs(profile.lat_deg).toFixed(3)} {profile.lat_deg >= 0 ? 'N' : 'S'} ·{' '}
+            {Math.abs(profile.lon_deg).toFixed(3)} {profile.lon_deg >= 0 ? 'E' : 'W'}
           </div>
           <div className={styles.siteMeta}>
             Bortle {profile.bortle ?? '—'} · floor {profile.min_altitude_deg}° · ceiling{' '}

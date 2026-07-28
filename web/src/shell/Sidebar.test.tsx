@@ -15,6 +15,23 @@ describe('Sidebar', () => {
     expect(screen.queryByText(/floor 25°/)).not.toBeInTheDocument()
   })
 
+  it('derives hemisphere letters from the sign, not a hardcoded N/W', () => {
+    // Recorded profile is Example Observatory: lat +51.4778 (N), lon -0.0015 (W) — a site where
+    // hardcoding "N"/"W" happens to look right. A southern, eastern site is
+    // the one case that actually exercises the sign.
+    const southernEastern = SiteProfileSchema.parse({
+      ok: true,
+      profile: { ...site.profile, lat_deg: -33.868, lon_deg: 151.209 },
+    })
+    render(<Sidebar site={southernEastern} verdict="NO-GO" gpsWarning={null} />)
+    expect(screen.getByText(/33\.868 S/)).toBeInTheDocument()
+    expect(screen.getByText(/151\.209 E/)).toBeInTheDocument()
+    expect(screen.queryByText(/33\.868 N/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/151\.209 W/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/-33\.868/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/-151\.209/)).not.toBeInTheDocument()
+  })
+
   it('renders an empty horizon mask as off', () => {
     render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
     expect(screen.getByText(/mask off/)).toBeInTheDocument()
