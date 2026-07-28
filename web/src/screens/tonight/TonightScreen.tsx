@@ -82,6 +82,18 @@ export function TonightScreen() {
                   conditions={data.conditions}
                   targets={data.plan.targets}
                 />
+                {/* plan_targets ranks on observability alone (astropy geometry,
+                    altitude, moon separation) — a different question from the
+                    sky judgment in assess_conditions — so the server genuinely
+                    returns a ranked shortlist even on a no-go night. Showing it
+                    is honest; this caption is what keeps it from reading as an
+                    invitation to act, which the disabled hand-off buttons
+                    already guard against structurally. */}
+                {verdict === 'NO-GO' && (
+                  <div className={styles.rankedCaption}>
+                    Ranked for reference — tonight is a no-go.
+                  </div>
+                )}
                 <div className={styles.grid}>
                   {data.plan.targets.map((target) => (
                     <PlanCard key={target.id} target={target} />
