@@ -163,18 +163,37 @@ this dashboard — it means session quality history is not being retained anywhe
 
 ---
 
-## 8. No tool returns target imagery
+## 8. No tool returns target imagery — but the imagery exists on disk
+
+> **Corrected 2026-07-28.** This item originally read "no tool returns target
+> imagery" and treated it as a server gap. That was wrong. The exports are on
+> the user's machine at `C:\Users\<user>\OneDrive\Documents\SeeStar` — 19,622
+> files, 11,818 JPEG and 7,804 FITS — in exactly the convention the design
+> handoff describes. **This is a dashboard feature, not a SeeStar-AI change**,
+> and it is tracked in `slice-2-backlog.md` rather than here.
 
 **Affects:** the 64×88 thumbnails on Tonight plan cards, the 96px project covers, the Live preview
 image, and the Review master image.
 
-The design's five reference JPEGs are stand-ins the user supplied. In production the handoff notes
-these "come from the scope's own storage," but no tool exposes them.
+The archive is laid out one directory per target, with masters and subs separated:
 
-**Asked for:** a read-only path to stacked previews — either a tool returning a path/URL per
-target, or a documented on-disk convention the sidecar can serve from. The S50 export naming
-(`Stacked_<target>_<exposure>_<filter>_<timestamp>[_thn].jpg`) already encodes what's needed to
-match an image to a target.
+```
+C 33/       Stacked_C 33_10.0s_LP_20240104-202236.fit   + _thn.jpg
+C 33-sub/   Light_C 33_10.0s_LP_20240104-200144.fit     + _thn.jpg
+```
+
+So `Stacked_<target>_…_thn.jpg` is already a per-target thumbnail, and the
+`-sub` directories hold the individual `Light_*.fit` frames that `qa_tier2`
+scores — which is the raw material the Review screen needs in slice 4.
+
+**What remains for the server, if anything:** only a canonical answer to *where*
+that directory lives, so the sidecar is not hardcoding a personal path. A
+`data_root` field on `get_site_profile`, or an existing config value the tool
+already knows, would do it. Everything else can be served from disk.
+
+**Note the target-name mismatch.** Directories use spaced catalogue names
+(`M 31`, `NGC 281`) while the tools use unspaced ids (`M31`, `NGC281`). Any
+lookup needs to normalise, and one directory is simply named `Unknown`.
 
 ---
 
@@ -217,7 +236,7 @@ which is the honest picture.
 | 5 | Filter recommendation | Filter chip | Yes — `lp_fit` computed |
 | 6 | Three-state verdict | CONDITIONAL state | Partly — `go` is already compound |
 | 7 | `median_fwhm` always null | Projects meta + history column | Unknown — possible write-path bug |
-| 8 | No target imagery | All thumbnails | No |
+| 8 | ~~No target imagery~~ — **not a server gap**, the archive is on disk | All thumbnails | N/A — dashboard feature, see `slice-2-backlog.md` |
 | 9 | Only the longest sweet-band span returned | Fragmented-band rendering; ranker figure and chart disagree | Yes — the mask exists, `_longest_run` is one reduction over it |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an

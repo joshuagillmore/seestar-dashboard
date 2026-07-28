@@ -8,6 +8,70 @@ branch.
 Nothing on this list is a defect on screen. Slice 1's rule — nothing rendered
 asserts something nobody verified — holds as shipped.
 
+## Blocks slice 2's Projects screen: "time on target" is currently unknowable
+
+Found 2026-07-28, after slice 1 was complete. This is a design constraint, not a
+defect — but the Projects screen cannot be built honestly without resolving it.
+
+There are **two disjoint records of what has been imaged**, and neither is complete:
+
+| Source | Span | Targets | Integration |
+|---|---|---|---|
+| `list_projects` store | Jul 2026 | 15 | 9.1 h |
+| `C:\Users\<user>\OneDrive\Documents\SeeStar` | Dec 2023 – Mar 2024 | 20 | **20.9 h** |
+
+They overlap on **two** targets: `NGC 281` and `M 31`. A Projects screen reading
+`list_projects` alone would report 9.1 hours and be blind to 20.9 hours sitting
+on disk.
+
+The M 31 case shows why this matters: the store holds 84.2 min from July 2026,
+the archive holds a further 38.3 min from January 2024, and **neither source
+knows the real total of roughly 122 min**. Progress toward an hours goal — the
+entire point of the screen — would be stated confidently and be wrong.
+
+Counted from the archive (each `Light_*.fit` is one sub; exposure is in the
+filename, 10.0s throughout):
+
+```
+IC 405    1303 subs  217.2 min   5 nights   M 45     447   74.5    4 nights
+M 42      1204        200.7      6          LDN 1625 418   69.7    1
+NGC 1499   647        107.8      2          NGC 281  283   47.2    2
+M 81       587         97.8      2          M 1      265   44.2    4
+SH2-142    558         93.0      2          M 31     230   38.3    1
+Unknown    535         89.2      1          …14 more targets
+```
+
+**Before building the Projects screen, decide:**
+
+1. **Which source is authoritative** — the store, the filesystem, or a union. A
+   union needs target-name normalisation (`M 31` on disk vs `M31` in the tools)
+   and de-duplication where a night appears in both.
+2. **Where that reconciliation belongs.** Counting FITS files to derive
+   integration time is arguably server work — it is the same data `qa_tier2`
+   already walks — which would put it behind the hand-back rule. Doing it in the
+   sidecar is faster but means the dashboard and the MCP server disagree about
+   how much data exists.
+3. **Whether the store should be backfilled** from the archive, so
+   `list_projects` becomes the single source of truth and this problem stops
+   recurring.
+
+Related: hand-back item 7 records that `median_fwhm` is `null` on every session
+record in the store. Between that and the missing 20.9 hours, the projects store
+is currently a partial record of observing history rather than a complete one.
+
+## Imagery: a dashboard feature, not a server gap
+
+Same archive, same discovery. `Stacked_<target>_…_thn.jpg` is a ready-made
+thumbnail per target, and the `-sub` directories hold every individual frame.
+That is what the design's plan-card thumbnails, project covers and Review master
+image need — so the sidecar can serve them from disk.
+
+Hand-back item 8 has been corrected accordingly; the only thing still owed by the
+server is a canonical `data_root` so the sidecar is not hardcoding a personal
+path. Note the sidecar's route allowlist currently exposes tool calls only —
+serving image bytes is a new route class and should be read-only and
+path-constrained, not a general static mount.
+
 ## Fix in slice 2
 
 | Item | Where | Why now |
