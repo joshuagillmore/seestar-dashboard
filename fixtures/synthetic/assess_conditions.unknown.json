@@ -10,17 +10,17 @@
   "go": null,
   "suitability": 0,
   "cloud_cover_pct": null,
-  "dew_risk": "high",
+  "dew_risk": "unknown",
   "wind_kph": null,
   "transparency": null,
   "seeing": null,
-  "moon_illum_frac": 0.9877644441237166,
+  "moon_illum_frac": 0.0,
   "dark_window_utc": [
     "2026-09-24T19:48:37.257",
     "2026-09-25T03:53:37.257"
   ],
-  "source": "unavailable",
+  "source": "unknown",
   "reasons": [
-    "weather source unreachable — assess the sky manually"
+    "weather unavailable — assess the sky manually"
   ]
 }
