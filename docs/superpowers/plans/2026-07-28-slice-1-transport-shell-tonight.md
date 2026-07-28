@@ -331,8 +331,23 @@ async def whoami() -> dict:
 
 @mcp.tool()
 async def failing_tool() -> dict:
-    """Always raises, to exercise tool-level failure."""
+    """Raise inside a HEALTHY server, to exercise tool-level failure.
+
+    Comes back to the client as CallToolResult(isError=True) — the session
+    survives. Contrast crash_the_server below.
+    """
     raise RuntimeError("stub failure")
+
+
+@mcp.tool()
+async def crash_the_server() -> dict:
+    """Kill this process mid-call, breaking the pipe.
+
+    This is the only way to exercise call()'s except branch and its _reset():
+    a tool that merely raises is caught by the isError check and never touches
+    the session, so it cannot stand in for a genuine transport failure.
+    """
+    os._exit(1)
 
 
 if __name__ == "__main__":
@@ -399,13 +414,48 @@ async def test_tool_level_failure_surfaces_as_transport_error(connection):
         await connection.call("failing_tool", {})
 
 
-async def test_session_recovers_after_a_failed_call(connection):
+async def test_a_raising_tool_leaves_the_session_intact(connection):
+    """isError is not a transport failure — the subprocess is still healthy.
+
+    Deliberately NOT named "recovers": nothing was reset, so there is nothing
+    to recover from. Conflating this with the reset path is how the reset path
+    went untested in the first place.
+    """
     with pytest.raises(ProxyTransportError):
         await connection.call("failing_tool", {})
-    from tests.stub_mcp_server import CANNED_PROFILE
-
+    assert connection.is_started
     assert await connection.call("get_site_profile", {}) == CANNED_PROFILE
+
+
+async def test_transport_failure_mid_call_resets_the_session(connection):
+    """The subprocess dies, so call_tool() itself raises.
+
+    This is the ONLY path that reaches call()'s except branch and its
+    _reset(). It is what recovers the connection when the MCP server dies
+    mid-session — the failure a night-long polling dashboard will actually
+    hit — so it must be covered.
+    """
+    with pytest.raises(ProxyTransportError):
+        await connection.call("crash_the_server", {})
+    assert not connection.is_started
+
+
+async def test_session_restarts_after_a_transport_failure(connection):
+    with pytest.raises(ProxyTransportError):
+        await connection.call("crash_the_server", {})
+    assert await connection.call("get_site_profile", {}) == CANNED_PROFILE
+    assert connection.is_started
 ```
+
+Import `CANNED_PROFILE` at module scope in the test file rather than inside each
+test.
+
+**Third SDK/OS uncertainty, flagged like the other two:** `os._exit(1)` inside a
+tool should surface to the client as a broken pipe or closed-stream error out of
+`call_tool()`. If instead the client **hangs** waiting for a response that will
+never come, do not leave a hanging test in the suite — report it, and say what
+the client did. A hang is a finding about the proxy worth knowing (a dead server
+should not wedge the dashboard), not merely a test-harness problem.
 
 **SDK uncertainty, same class as `_extract_payload`'s:** a FastMCP tool that raises
 may surface either as an exception out of `session.call_tool()` or as a returned
@@ -532,7 +582,7 @@ def _extract_payload(result: Any) -> dict:
 - [ ] **Step 5: Run tests and confirm they pass**
 
 Run: `cd sidecar && uv run pytest tests/test_proxy.py -v`
-Expected: PASS — 5 tests
+Expected: PASS — 7 tests
 
 - [ ] **Step 6: Commit**
 
@@ -1949,7 +1999,7 @@ export function Sidebar({ site, verdict }: Props) {
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- Sidebar`
-Expected: PASS — 5 tests
+Expected: PASS — 7 tests
 
 - [ ] **Step 5: Commit**
 
@@ -2677,7 +2727,7 @@ export function PlanCard({ target }: { target: PlanTarget }) {
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- PlanCard`
-Expected: PASS — 5 tests
+Expected: PASS — 7 tests
 
 - [ ] **Step 5: Write the failing screen test**
 
