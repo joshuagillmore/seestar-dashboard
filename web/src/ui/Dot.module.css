@@ -1,0 +1,8 @@
+.dot { border-radius: 50%; flex: 0 0 auto; }
+.md { width: 6px; height: 6px; }
+.sm { width: 5px; height: 5px; }
+.pass { background: var(--pass); }
+.marginal { background: var(--marginal); }
+.reject { background: var(--reject); }
+.accent { background: var(--accent); }
+.idle { background: var(--text-ghost); }

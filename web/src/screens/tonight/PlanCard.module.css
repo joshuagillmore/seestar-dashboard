@@ -1,0 +1,26 @@
+.card { display: flex; flex-direction: column; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-card); overflow: hidden; }
+.head { padding: 14px 15px; border-bottom: 1px solid var(--border-subtle); }
+.titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.id { font-family: var(--font-sans); font-weight: 600; font-size: 16px; white-space: nowrap; color: var(--text-primary); }
+.scoreWrap { display: flex; align-items: baseline; gap: 5px; }
+.score { font-family: var(--font-mono); font-weight: 500; font-size: 18px; line-height: 1; color: var(--accent); }
+.scoreLabel { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-faint); }
+.name { margin-top: 4px; font-family: var(--font-sans); font-size: 11.5px; color: var(--text-dimmer); }
+.chips { display: flex; gap: 6px; margin-top: 9px; }
+.chip { padding: 3px 7px; border: 1px solid var(--border-default); border-radius: var(--radius-chip); font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dimmer); }
+
+.stats { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border-subtle); }
+.stat { padding: 11px 15px; }
+.stat + .stat { border-left: 1px solid var(--border-subtle); }
+.statLabel { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.08em; color: var(--text-faint); }
+.statValue { margin-top: 6px; font-family: var(--font-mono); font-weight: 500; font-size: 13px; color: var(--text-primary); }
+
+.reasons { flex: 1; padding: 12px 15px; border-bottom: 1px solid var(--border-subtle); }
+.reasonList { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.reasonRow { display: flex; gap: 8px; font-family: var(--font-sans); font-size: 11.5px; line-height: 1.45; color: var(--text-muted); }
+.plus { color: var(--accent); }
+
+.actions { display: flex; gap: 8px; padding: 12px 15px; }
+.primary { flex: 1; padding: 9px 13px; border: 0; border-radius: var(--radius-control); background: var(--accent); color: var(--accent-on-accent); font-family: var(--font-sans); font-weight: 500; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.primary:disabled { opacity: 0.45; cursor: default; }
+.secondary { padding: 9px 13px; border: 1px solid var(--border-control); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-family: var(--font-sans); font-weight: 500; font-size: 12px; cursor: pointer; }

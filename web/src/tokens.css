@@ -1,0 +1,110 @@
+/* Transcribed verbatim from docs/design/README.md § Design Tokens → Color.
+   This is the ONLY file in web/src permitted to contain a hex literal.
+   Semantic rule from the handoff: `accent` is never a verdict. Verdicts are
+   pass/marginal/reject; the accent marks the live or actionable thing. */
+:root {
+  --bg-root: #0d0e10;
+  --bg-chrome: #101215;
+  --bg-chrome-alt: #0f1114;
+  --bg-card: #15171a;
+  --bg-card-sunken: #131518;
+  --bg-cell: #181b1e;
+  --bg-inset: #101317;
+  --bg-hover: #1e2226;
+  --bg-seg-active: #2a2f34;
+  --bg-seg-track: #181b1f;
+  --bg-track: #1c1f22;
+  --bg-track-alt: #101317;
+
+  --border-default: #262a2f;
+  --border-subtle: #1f2327;
+  --border-faint: #1c1f22;
+  --border-quiet: #222629;
+  --border-control: #2f343a;
+  --border-control-hover: #3f454b;
+
+  --text-primary: #e9e7e4;
+  --text-body: #d5d2ce;
+  --text-secondary: #c5c2be;
+  --text-muted: #a8a5a1;
+  --text-dim: #9aa0a6;
+  --text-dimmer: #8b8f95;
+  --text-faint: #6f747a;
+  --text-fainter: #5f646a;
+  --text-ghost: #4d5257;
+
+  --accent: #c4643a;
+  --accent-hover: #d97b51;
+  --accent-text: #e2a883;
+  --accent-text-bright: #f0c6ab;
+  --accent-on-accent: #120d09;
+  --accent-on-accent-alt: #150d08;
+  --accent-bg: #1c1712;
+  --accent-bg-alt: #1b1712;
+  --accent-border: #3a2f26;
+  --accent-hover-bg: #241d16;
+
+  --pass: #4f9b7a;
+  --pass-bg: #12241d;
+
+  --marginal: #c9a24a;
+  --marginal-bg: #242015;
+  --marginal-callout-bg: #161311;
+  --marginal-callout-border: #2d2621;
+
+  --reject: #d1554e;
+  --reject-bg: #241514;
+  --reject-btn-bg: #1e1513;
+  --reject-btn-bg-hover: #271917;
+  --reject-btn-border: #4a2f2b;
+
+  --neutral-tag-bg: #1a1d21;
+
+  --chart-bar-quiet: #3a4a44;
+  --chart-rail: #2f353b;
+  --chart-rail-empty: #3a4046;
+}
+
+/* Typography. The Sans/Mono split is load-bearing: anything a machine produced,
+   or a human would read as a measurement, is Mono. Do not collapse it. */
+:root {
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --radius-card: 10px;
+  --radius-control: 6px;
+  --radius-chip: 4px;
+
+  /* The twilight strip's gradient — darkness deepens toward the middle. The
+     handoff specifies it in the timeline section rather than the token table,
+     but it lives here so tokens.css stays the only file with hex literals. */
+  --twilight-strip: linear-gradient(
+    90deg, #1b1f24 0%, #171b20 25%, #0f1215 32%,
+    #0f1215 85%, #171b20 90%, #1b1f24 100%
+  );
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars are restyled globally per the handoff. */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: #2b3036; border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }

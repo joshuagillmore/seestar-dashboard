@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "location": {
+    "matched": null,
+    "distance_km": null,
+    "site_name": "Example Observatory (scope GPS)",
+    "mask_applied": true,
+    "warning": "GPS unverified \u2014 assuming saved site 'Example Observatory (scope GPS)'."
+  },
+  "go": true,
+  "suitability": 88,
+  "cloud_cover_pct": 6.0,
+  "dew_risk": "low",
+  "wind_kph": 7.128,
+  "transparency": "good",
+  "seeing": "good",
+  "moon_illum_frac": 0.12,
+  "dark_window_utc": [
+    "2026-09-24T19:48:37.257",
+    "2026-09-25T03:53:37.257"
+  ],
+  "source": "meteoblue",
+  "reasons": [
+    "cloud cover 6% (worst over window)",
+    "moon 12% illuminated"
+  ]
+}
