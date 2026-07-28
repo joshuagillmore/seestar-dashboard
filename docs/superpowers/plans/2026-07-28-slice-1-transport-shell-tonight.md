@@ -2656,6 +2656,15 @@ describe('timeline scale', () => {
     // The component appends nothing of its own now; a double-Z would be NaN.
     expect(parse('2026-07-28T02:00:00.000')).toBe(parse('2026-07-28T02:00:00.000Z'))
   })
+
+  it('measures whole minutes between two timestamps', () => {
+    // Direct coverage for the new export. Importing it without calling it also
+    // breaks `npm run build` — noUnusedLocals is on — so this is load-bearing
+    // for the build gate, not only for coverage.
+    expect(
+      minutesBetween(['2026-07-28T02:00:00.000', '2026-07-28T04:32:00.000']),
+    ).toBe(152)
+  })
 })
 ```
 
@@ -2723,7 +2732,11 @@ export const localHhMm = (ms: number): string =>
 - [ ] **Step 4: Run the scale tests and confirm they pass**
 
 Run: `cd web && npm test -- timeline`
-Expected: PASS — 6 tests
+Expected: PASS — 7 tests
+
+Then run the **full build gate**, not just the tests: `cd web && npm run build`.
+`noUnusedLocals` is on, so an imported-but-uncalled helper fails the build while
+`npm test` stays green. Every task from here should run both.
 
 - [ ] **Step 5: Write the failing component test**
 
