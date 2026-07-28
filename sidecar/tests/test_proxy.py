@@ -28,8 +28,34 @@ async def test_unreachable_subprocess_raises_transport_error():
         await conn.start()
 
 
-async def test_repeated_calls_reuse_one_session(connection):
-    first = await connection.call("get_site_profile", {})
-    second = await connection.call("get_site_profile", {})
-    assert first == second
+async def test_repeated_calls_reuse_one_subprocess(connection):
+    """Same pid twice proves one session.
+
+    Comparing canned payloads would NOT prove it — a regressed call() that tore
+    down and respawned the server on every invocation returns identical dicts
+    and still leaves is_started true. The pid is what distinguishes reuse from
+    the per-call spawn this design rules out.
+    """
+    first = await connection.call("whoami", {})
+    second = await connection.call("whoami", {})
+    assert first["pid"] == second["pid"]
     assert connection.is_started
+
+
+async def test_tool_level_failure_surfaces_as_transport_error(connection):
+    """A tool that RAISED must not be mistaken for a payload.
+
+    Distinct from a tool that RETURNS {"ok": false, "error": ...} — that is a
+    valid response the sidecar forwards untouched (see Task 4). This covers the
+    tool raising, where the result carries a traceback rather than JSON.
+    """
+    with pytest.raises(ProxyTransportError):
+        await connection.call("failing_tool", {})
+
+
+async def test_session_recovers_after_a_failed_call(connection):
+    with pytest.raises(ProxyTransportError):
+        await connection.call("failing_tool", {})
+    from tests.stub_mcp_server import CANNED_PROFILE
+
+    assert await connection.call("get_site_profile", {}) == CANNED_PROFILE

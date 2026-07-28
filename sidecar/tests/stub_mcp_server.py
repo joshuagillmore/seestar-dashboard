@@ -3,6 +3,8 @@
 Speaks the same protocol as seestar-mcp but needs no telescope, no astropy and
 no SeeStar-AI checkout, so proxy tests stay fast and hermetic.
 """
+import os
+
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("stub-seestar")
@@ -17,6 +19,16 @@ CANNED_PROFILE = {
 async def get_site_profile() -> dict:
     """Return a fixed profile."""
     return CANNED_PROFILE
+
+
+@mcp.tool()
+async def whoami() -> dict:
+    """Return this server process's pid.
+
+    Exists so a test can tell session reuse from a per-call respawn: a canned
+    payload is identical either way, but the pid is not.
+    """
+    return {"pid": os.getpid()}
 
 
 @mcp.tool()

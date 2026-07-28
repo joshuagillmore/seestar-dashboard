@@ -61,7 +61,13 @@ class McpConnection:
         return _extract_payload(result)
 
     async def aclose(self) -> None:
-        await self._reset()
+        # Under the lock: shutdown can race an in-flight call(). Tearing the
+        # subprocess out from under one turns a clean failure into a raw
+        # transport error, and Task 4 wires this into FastAPI's lifespan
+        # shutdown, where exactly that race is reachable. Neither path
+        # re-acquires the lock, so this cannot deadlock.
+        async with self._lock:
+            await self._reset()
 
     async def _reset(self) -> None:
         if self._stack is not None:
@@ -74,7 +80,19 @@ class McpConnection:
 
 
 def _extract_payload(result: Any) -> dict:
-    """Pull the tool's dict out of an MCP CallToolResult."""
+    """Pull the tool's dict out of an MCP CallToolResult.
+
+    A tool that RAISED is not a payload: the SDK flags it via isError and the
+    text block holds a traceback, not JSON. That is a different thing from a
+    tool that RETURNS {"ok": false, "error": ...} — the MCP server's never-raise
+    contract makes that a valid response, and the sidecar forwards it untouched.
+    """
+    if getattr(result, "isError", False):
+        detail = next(
+            (getattr(b, "text", None) for b in getattr(result, "content", []) or []),
+            None,
+        )
+        raise ProxyTransportError(f"tool reported an error: {detail or 'no detail'}")
     for block in getattr(result, "content", []) or []:
         text = getattr(block, "text", None)
         if text is not None:
