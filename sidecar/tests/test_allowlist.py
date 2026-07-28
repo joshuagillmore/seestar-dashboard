@@ -35,3 +35,18 @@ def test_slice_one_allowlist_is_exactly_three_tools():
     assert ALLOWED_TOOLS == frozenset(
         {"assess_conditions", "plan_targets", "get_site_profile"}
     )
+
+
+def test_registered_routes_are_exactly_health_plus_the_allowlist():
+    """The parametrised FORBIDDEN_TOOLS test above only fails for a listed
+    tool. A route for a side-effecting tool nobody thought to list — the live
+    server already has several ALLOWED_TOOLS and FORBIDDEN_TOOLS both miss
+    (simulate_night, check_night_guardrails, suggest_horizon_mask, qa_tier1,
+    qa_tier2) — sails straight through it. This does not enumerate tools at
+    all: it demands the registered /api/* route set equal exactly what the
+    allowlist permits, so ANY unlisted route fails it, named or not.
+    """
+    app = create_app()
+    registered = {route.path for route in app.routes if route.path.startswith("/api")}
+    expected = {"/api/health"} | {f"/api/{tool}" for tool in ALLOWED_TOOLS}
+    assert registered == expected
