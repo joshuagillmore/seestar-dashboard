@@ -1043,10 +1043,17 @@ git commit -m "feat(sidecar): replay mode and the three read-only tool routes"
 
 Run: `npm create vite@latest web -- --template react-ts` then `cd web && npm install && npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom && npm install zod`
 
-`web/vite.config.ts`:
+`web/vite.config.ts` — note the import is from `vitest/config`, not `vite`.
+Vite's own `defineConfig` has no `test` key on `UserConfigExport`, so the
+config fails to typecheck; `vitest/config` re-exports a widened version. This is
+vitest's documented approach, not a workaround.
+
+Also add `"node"` to the `types` array in `web/tsconfig.app.json` — the guard
+tests use `node:fs` and `__dirname`. `@types/node` already ships with the Vite
+scaffold.
 
 ```ts
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
