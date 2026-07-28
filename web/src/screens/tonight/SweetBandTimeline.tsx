@@ -1,6 +1,6 @@
 import type { Conditions, PlanTarget } from '../../api/schemas'
 import styles from './SweetBandTimeline.module.css'
-import { buildScale, localHhMm, spanToPercent } from './timeline'
+import { buildScale, localHhMm, minutesBetween, parse, spanToPercent } from './timeline'
 
 interface Props {
   conditions: Conditions
@@ -32,13 +32,13 @@ export function SweetBandTimeline({ conditions, targets }: Props) {
 
       <div className={styles.bracketLabels}>
         <span className={styles.bracketLabel} style={{ left: `${dark.left}%` }}>
-          {localHhMm(Date.parse(`${conditions.dark_window_utc[0]}Z`))} dark
+          {localHhMm(parse(conditions.dark_window_utc[0]))} dark
         </span>
         <span
           className={`${styles.bracketLabel} ${styles.bracketLabelEnd}`}
           style={{ left: `${dark.left + dark.width}%` }}
         >
-          {localHhMm(Date.parse(`${conditions.dark_window_utc[1]}Z`))} dawn
+          {localHhMm(parse(conditions.dark_window_utc[1]))} dawn
         </span>
       </div>
 
@@ -58,11 +58,19 @@ export function SweetBandTimeline({ conditions, targets }: Props) {
                 className={styles.band}
                 style={{ left: `${band.left}%`, width: `${band.width}%` }}
               >
-                {Math.round(target.sweet_band_min)} min
+                {/* The bar's OWN span, not target.sweet_band_min. The bar is
+                    drawn from best_window_utc — the longest contiguous run —
+                    while sweet_band_min is the integrated total across the dark
+                    window and may include time this bar does not cover. On
+                    tonight's data they differ by 2 minutes; on a night with a
+                    fragmented band they could differ a lot, and this is the one
+                    chart whose purpose is an auditable promised-vs-bankable
+                    comparison. See handback item 9. */}
+                {minutesBetween(target.best_window_utc)} min
               </div>
             </div>
             <span className={styles.laneWindow}>
-              {localHhMm(Date.parse(`${from}Z`))}–{localHhMm(Date.parse(`${to}Z`))}
+              {localHhMm(parse(from))}–{localHhMm(parse(to))}
             </span>
           </div>
         )

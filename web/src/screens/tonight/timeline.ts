@@ -12,8 +12,17 @@ export interface Scale {
   ticks: number[]
 }
 
-const parse = (iso: string): number =>
+/**
+ * Fixture timestamps are UTC but carry no `Z`. Exported because the component
+ * needs it too — an inline `Date.parse(`${x}Z`)` would append a second `Z` to
+ * an already-suffixed string and yield NaN, rendering "Invalid Date".
+ */
+export const parse = (iso: string): number =>
   Date.parse(iso.endsWith('Z') ? iso : `${iso}Z`)
+
+/** Whole minutes spanned by an ISO pair. */
+export const minutesBetween = ([from, to]: [string, string]): number =>
+  Math.round((parse(to) - parse(from)) / 60_000)
 
 export function buildScale([darkStart, darkEnd]: [string, string]): Scale {
   const startMs = Math.floor((parse(darkStart) - HOUR_MS) / HOUR_MS) * HOUR_MS
