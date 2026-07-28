@@ -66,6 +66,8 @@ export function PlanCard({ target }: { target: PlanTarget }) {
         >
           Hand to run-session
         </button>
+        {/* Not wired yet, not forgotten: there is no detail screen in slice 1
+            for it to open. Revisit when a target-detail view exists. */}
         <button className={styles.secondary}>Detail</button>
       </div>
     </article>
