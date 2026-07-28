@@ -2607,7 +2607,7 @@ git commit -m "feat(web): verdict banner with reasons promoted and precip shown 
 
 ```ts
 import { describe, expect, it } from 'vitest'
-import { buildScale, spanToPercent } from './timeline'
+import { buildScale, minutesBetween, parse, spanToPercent } from './timeline'
 
 describe('timeline scale', () => {
   const scale = buildScale(['2026-09-24T19:49:29.005', '2026-09-25T03:54:29.005'])
@@ -2638,6 +2638,24 @@ describe('timeline scale', () => {
   it('produces one hourly tick per hour of the axis', () => {
     expect(scale.ticks).toHaveLength(12) // 18:00 through 05:00 inclusive, across midnight
   })
+
+  it('collapses a span entirely outside the axis rather than going negative', () => {
+    const before = spanToPercent(scale, [
+      '2026-07-27T20:00:00.000',
+      '2026-07-27T22:00:00.000',
+    ])
+    expect(before).toEqual({ left: 0, width: 0 })
+    const after = spanToPercent(scale, [
+      '2026-07-28T10:00:00.000',
+      '2026-07-28T12:00:00.000',
+    ])
+    expect(after).toEqual({ left: 100, width: 0 })
+  })
+
+  it('parses UTC timestamps with or without a trailing Z identically', () => {
+    // The component appends nothing of its own now; a double-Z would be NaN.
+    expect(parse('2026-07-28T02:00:00.000')).toBe(parse('2026-07-28T02:00:00.000Z'))
+  })
 })
 ```
 
@@ -2665,8 +2683,17 @@ export interface Scale {
   ticks: number[]
 }
 
-const parse = (iso: string): number =>
+/**
+ * Fixture timestamps are UTC but carry no `Z`. Exported because the component
+ * needs it too — an inline `Date.parse(`${x}Z`)` would append a second `Z` to
+ * an already-suffixed string and yield NaN, rendering "Invalid Date".
+ */
+export const parse = (iso: string): number =>
   Date.parse(iso.endsWith('Z') ? iso : `${iso}Z`)
+
+/** Whole minutes spanned by an ISO pair. */
+export const minutesBetween = ([from, to]: [string, string]): number =>
+  Math.round((parse(to) - parse(from)) / 60_000)
 
 export function buildScale([darkStart, darkEnd]: [string, string]): Scale {
   const startMs = Math.floor((parse(darkStart) - HOUR_MS) / HOUR_MS) * HOUR_MS
@@ -2696,7 +2723,7 @@ export const localHhMm = (ms: number): string =>
 - [ ] **Step 4: Run the scale tests and confirm they pass**
 
 Run: `cd web && npm test -- timeline`
-Expected: PASS — 4 tests
+Expected: PASS — 6 tests
 
 - [ ] **Step 5: Write the failing component test**
 
@@ -2720,9 +2747,17 @@ describe('SweetBandTimeline', () => {
     }
   })
 
-  it('labels each sweet band with its duration in minutes', () => {
+  it('labels each bar with the span it actually draws', () => {
     render(<SweetBandTimeline conditions={conditions} targets={plan.targets} />)
-    expect(screen.getByText(`${Math.round(plan.targets[0].sweet_band_min)} min`)).toBeInTheDocument()
+    const target = plan.targets[0]
+    const drawn = minutesBetween(target.best_window_utc)
+    // Guard the distinction rather than assume it: the label must track the
+    // rendered span, and must NOT silently become sweet_band_min again.
+    expect(drawn).not.toBe(Math.round(target.sweet_band_min))
+    expect(screen.getByText(`${drawn} min`)).toBeInTheDocument()
+    expect(
+      screen.queryByText(`${Math.round(target.sweet_band_min)} min`),
+    ).not.toBeInTheDocument()
   })
 
   it('omits the above-floor rail and its legend entry', () => {
@@ -2798,7 +2833,7 @@ describe('SweetBandTimeline', () => {
 ```tsx
 import type { Conditions, PlanTarget } from '../../api/schemas'
 import styles from './SweetBandTimeline.module.css'
-import { buildScale, localHhMm, spanToPercent } from './timeline'
+import { buildScale, localHhMm, minutesBetween, parse, spanToPercent } from './timeline'
 
 interface Props {
   conditions: Conditions
@@ -2830,13 +2865,13 @@ export function SweetBandTimeline({ conditions, targets }: Props) {
 
       <div className={styles.bracketLabels}>
         <span className={styles.bracketLabel} style={{ left: `${dark.left}%` }}>
-          {localHhMm(Date.parse(`${conditions.dark_window_utc[0]}Z`))} dark
+          {localHhMm(parse(conditions.dark_window_utc[0]))} dark
         </span>
         <span
           className={`${styles.bracketLabel} ${styles.bracketLabelEnd}`}
           style={{ left: `${dark.left + dark.width}%` }}
         >
-          {localHhMm(Date.parse(`${conditions.dark_window_utc[1]}Z`))} dawn
+          {localHhMm(parse(conditions.dark_window_utc[1]))} dawn
         </span>
       </div>
 
@@ -2856,11 +2891,19 @@ export function SweetBandTimeline({ conditions, targets }: Props) {
                 className={styles.band}
                 style={{ left: `${band.left}%`, width: `${band.width}%` }}
               >
-                {Math.round(target.sweet_band_min)} min
+                {/* The bar's OWN span, not target.sweet_band_min. The bar is
+                    drawn from best_window_utc — the longest contiguous run —
+                    while sweet_band_min is the integrated total across the dark
+                    window and may include time this bar does not cover. On
+                    tonight's data they differ by 2 minutes; on a night with a
+                    fragmented band they could differ a lot, and this is the one
+                    chart whose purpose is an auditable promised-vs-bankable
+                    comparison. See handback item 9. */}
+                {minutesBetween(target.best_window_utc)} min
               </div>
             </div>
             <span className={styles.laneWindow}>
-              {localHhMm(Date.parse(`${from}Z`))}–{localHhMm(Date.parse(`${to}Z`))}
+              {localHhMm(parse(from))}–{localHhMm(parse(to))}
             </span>
           </div>
         )
@@ -2996,7 +3039,7 @@ Expected: FAIL — cannot resolve `./PlanCard`
 
 ```tsx
 import type { PlanTarget } from '../../api/schemas'
-import { localHhMm } from './timeline'
+import { localHhMm, parse } from './timeline'
 import styles from './PlanCard.module.css'
 
 /**
@@ -3032,7 +3075,7 @@ export function PlanCard({ target }: { target: PlanTarget }) {
         <div className={styles.stat}>
           <div className={styles.statLabel}>BEST WINDOW</div>
           <div className={styles.statValue}>
-            {localHhMm(Date.parse(`${from}Z`))}–{localHhMm(Date.parse(`${to}Z`))}
+            {localHhMm(parse(from))}–{localHhMm(parse(to))}
           </div>
         </div>
         <div className={styles.stat}>
