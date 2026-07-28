@@ -78,7 +78,11 @@ export function SweetBandTimeline({ conditions, targets }: Props) {
 
       <div className={styles.axis}>
         {scale.ticks.map((tick) => (
-          <span key={tick}>{localHhMm(tick).slice(0, 2)}</span>
+          // data-tick lets a test count rendered ticks without depending on
+          // the test runner's local timezone — the label text is local wall
+          // clock (see localHhMm), but the tick COUNT is a pure function of
+          // the UTC scale and must track dark_window_utc, not a fixed window.
+          <span key={tick} data-tick>{localHhMm(tick).slice(0, 2)}</span>
         ))}
       </div>
     </section>
