@@ -1623,6 +1623,14 @@ describe('api client', () => {
     mockFetch({ ok: true, go: 'yes' })
     await expect(fetchConditions()).rejects.toBeInstanceOf(ApiError)
   })
+
+  it('surfaces a tool-level failure message, not a schema complaint', async () => {
+    // The sidecar forwards {ok: false} at HTTP 200 — the tool ran and reported
+    // a problem. Blaming the payload shape would hide the real reason.
+    mockFetch({ ok: false, error: 'no site profile has been set' })
+    await expect(fetchConditions()).rejects.toThrow(/no site profile has been set/)
+    await expect(fetchConditions()).rejects.not.toThrow(/unexpected payload/)
+  })
 })
 ```
 
@@ -1665,12 +1673,29 @@ async function get<T>(path: string, schema: ZodType<T>): Promise<T> {
         : `HTTP ${response.status}`
     throw new ApiError(detail)
   }
+  // A tool-level failure arrives as {ok: false, error} at HTTP 200 — the MCP
+  // tools never raise, so that is a valid response saying the tool itself
+  // failed. Surface its message. Without this it falls through to schema
+  // validation and reports "unexpected payload", which blames the shape for
+  // what is really an upstream error.
+  if (isToolFailure(body)) {
+    throw new ApiError(String(body.error ?? 'the tool reported a failure'))
+  }
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
     // Loud, not silent: a shape change should be visible, not a blank card.
     throw new ApiError(`unexpected payload from ${path}: ${parsed.error.message}`)
   }
   return parsed.data
+}
+
+function isToolFailure(body: unknown): body is { ok: false; error?: unknown } {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    'ok' in body &&
+    (body as { ok: unknown }).ok === false
+  )
 }
 
 export const fetchConditions = (): Promise<Conditions> =>
@@ -1689,7 +1714,7 @@ export const fetchHealth = (): Promise<Health> => get('/api/health', HealthSchem
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- client`
-Expected: PASS — 3 tests
+Expected: PASS — 4 tests
 
 - [ ] **Step 5: Commit**
 
@@ -1865,7 +1890,7 @@ export function TopBar({ site, replay }: Props) {
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- TopBar`
-Expected: PASS — 3 tests
+Expected: PASS — 4 tests
 
 - [ ] **Step 5: Commit**
 
