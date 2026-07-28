@@ -1,6 +1,5 @@
-// Placeholder shell. Task 13 replaces this with the real screen assembly.
-function App() {
-  return <div>SeeStar Dashboard</div>
-}
+import { TonightScreen } from './screens/tonight/TonightScreen'
 
-export default App
+export default function App() {
+  return <TonightScreen />
+}
