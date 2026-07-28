@@ -4,10 +4,10 @@ Server-side gaps found while building the SeeStar Console dashboard. Under the h
 this repo's `CLAUDE.md`, none of these can be fixed here — working around them in the UI would
 mean re-implementing server logic in the client, which is exactly what the rule forbids.
 
-**Found:** 2026-07-27, by reading `src/seestar_mcp/` and calling the read-only tools live against
+**Found:** 2026-07-27 to 2026-07-28, by reading `src/seestar_mcp/` and calling the read-only tools live against
 the current installation (Example Observatory, Bortle 8).
 
-**The encouraging part:** seven of the eight values below are *already computed inside the
+**The encouraging part:** eight of the nine values below are *already computed inside the
 server* — they are simply not in the returned payload. Most of these are a dataclass field and a
 line in a return dict, not new logic.
 
@@ -178,6 +178,34 @@ match an image to a target.
 
 ---
 
+## 9. `plan_targets` returns only the longest sweet-band span, not all of them
+
+**Affects:** the sweet-band timeline's bar labels, and its ability to show a
+fragmented band honestly.
+
+`Observability.best_window_utc` (`planning/astro.py:81`) is
+`_longest_run(sweet, times)` — the single longest contiguous span. Alongside it,
+`dark_minutes_in_sweet_band` is the *integrated total* across the whole dark
+window, which may include further spans the longest run does not cover.
+
+On the recorded night the two differ by two minutes (M76's longest
+contiguous run against its total). Invisible. But a band split by a
+cloud gap or a horizon-mask crossing can diverge arbitrarily, and the dashboard
+has no way to draw the second span or to say one exists.
+
+The client currently labels each bar with the span it actually draws, so nothing
+on screen is false — but it means the ranker's headline figure and the chart
+disagree, and the chart is the one screen whose stated purpose is an auditable
+promised-versus-bankable comparison.
+
+**Asked for:** return every sweet-band span, not only the longest — e.g.
+`sweet_band_windows_utc: [[start, end], ...]`. The mask already exists
+(`astro.py:280`), and `_longest_run` is one of several possible reductions over
+it. With the full list the chart can draw each span and the gaps between them,
+which is the honest picture.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
@@ -190,7 +218,8 @@ match an image to a target.
 | 6 | Three-state verdict | CONDITIONAL state | Partly — `go` is already compound |
 | 7 | `median_fwhm` always null | Projects meta + history column | Unknown — possible write-path bug |
 | 8 | No target imagery | All thumbnails | No |
+| 9 | Only the longest sweet-band span returned | Fragmented-band rendering; ranker figure and chart disagree | Yes — the mask exists, `_longest_run` is one reduction over it |
 
-Items 2–5 **degrade** the Tonight screen rather than block it; the dashboard renders an explicit
-absent state for each rather than a plausible-looking placeholder, so nothing on screen is a lie.
-Item 1 **blocks** the Review screen outright. Item 7 may indicate a real server-side defect.
+Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
+explicit absent state for each rather than a plausible-looking placeholder, so nothing on screen is
+a lie. Item 1 **blocks** the Review screen outright. Item 7 may indicate a real server-side defect.
