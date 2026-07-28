@@ -14,14 +14,20 @@ describe('TopBar', () => {
   })
 
   it('never shows fabricated connection telemetry', () => {
-    render(<TopBar site={site} replay={false} />)
+    const { container } = render(<TopBar site={site} replay={false} />)
     // Assert on the design's literal pill copy, which is what a regression
     // would actually reintroduce. An earlier version of this test queried
     // [data-dot="pass"] — an attribute nothing in the codebase sets — so it
     // passed vacuously and would have missed a dot added any other way.
-    expect(screen.queryByText(/bridge/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/fw \d/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/alt-az/i)).not.toBeInTheDocument()
+    // Assert against container.textContent, not queryByText: queryByText only
+    // matches an element's direct text node, so a future pill written as
+    // `fw <span>7.75</span>` (a nested element, the way this file's own facts
+    // row is written) would slip past a queryByText(/fw \d/i) check even
+    // though the text is visibly present. textContent concatenates the whole
+    // subtree, so it catches that regardless of markup shape.
+    expect(container.textContent).not.toMatch(/bridge/i)
+    expect(container.textContent).not.toMatch(/fw \d/i)
+    expect(container.textContent).not.toMatch(/alt-az/i)
     expect(screen.getByText(/slice 3/)).toBeInTheDocument()
   })
 
