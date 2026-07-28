@@ -2061,7 +2061,7 @@ const site = SiteProfileSchema.parse(recordedSite())
 
 describe('Sidebar', () => {
   it('reads floor and ceiling from the profile, not constants', () => {
-    render(<Sidebar site={site} verdict="NO-GO" />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
     // Recorded profile is floor 20, ceiling 60 — the design's 25 must not appear.
     expect(screen.getByText(/floor 20°/)).toBeInTheDocument()
     expect(screen.getByText(/ceiling 60°/)).toBeInTheDocument()
@@ -2069,25 +2069,25 @@ describe('Sidebar', () => {
   })
 
   it('renders an empty horizon mask as off', () => {
-    render(<Sidebar site={site} verdict="NO-GO" />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
     expect(screen.getByText(/mask off/)).toBeInTheDocument()
     expect(screen.queryByText(/3 arcs/)).not.toBeInTheDocument()
   })
 
   it('shows the site name and Bortle from the profile', () => {
-    render(<Sidebar site={site} verdict="NO-GO" />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
     expect(screen.getByText('Example Observatory (scope GPS)')).toBeInTheDocument()
     expect(screen.getByText(/Bortle 8/)).toBeInTheDocument()
   })
 
   it('marks screens that are not in slice 1 as unavailable', () => {
-    render(<Sidebar site={site} verdict="NO-GO" />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
     expect(screen.getByRole('button', { name: /Tonight/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /Live session/ })).toBeDisabled()
   })
 
   it('renders without a profile', () => {
-    render(<Sidebar site={null} verdict={null} />)
+    render(<Sidebar site={null} verdict={null} gpsWarning={null} />)
     expect(screen.getByText('Session')).toBeInTheDocument()
   })
 
@@ -2095,19 +2095,39 @@ describe('Sidebar', () => {
     // This assertion is only possible because every dot routes through <Dot>,
     // which guarantees data-dot. The Task 9 review found a guard querying that
     // attribute when nothing set it — it passed vacuously for a whole task.
-    render(<Sidebar site={site} verdict="NO-GO" />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+    // Five dots: four nav rows, then the GPS status row in the site block.
     const dots = screen.getAllByTestId('dot')
-    expect(dots).toHaveLength(4)
+    expect(dots).toHaveLength(5)
     expect(dots[0]).toHaveAttribute('data-dot', 'reject')
-    expect(dots.slice(1).every((d) => d.getAttribute('data-dot') === 'idle')).toBe(true)
+    expect(dots.slice(1, 4).every((d) => d.getAttribute('data-dot') === 'idle')).toBe(true)
   })
 
-  it('shows a pass dot only when the night is a GO', () => {
-    const { rerender } = render(<Sidebar site={site} verdict="NO-GO" />)
-    expect(screen.queryAllByTestId('dot').filter(
-      (d) => d.getAttribute('data-dot') === 'pass',
-    )).toHaveLength(0)
-    rerender(<Sidebar site={site} verdict="GO" />)
+  it('carries the GPS warning verbatim instead of claiming a match', () => {
+    // The real installation has never GPS-matched. Rendering the design's
+    // confident "GPS matched" row would assert something nobody verified.
+    const warning = "GPS unverified — assuming saved site 'Example Observatory (scope GPS)'."
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={warning} />)
+    expect(screen.getByText(warning)).toBeInTheDocument()
+    expect(screen.queryByText('GPS matched')).not.toBeInTheDocument()
+    const dots = screen.getAllByTestId('dot')
+    expect(dots[dots.length - 1]).toHaveAttribute('data-dot', 'marginal')
+  })
+
+  it('shows a confirmed GPS row when there is no warning', () => {
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+    expect(screen.getByText('GPS matched')).toBeInTheDocument()
+    const dots = screen.getAllByTestId('dot')
+    expect(dots[dots.length - 1]).toHaveAttribute('data-dot', 'pass')
+  })
+
+  it('gives the Tonight nav dot a pass tone only on a GO', () => {
+    // Scoped to dots[0] deliberately: the GPS row also renders a pass dot when
+    // the site is confirmed, so a whole-tree "no pass dot" assertion would be
+    // testing the wrong thing.
+    const { rerender } = render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+    expect(screen.getAllByTestId('dot')[0]).toHaveAttribute('data-dot', 'reject')
+    rerender(<Sidebar site={site} verdict="GO" gpsWarning={null} />)
     expect(screen.getAllByTestId('dot')[0]).toHaveAttribute('data-dot', 'pass')
   })
 })
@@ -2207,7 +2227,16 @@ Expected: FAIL — cannot resolve `./Sidebar`
   color: var(--marginal);
 }
 
-.warnDot { width: 5px; height: 5px; border-radius: 50%; margin-top: 5px; flex: 0 0 5px; background: var(--marginal); }
+.okRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--pass);
+}
 ```
 
 `web/src/shell/Sidebar.tsx`:
@@ -2221,9 +2250,15 @@ import styles from './Sidebar.module.css'
 export interface SidebarProps {
   site: SiteProfile | null
   verdict: Verdict | null
+  /**
+   * `location.warning` from assess_conditions, or null when the site is
+   * confirmed. It does NOT live on SiteProfile — `location` is returned
+   * alongside the conditions payload — so TonightScreen threads it in.
+   */
+  gpsWarning: string | null
 }
 
-export function Sidebar({ site, verdict }: SidebarProps) {
+export function Sidebar({ site, verdict, gpsWarning }: SidebarProps) {
   const profile = site?.profile
 
   return (
@@ -2265,6 +2300,14 @@ export function Sidebar({ site, verdict }: SidebarProps) {
             mask {profile.horizon_mask.length > 0
               ? `on (${profile.horizon_mask.length} arcs)`
               : 'off'}
+          </div>
+          {/* The design shows a confident `GPS matched` row here. This
+              installation has never matched — location.matched is null and the
+              server sends a warning — so the row carries that warning verbatim
+              in the marginal tone instead of asserting a match nobody made. */}
+          <div className={gpsWarning ? styles.warnRow : styles.okRow}>
+            <Dot tone={gpsWarning ? 'marginal' : 'pass'} size="sm" />
+            <span>{gpsWarning ?? 'GPS matched'}</span>
           </div>
         </div>
       )}
@@ -3137,7 +3180,13 @@ export function TonightScreen() {
   return (
     <AppShell
       topBar={<TopBar site={data?.site ?? null} replay={data?.health.replay ?? false} />}
-      sidebar={<Sidebar site={data?.site ?? null} verdict={verdict} />}
+      sidebar={
+        <Sidebar
+          site={data?.site ?? null}
+          verdict={verdict}
+          gpsWarning={data?.conditions.location.warning ?? null}
+        />
+      }
     >
       <div className={styles.screen}>
         <div className={styles.header}>
