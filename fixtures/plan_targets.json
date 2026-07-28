@@ -1,0 +1,95 @@
+{
+  "ok": true,
+  "location": {
+    "matched": null,
+    "distance_km": null,
+    "site_name": "Example Observatory (scope GPS)",
+    "mask_applied": true,
+    "warning": "GPS unverified \u2014 assuming saved site 'Example Observatory (scope GPS)'."
+  },
+  "conditions": {
+    "go": false,
+    "suitability": 0,
+    "source": "meteoblue"
+  },
+  "count": 3,
+  "targets": [
+    {
+      "id": "M76",
+      "name": "Little Dumbbell Nebula",
+      "type": "planetary_nebula",
+      "score": 97,
+      "reasons": [
+        "best window 2026-09-24T19:48:37.986\u20132026-09-24T22:10:55.589 UTC",
+        "144 min clean sweet-band time (865 subs at 10s)",
+        "transit 90\u00b0 \u2014 field rotation above ceiling",
+        "subs trail near transit",
+        "55\u00b0 from a 97%-lit moon",
+        "planetary nebula suits Bortle 8 (LP fit 0.96)",
+        "small in FOV",
+        "active project \u2014 14 min collected, open-ended"
+      ],
+      "best_window_utc": [
+        "2026-09-24T19:48:37.986",
+        "2026-09-24T22:10:55.589"
+      ],
+      "recommended_subs": 865,
+      "recommended_exposure_s": 10,
+      "framing_note": "small in FOV",
+      "max_alt_deg": 89.7,
+      "transit_utc": "2026-09-25T01:29:20.135",
+      "sweet_band_min": 144,
+      "moon_sep_deg": 55.0
+    },
+    {
+      "id": "M15",
+      "name": "Messier 15",
+      "type": "globular_cluster",
+      "score": 92,
+      "reasons": [
+        "best window 2026-09-24T19:48:37.986\u20132026-09-25T02:07:24.846 UTC",
+        "381 min clean sweet-band time (2284 subs at 10s)",
+        "40\u00b0 from a 96%-lit moon",
+        "globular cluster suits Bortle 8 (LP fit 0.70)",
+        "fits FOV (18')",
+        "active project \u2014 65 min collected, open-ended"
+      ],
+      "best_window_utc": [
+        "2026-09-24T19:48:37.986",
+        "2026-09-25T02:07:24.846"
+      ],
+      "recommended_subs": 2284,
+      "recommended_exposure_s": 10,
+      "framing_note": "fits FOV (18')",
+      "max_alt_deg": 50.8,
+      "transit_utc": "2026-09-24T21:16:48.895",
+      "sweet_band_min": 381,
+      "moon_sep_deg": 40.0
+    },
+    {
+      "id": "M2",
+      "name": "Messier 2",
+      "type": "globular_cluster",
+      "score": 91,
+      "reasons": [
+        "best window 2026-09-24T19:48:37.986\u20132026-09-25T01:01:16.664 UTC",
+        "315 min clean sweet-band time (1887 subs at 10s)",
+        "38\u00b0 from a 96%-lit moon",
+        "globular cluster suits Bortle 8 (LP fit 0.70)",
+        "fits FOV (16')",
+        "active project \u2014 32 min collected, open-ended"
+      ],
+      "best_window_utc": [
+        "2026-09-24T19:48:37.986",
+        "2026-09-25T01:01:16.664"
+      ],
+      "recommended_subs": 1887,
+      "recommended_exposure_s": 10,
+      "framing_note": "fits FOV (16')",
+      "max_alt_deg": 37.8,
+      "transit_utc": "2026-09-24T21:20:49.391",
+      "sweet_band_min": 315,
+      "moon_sep_deg": 37.7
+    }
+  ]
+}

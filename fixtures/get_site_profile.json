@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "profile": {
+    "name": "Example Observatory (scope GPS)",
+    "lat_deg": 51.4778,
+    "lon_deg": -0.0015,
+    "elevation_m": 46.0,
+    "bortle": 8,
+    "sqm": null,
+    "horizon_mask": [],
+    "min_altitude_deg": 20.0,
+    "field_rotation_ceiling_deg": 60.0,
+    "location_tolerance_km": 1.0
+  }
+}
