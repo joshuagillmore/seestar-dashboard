@@ -82,4 +82,13 @@
   color: var(--marginal);
 }
 
-.warnDot { width: 5px; height: 5px; border-radius: 50%; margin-top: 5px; flex: 0 0 5px; background: var(--marginal); }
+.okRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--pass);
+}

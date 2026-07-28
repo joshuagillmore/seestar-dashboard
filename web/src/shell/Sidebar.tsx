@@ -6,9 +6,15 @@ import styles from './Sidebar.module.css'
 export interface SidebarProps {
   site: SiteProfile | null
   verdict: Verdict | null
+  /**
+   * `location.warning` from assess_conditions, or null when the site is
+   * confirmed. It does NOT live on SiteProfile — `location` is returned
+   * alongside the conditions payload — so TonightScreen threads it in.
+   */
+  gpsWarning: string | null
 }
 
-export function Sidebar({ site, verdict }: SidebarProps) {
+export function Sidebar({ site, verdict, gpsWarning }: SidebarProps) {
   const profile = site?.profile
 
   return (
@@ -50,6 +56,14 @@ export function Sidebar({ site, verdict }: SidebarProps) {
             mask {profile.horizon_mask.length > 0
               ? `on (${profile.horizon_mask.length} arcs)`
               : 'off'}
+          </div>
+          {/* The design shows a confident `GPS matched` row here. This
+              installation has never matched — location.matched is null and the
+              server sends a warning — so the row carries that warning verbatim
+              in the marginal tone instead of asserting a match nobody made. */}
+          <div className={gpsWarning ? styles.warnRow : styles.okRow}>
+            <Dot tone={gpsWarning ? 'marginal' : 'pass'} size="sm" />
+            <span>{gpsWarning ?? 'GPS matched'}</span>
           </div>
         </div>
       )}
