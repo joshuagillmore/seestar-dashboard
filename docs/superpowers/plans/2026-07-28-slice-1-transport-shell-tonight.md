@@ -2383,9 +2383,14 @@ describe('VerdictBanner', () => {
 
   it('shows cloud, moon and dew from real fields', () => {
     render(<VerdictBanner conditions={recorded} />)
-    expect(screen.getByText('99%')).toBeInTheDocument()   // cloud_cover_pct
-    expect(screen.getByText('98%')).toBeInTheDocument()   // moon_illum_frac
-    expect(screen.getByText('high')).toBeInTheDocument()  // dew_risk
+    // Scoped by testid rather than getByText. The recorded night is 99.0%
+    // cloud AND a 0.9877 moon that rounds to 99%, so a bare getByText('99%')
+    // matches two elements and throws. Do not "fix" that collision by
+    // truncating the moon to 98% — the display rounding is correct; it was the
+    // query that was too loose.
+    expect(screen.getByTestId('stat-cloud')).toHaveTextContent('99%')
+    expect(screen.getByTestId('stat-moon')).toHaveTextContent('99%')
+    expect(screen.getByTestId('stat-dew')).toHaveTextContent('high')
   })
 
   it('shows precipitation as absent, never a fabricated number', () => {
@@ -2499,6 +2504,7 @@ import styles from './VerdictBanner.module.css'
 const SPINE = { pass: styles.spinePass, reject: styles.spineReject, marginal: styles.spineMarginal } as const
 const WORD = { pass: styles.wordPass, reject: styles.wordReject, marginal: styles.wordMarginal } as const
 
+/** Round, don't truncate: the recorded moon is 0.9877, which is 99% not 98%. */
 const pct = (fraction: number) => `${Math.round(fraction * 100)}%`
 
 function Stat({ id, label, value, tone }: {
