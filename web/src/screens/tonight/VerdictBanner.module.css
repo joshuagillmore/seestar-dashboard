@@ -35,13 +35,6 @@
   color: var(--text-body);
 }
 
-.warning {
-  margin-top: 10px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--marginal);
-}
-
 /* The handoff specifies `repeat(4,auto)` with `gap: 0 26px`. A flex row of
    label/value columns is visually identical and avoids relying on grid
    auto-placement to interleave eight children into two rows correctly. */

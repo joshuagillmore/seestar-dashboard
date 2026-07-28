@@ -8,11 +8,15 @@ const WORD = { pass: styles.wordPass, reject: styles.wordReject, marginal: style
 /** Round, don't truncate: the recorded moon is 0.9877, which is 99% not 98%. */
 const pct = (fraction: number) => `${Math.round(fraction * 100)}%`
 
-function Stat({ id, label, value, tone }: {
+function Stat({ id, label, value, tone, absentTitle }: {
   id: string
   label: string
   value: string | null
   tone?: 'pass'
+  /** Why THIS stat is showing an em-dash. There is more than one reason a
+   * value can be absent — never returned at all, missing during an outage, or
+   * suppressed by the UI for provenance — and each caller must say which. */
+  absentTitle?: string
 }) {
   const absent = value === null
   return (
@@ -23,7 +27,7 @@ function Stat({ id, label, value, tone }: {
         className={`${styles.statValue} ${absent ? styles.statAbsent : ''} ${
           tone === 'pass' && !absent ? styles.statPass : ''
         }`}
-        title={absent ? 'not returned by assess_conditions — see handback item 3' : undefined}
+        title={absent ? absentTitle : undefined}
       >
         {value ?? '—'}
       </div>
@@ -59,19 +63,30 @@ export function VerdictBanner({ conditions }: { conditions: Conditions }) {
             <li key={reason} className={styles.reason}>{reason}</li>
           ))}
         </ul>
-        {conditions.location.warning && (
-          <div className={styles.warning}>{conditions.location.warning}</div>
-        )}
+        {/* location.warning is NOT rendered here. Sidebar has the dedicated GPS
+            status row (a Dot in the matching tone plus this same string) —
+            this installation's warning is always populated, so rendering it in
+            both places printed it twice on every load. This body's slot is now
+            fully occupied by the promoted reasons[] list above. */}
       </div>
       <div className={styles.stats}>
         <Stat id="cloud" label="CLOUD"
-          value={conditions.cloud_cover_pct === null ? null : `${Math.round(conditions.cloud_cover_pct)}%`} />
+          value={conditions.cloud_cover_pct === null ? null : `${Math.round(conditions.cloud_cover_pct)}%`}
+          // Unlike PRECIP, cloud cover IS normally returned by assess_conditions
+          // — null here means a weather-source outage for this call, not a gap
+          // in the tool surface.
+          absentTitle="cloud cover unavailable — weather source outage this call" />
         {/* Precipitation is scored on server-side and gates `go`, but is not a
             returned field — it appears only as prose inside reasons[]. Parsing
             it out would put server logic in the UI. See handback item 3. */}
-        <Stat id="precip" label="PRECIP" value={null} />
+        <Stat id="precip" label="PRECIP" value={null}
+          absentTitle="not returned by assess_conditions — see handback item 3" />
         <Stat id="moon" label="MOON"
-          value={unknown ? null : pct(conditions.moon_illum_frac)} />
+          value={unknown ? null : pct(conditions.moon_illum_frac)}
+          // The server DID return moon_illum_frac (0.0, from the outage
+          // fallback) — this is the UI declining to show it, not the server
+          // withholding it. Blaming the server here would be false.
+          absentTitle="suppressed by the UI during a weather outage — the server's fallback returns 0%, not a measured value" />
         <Stat id="dew" label="DEW" value={conditions.dew_risk}
           tone={conditions.dew_risk === 'low' ? 'pass' : undefined} />
       </div>

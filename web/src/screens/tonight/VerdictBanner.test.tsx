@@ -66,4 +66,22 @@ describe('VerdictBanner', () => {
     render(<VerdictBanner conditions={unknown} />)
     expect(screen.getByTestId('stat-dew')).toHaveTextContent('unknown')
   })
+
+  it('does not blame the server for the MOON stat the UI itself suppressed', () => {
+    // The server DID return moon_illum_frac (0.0, from its outage fallback) —
+    // it is the UI choosing not to show it. The tooltip must not claim
+    // otherwise, unlike PRECIP, which really was never returned.
+    render(<VerdictBanner conditions={unknown} />)
+    const moonTitle = screen.getByTestId('stat-moon').getAttribute('title')
+    expect(moonTitle).not.toMatch(/not returned by assess_conditions/i)
+    expect(moonTitle).toMatch(/suppressed by the ui/i)
+  })
+
+  it('gives CLOUD an outage-specific tooltip, distinct from PRECIP\'s never-returned one', () => {
+    render(<VerdictBanner conditions={unknown} />)
+    const cloudTitle = screen.getByTestId('stat-cloud').getAttribute('title')
+    const precipTitle = screen.getByTestId('stat-precip').getAttribute('title')
+    expect(cloudTitle).toMatch(/outage/i)
+    expect(cloudTitle).not.toBe(precipTitle)
+  })
 })
