@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#0d0e10;color:#e9e7e4;font-family:'IBM Plex Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#c4643a;text-decoration:none}
+a:hover{color:#d97b51}
+button{font-family:inherit}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#2b3036;border-radius:5px}
+::-webkit-scrollbar-track{background:transparent}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:.25}}
+</style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden;background:#0d0e10">
+
+  <div style="display:flex;align-items:center;gap:16px;padding:0 18px;height:52px;flex:none;border-bottom:1px solid #1f2327;background:#101215">
+    <div style="display:flex;align-items:baseline;gap:9px">
+      <span style="font:600 14px/1 'IBM Plex Sans',sans-serif;letter-spacing:-.01em">seestar</span>
+      <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:#6f747a">mcp 0.1.0</span>
+    </div>
+    <div style="width:1px;height:20px;background:#262a2f"></div>
+    <div style="display:flex;gap:7px">
+      <span style="display:flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid #262a2f;border-radius:5px;font:400 10.5px/1 'IBM Plex Mono',monospace;color:#9aa0a6"><span style="width:5px;height:5px;border-radius:50%;background:#4f9b7a"></span>bridge :5555</span>
+      <span style="display:flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid #262a2f;border-radius:5px;font:400 10.5px/1 'IBM Plex Mono',monospace;color:#9aa0a6"><span style="width:5px;height:5px;border-radius:50%;background:#4f9b7a"></span>S50 fw 7.75</span>
+      <span style="display:flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid #262a2f;border-radius:5px;font:400 10.5px/1 'IBM Plex Mono',monospace;color:#9aa0a6"><span style="width:5px;height:5px;border-radius:50%;background:#4f9b7a"></span>alt-az</span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:18px;font:400 11px/1 'IBM Plex Mono',monospace;color:#8b8f95">
+      <span>23:53 <span style="color:#5f646a">local</span></span>
+      <span>dark ends <span style="color:#e9e7e4">03:44</span></span>
+      <span>batt <span style="color:#e9e7e4">61%</span></span>
+      <span>eMMC <span style="color:#e9e7e4">38.2/64 GB</span></span>
+    </div>
+    <div style="display:flex;padding:2px;background:#181b1f;border:1px solid #262a2f;border-radius:6px">
+      <button onClick="{{ showDesktop }}" style="{{ deskBtn }}">Desktop</button>
+      <button onClick="{{ showMobile }}" style="{{ mobBtn }}">Mobile</button>
+    </div>
+  </div>
+
+  <div style="display:flex;flex:1;min-height:0">
+
+    <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+    <sc-if value="{{ railNav }}" hint-placeholder-val="{{ true }}">
+    <div style="width:214px;flex:none;border-right:1px solid #1f2327;background:#101215;display:flex;flex-direction:column;padding:14px 10px">
+      <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5f646a;padding:0 8px 10px">Session</div>
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="4">
+        <button onClick="{{ n.go }}" style="{{ n.style }}">
+          <span style="{{ n.dot }}"></span>
+          <span style="flex:1;text-align:left">{{ n.label }}</span>
+          <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:#5f646a">{{ n.meta }}</span>
+        </button>
+      </sc-for>
+      <div style="flex:1"></div>
+      <div style="border-top:1px solid #1f2327;padding:12px 8px 2px">
+        <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5f646a;margin-bottom:8px">Site profile</div>
+        <div style="font:500 12.5px/1.4 'IBM Plex Sans',sans-serif;color:#e9e7e4">Backyard</div>
+        <div style="font:400 10.5px/1.6 'IBM Plex Mono',monospace;color:#8b8f95;margin-top:3px">40.713 N · 74.006 W<br>Bortle 6 · floor 25° · ceiling 60°</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:9px;font:400 10.5px/1 'IBM Plex Mono',monospace;color:#4f9b7a"><span style="width:5px;height:5px;border-radius:50%;background:#4f9b7a"></span>GPS matched · mask ON (3 arcs)</div>
+      </div>
+    </div>
+    </sc-if>
+    </sc-if>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+      <sc-if value="{{ topNav }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:6px;padding:0 20px;height:46px;flex:none;border-bottom:1px solid #1f2327;background:#0f1114">
+        <sc-for list="{{ nav }}" as="n" hint-placeholder-count="4">
+          <button onClick="{{ n.go }}" style="{{ n.tabStyle }}">{{ n.label }}<span style="font:400 10px/1 'IBM Plex Mono',monospace;color:#5f646a;margin-left:7px">{{ n.meta }}</span></button>
+        </sc-for>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:7px;font:400 10.5px/1 'IBM Plex Mono',monospace;color:#8b8f95"><span style="width:5px;height:5px;border-radius:50%;background:#4f9b7a"></span>Backyard · Bortle 6 · mask ON</div>
+      </div>
+      </sc-if>
+
+      <div style="flex:1;min-height:0;overflow:auto;padding:22px 24px 40px">
+
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:40px;justify-content:center;padding:10px 0 20px">
+          <div style="display:flex;flex-direction:column;gap:14px;align-items:center">
+            <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5f646a">Remote control — live</div>
+            <div style="width:393px;height:852px;flex:none;border-radius:48px;box-shadow:0 0 0 1px #2a2f34,0 30px 60px rgba(0,0,0,.5)">
+            <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" width="{{ phoneW }}" height="{{ phoneH }}" hint-size="393px,852px">
+              <div style="padding:62px 16px 44px;background:#0d0e10;min-height:100%;color:#e9e7e4;font-family:'IBM Plex Sans',sans-serif">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0 12px">
+                  <div>
+                    <div style="display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:#c4643a;animation:livePulse 1.8s ease-in-out infinite"></span><span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c4643a">Stacking</span></div>
+                    <div style="font:600 21px/1.2 'IBM Plex Sans',sans-serif;margin-top:6px;white-space:nowrap">SH2-142</div>
+                    <div style="font:400 11px/1 'IBM Plex Mono',monospace;color:#8b8f95;margin-top:4px">Wizard Nebula · LP · 10.0 s</div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font:500 26px/1 'IBM Plex Mono',monospace">428</div>
+                    <div style="font:400 10px/1 'IBM Plex Mono',monospace;color:#8b8f95;margin-top:5px">stacked · 71.3 min</div>
+                  </div>
+                </div>
+                <div style="border-radius:10px;overflow:hidden;border:1px solid #262a2f;background:#000">
+                  <img src="assets/sh2-142.jpg" alt="Live stack preview" style="display:block;width:100%;height:230px;object-fit:cover;object-position:center 30%">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:12px">
+                  <div style="background:#15171a;border:1px solid #262a2f;border-radius:8px;padding:9px 10px"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">DROPS</div><div style="font:500 15px/1 'IBM Plex Mono',monospace;margin-top:6px">23</div></div>
+                  <div style="background:#15171a;border:1px solid #262a2f;border-radius:8px;padding:9px 10px"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">ALT</div><div style="font:500 15px/1 'IBM Plex Mono',monospace;margin-top:6px">54.2°</div></div>
+                  <div style="background:#15171a;border:1px solid #262a2f;border-radius:8px;padding:9px 10px"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">BAND</div><div style="font:500 15px/1 'IBM Plex Mono',monospace;margin-top:6px;color:#c9a24a">38m</div></div>
+                </div>
+                <div style="background:#15171a;border:1px solid #3a2f26;border-left:2px solid #c4643a;border-radius:8px;padding:12px 13px;margin-top:12px">
+                  <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c4643a">Decision needed</div>
+                  <div style="font:400 13px/1.5 'IBM Plex Sans',sans-serif;color:#d5d2ce;margin-top:8px">SH2-142 hits its rotation ceiling in 38 min. Next in the plan is M31 (score 78), entering true dark at 01:20.</div>
+                  <div style="display:flex;gap:8px;margin-top:11px">
+                    <button style="flex:1;padding:11px 12px;border:none;border-radius:7px;background:#c4643a;color:#120d09;font:500 12.5px/1 'IBM Plex Sans',sans-serif;min-height:44px">Approve slew</button>
+                    <button style="flex:1;padding:11px 12px;border:1px solid #2f343a;border-radius:7px;background:transparent;color:#c5c2be;font:500 12.5px/1 'IBM Plex Sans',sans-serif;min-height:44px">Not yet</button>
+                  </div>
+                </div>
+                <div style="font:400 10.5px/1.9 'IBM Plex Mono',monospace;color:#8b8f95;margin-top:14px;padding-bottom:20px">
+                  <div style="color:#6f747a;letter-spacing:.08em;margin-bottom:6px">TIER-1 TELEMETRY</div>
+                  <div>[71:20] stacked 428 (+6) | drop 23 | solve OK</div>
+                  <div>[70:20] stacked 422 (+6) | drop 23 | solve OK</div>
+                  <div>[69:20] stacked 416 (+5) | drop 22 | focus Δ=+2</div>
+                </div>
+              </div>
+            </x-import>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px;align-items:center">
+            <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5f646a">Remote control — tonight</div>
+            <div style="width:393px;height:852px;flex:none;border-radius:48px;box-shadow:0 0 0 1px #2a2f34,0 30px 60px rgba(0,0,0,.5)">
+            <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" width="{{ phoneW }}" height="{{ phoneH }}" hint-size="393px,852px">
+              <div style="padding:62px 16px 44px;background:#0d0e10;min-height:100%;color:#e9e7e4;font-family:'IBM Plex Sans',sans-serif">
+                <div style="padding:6px 0 12px">
+                  <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5f646a">Sun 27 Jul · Backyard</div>
+                  <div style="display:flex;align-items:baseline;gap:11px;margin-top:10px">
+                    <span style="font:600 34px/1 'IBM Plex Sans',sans-serif;color:#4f9b7a;letter-spacing:-.02em">GO</span>
+                    <span style="font:400 12.5px/1.4 'IBM Plex Sans',sans-serif;color:#a8a5a1">clear (6% cloud), 5.8 h dark,<br>12%-lit moon well separated</span>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+                  <div style="background:#15171a;border:1px solid #262a2f;border-radius:8px;padding:10px 11px"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">DARK WINDOW</div><div style="font:500 14px/1 'IBM Plex Mono',monospace;margin-top:7px">21:58 → 03:44</div></div>
+                  <div style="background:#15171a;border:1px solid #262a2f;border-radius:8px;padding:10px 11px"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">DEW RISK</div><div style="font:500 14px/1 'IBM Plex Mono',monospace;margin-top:7px;color:#4f9b7a">low</div></div>
+                </div>
+                <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5f646a;margin:18px 0 9px">Ranked shortlist</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;gap:11px;align-items:center;background:#15171a;border:1px solid #262a2f;border-radius:9px;padding:10px;min-height:44px">
+                    <img src="assets/sh2-142.jpg" alt="SH2-142" style="width:42px;height:56px;object-fit:cover;border-radius:5px;flex:none">
+                    <div style="flex:1;min-width:0"><div style="font:500 13.5px/1.2 'IBM Plex Sans',sans-serif">SH2-142</div><div style="font:400 10.5px/1.5 'IBM Plex Mono',monospace;color:#8b8f95;margin-top:4px">22:40–01:10 · 620×10s</div></div>
+                    <div style="font:500 16px/1 'IBM Plex Mono',monospace;color:#c4643a">82</div>
+                  </div>
+                  <div style="display:flex;gap:11px;align-items:center;background:#15171a;border:1px solid #262a2f;border-radius:9px;padding:10px;min-height:44px">
+                    <img src="assets/m31.jpg" alt="M31" style="width:42px;height:56px;object-fit:cover;border-radius:5px;flex:none">
+                    <div style="flex:1;min-width:0"><div style="font:500 13.5px/1.2 'IBM Plex Sans',sans-serif">M31</div><div style="font:400 10.5px/1.5 'IBM Plex Mono',monospace;color:#8b8f95;margin-top:4px">01:20–03:30 · 460×10s</div></div>
+                    <div style="font:500 16px/1 'IBM Plex Mono',monospace;color:#c4643a">78</div>
+                  </div>
+                  <div style="display:flex;gap:11px;align-items:center;background:#15171a;border:1px solid #262a2f;border-radius:9px;padding:10px;min-height:44px">
+                    <img src="assets/m45.jpg" alt="M45" style="width:42px;height:56px;object-fit:cover;border-radius:5px;flex:none">
+                    <div style="flex:1;min-width:0"><div style="font:500 13.5px/1.2 'IBM Plex Sans',sans-serif">M45</div><div style="font:400 10.5px/1.5 'IBM Plex Mono',monospace;color:#8b8f95;margin-top:4px">02:10–03:40 · 300×10s</div></div>
+                    <div style="font:500 16px/1 'IBM Plex Mono',monospace;color:#c4643a">66</div>
+                  </div>
+                </div>
+                <div style="font:400 11px/1.6 'IBM Plex Sans',sans-serif;color:#6f747a;margin-top:13px;padding-bottom:24px">Order: SH2-142 → M31 → M45 (earliest-setting first, 2 slews). NGC 7000 dropped — behind horizon mask.</div>
+              </div>
+            </x-import>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ atTonight }}" hint-placeholder-val="{{ true }}">
+        <div style="max-width:1180px;min-width:1000px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px">
+            <div>
+              <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5f646a">Observing planner · assess_conditions</div>
+              <div style="font:600 19px/1.2 'IBM Plex Sans',sans-serif;margin-top:8px;letter-spacing:-.01em">Sunday 27 July 2026</div>
+            </div>
+            <div style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:#6f747a">source: meteoblue · fallback open-meteo</div>
+          </div>
+
+          <div style="display:flex;align-items:stretch;gap:0;background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden">
+            <div style="width:4px;background:#4f9b7a;flex:none"></div>
+            <div style="padding:20px 22px;flex:1;display:flex;align-items:center;gap:26px">
+              <div style="flex:none">
+                <div style="font:600 38px/1 'IBM Plex Sans',sans-serif;color:#4f9b7a;letter-spacing:-.02em">GO</div>
+                <div style="font:400 10px/1 'IBM Plex Mono',monospace;color:#6f747a;margin-top:8px">verdict</div>
+              </div>
+              <div style="width:1px;align-self:stretch;background:#262a2f"></div>
+              <div style="flex:1">
+                <div style="font:400 14.5px/1.5 'IBM Plex Sans',sans-serif;color:#d5d2ce">Clear (6% cloud) through the dark window, 5.8 h of astronomical dark, 12%-lit moon 96° from the plan.</div>
+                <div style="display:flex;align-items:center;gap:7px;margin-top:10px;font:400 11px/1 'IBM Plex Mono',monospace;color:#4f9b7a"><span style="width:5px;height:5px;border-radius:50%;background:#4f9b7a"></span>GPS matched site &lsquo;Backyard&rsquo; (0.2 km) — horizon mask applied</div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,auto);gap:0 26px;flex:none">
+                <div><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">CLOUD</div><div style="font:500 17px/1 'IBM Plex Mono',monospace;margin-top:7px">6%</div></div>
+                <div><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">PRECIP</div><div style="font:500 17px/1 'IBM Plex Mono',monospace;margin-top:7px">0%</div></div>
+                <div><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">MOON</div><div style="font:500 17px/1 'IBM Plex Mono',monospace;margin-top:7px">12%</div></div>
+                <div><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">DEW</div><div style="font:500 17px/1 'IBM Plex Mono',monospace;margin-top:7px;color:#4f9b7a">low</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;padding:18px 20px 14px;margin-top:14px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+              <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#6f747a">Tonight · sweet-band windows</div>
+              <div style="display:flex;gap:16px;font:400 10px/1 'IBM Plex Mono',monospace;color:#6f747a">
+                <span style="display:flex;align-items:center;gap:6px"><span style="width:16px;height:3px;background:#c4643a;border-radius:2px"></span>sweet band</span>
+                <span style="display:flex;align-items:center;gap:6px"><span style="width:16px;height:3px;background:#2f353b;border-radius:2px"></span>above floor, outside band</span>
+              </div>
+            </div>
+            <div style="position:relative;height:14px;border-radius:3px;background:linear-gradient(90deg,#1b1f24 0%,#171b20 25%,#0f1215 32%,#0f1215 85%,#171b20 90%,#1b1f24 100%);margin-bottom:6px">
+              <div style="position:absolute;left:29.7%;width:57.6%;top:0;bottom:0;border-left:1px solid #3a4046;border-right:1px solid #3a4046"></div>
+              <div style="position:absolute;left:29.7%;top:-18px;font:400 9.5px/1 'IBM Plex Mono',monospace;color:#8b8f95">21:58 dark</div>
+              <div style="position:absolute;left:87.3%;top:-18px;transform:translateX(-100%);font:400 9.5px/1 'IBM Plex Mono',monospace;color:#8b8f95">03:44 dawn</div>
+            </div>
+            <sc-for list="{{ timeline }}" as="t" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:12px;padding:5px 0">
+                <div style="width:74px;flex:none;font:500 11.5px/1 'IBM Plex Mono',monospace;color:#c5c2be">{{ t.name }}</div>
+                <div style="flex:1;position:relative;height:20px;border-radius:4px;background:#101317">
+                  <div style="{{ t.faintStyle }}"></div>
+                  <div style="{{ t.bandStyle }}">{{ t.dur }}</div>
+                </div>
+                <div style="width:78px;flex:none;text-align:right;font:400 10.5px/1 'IBM Plex Mono',monospace;color:#8b8f95">{{ t.window }}</div>
+              </div>
+            </sc-for>
+            <div style="display:flex;justify-content:space-between;padding:8px 86px 0 86px;font:400 9.5px/1 'IBM Plex Mono',monospace;color:#4d5257">
+              <span>19</span><span>20</span><span>21</span><span>22</span><span>23</span><span>00</span><span>01</span><span>02</span><span>03</span><span>04</span><span>05</span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin:24px 0 12px">
+            <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#6f747a">plan_targets · ranked shortlist</div>
+            <div style="font:400 11px/1 'IBM Plex Sans',sans-serif;color:#8b8f95">Order: SH2-142 → M31 → M45 · earliest-setting first, 2 slews</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+              <div style="display:flex;gap:14px;padding:14px 15px">
+                <img src="assets/sh2-142.jpg" alt="SH2-142" style="display:block;width:64px;height:88px;object-fit:cover;border-radius:6px;flex:none;background:#000">
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                    <span style="font:600 16px/1.1 'IBM Plex Sans',sans-serif;white-space:nowrap">SH2-142</span>
+                    <span style="display:flex;align-items:baseline;gap:4px"><span style="font:500 18px/1 'IBM Plex Mono',monospace;color:#c4643a">82</span><span style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a">score</span></span>
+                  </div>
+                  <div style="font:400 11.5px/1.4 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:5px">Wizard Nebula · emission</div>
+                  <div style="display:flex;gap:6px;margin-top:9px">
+                    <span style="padding:3px 7px;border-radius:4px;font:400 9.5px/1 'IBM Plex Mono',monospace;background:#1c1712;border:1px solid #3a2f26;color:#c4643a">LP on</span>
+                    <span style="padding:3px 7px;border:1px solid #2f343a;border-radius:4px;font:400 9.5px/1 'IBM Plex Mono',monospace;color:#8b8f95">nebula</span>
+                  </div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #1f2327">
+                <div style="padding:11px 15px;border-right:1px solid #1f2327"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">BEST WINDOW UTC</div><div style="font:500 13px/1 'IBM Plex Mono',monospace;margin-top:7px">22:40–01:10</div></div>
+                <div style="padding:11px 15px"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">RECOMMENDED</div><div style="font:500 13px/1 'IBM Plex Mono',monospace;margin-top:7px">620 × 10 s</div></div>
+              </div>
+              <div style="padding:12px 15px;border-top:1px solid #1f2327;flex:1">
+                <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em;margin-bottom:9px">WHY — REASON TAGS</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>150 min in the sweet band — the longest clean pass tonight</span></div>
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Emission target suits Bortle 6: the dual-band filter passes Hα/OIII</span></div>
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Fits the 0.73° × 1.29° FOV with margin for the rotation crop</span></div>
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Moon 96° away and only 12% lit</span></div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;padding:12px 15px;border-top:1px solid #1f2327">
+                <button onClick="{{ goLive }}" style="flex:1;padding:9px;border:none;border-radius:6px;background:#c4643a;color:#120d09;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer;white-space:nowrap" style-hover="background:#d97b51">Hand to run-session</button>
+                <button style="padding:9px 12px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#a8a5a1;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="border-color:#3f454b;color:#e9e7e4">Detail</button>
+              </div>
+            </div>
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+              <div style="display:flex;gap:14px;padding:14px 15px">
+                <img src="assets/m31.jpg" alt="M31" style="display:block;width:64px;height:88px;object-fit:cover;border-radius:6px;flex:none;background:#000">
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                    <span style="font:600 16px/1.1 'IBM Plex Sans',sans-serif;white-space:nowrap">M31</span>
+                    <span style="display:flex;align-items:baseline;gap:4px"><span style="font:500 18px/1 'IBM Plex Mono',monospace;color:#c4643a">78</span><span style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a">score</span></span>
+                  </div>
+                  <div style="font:400 11.5px/1.4 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:5px">Andromeda Galaxy · broadband</div>
+                  <div style="display:flex;gap:6px;margin-top:9px">
+                    <span style="padding:3px 7px;border-radius:4px;font:400 9.5px/1 'IBM Plex Mono',monospace;background:#15191d;border:1px solid #2f343a;color:#8b8f95">LP off</span>
+                    <span style="padding:3px 7px;border:1px solid #2f343a;border-radius:4px;font:400 9.5px/1 'IBM Plex Mono',monospace;color:#8b8f95">galaxy</span>
+                  </div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #1f2327">
+                <div style="padding:11px 15px;border-right:1px solid #1f2327"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">BEST WINDOW UTC</div><div style="font:500 13px/1 'IBM Plex Mono',monospace;margin-top:7px">01:20–03:30</div></div>
+                <div style="padding:11px 15px"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">RECOMMENDED</div><div style="font:500 13px/1 'IBM Plex Mono',monospace;margin-top:7px">460 × 10 s</div></div>
+              </div>
+              <div style="padding:12px 15px;border-top:1px solid #1f2327;flex:1">
+                <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em;margin-bottom:9px">WHY — REASON TAGS</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Project needs 3.0 h more to hit its 6 h goal</span></div>
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Broadband — sequenced into true dark, filter off</span></div>
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Large target: rotation crop costs the outer dust lanes</span></div>
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Transits at 58°, just under the rotation ceiling</span></div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;padding:12px 15px;border-top:1px solid #1f2327">
+                <button onClick="{{ goLive }}" style="flex:1;padding:9px;border:none;border-radius:6px;background:#c4643a;color:#120d09;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer;white-space:nowrap" style-hover="background:#d97b51">Hand to run-session</button>
+                <button style="padding:9px 12px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#a8a5a1;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="border-color:#3f454b;color:#e9e7e4">Detail</button>
+              </div>
+            </div>
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+              <div style="display:flex;gap:14px;padding:14px 15px">
+                <img src="assets/m45.jpg" alt="M45" style="display:block;width:64px;height:88px;object-fit:cover;border-radius:6px;flex:none;background:#000">
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                    <span style="font:600 16px/1.1 'IBM Plex Sans',sans-serif;white-space:nowrap">M45</span>
+                    <span style="display:flex;align-items:baseline;gap:4px"><span style="font:500 18px/1 'IBM Plex Mono',monospace;color:#c4643a">66</span><span style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a">score</span></span>
+                  </div>
+                  <div style="font:400 11.5px/1.4 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:5px">Pleiades · reflection cluster</div>
+                  <div style="display:flex;gap:6px;margin-top:9px">
+                    <span style="padding:3px 7px;border-radius:4px;font:400 9.5px/1 'IBM Plex Mono',monospace;background:#15191d;border:1px solid #2f343a;color:#8b8f95">LP off</span>
+                    <span style="padding:3px 7px;border:1px solid #2f343a;border-radius:4px;font:400 9.5px/1 'IBM Plex Mono',monospace;color:#8b8f95">cluster</span>
+                  </div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #1f2327">
+                <div style="padding:11px 15px;border-right:1px solid #1f2327"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">BEST WINDOW UTC</div><div style="font:500 13px/1 'IBM Plex Mono',monospace;margin-top:7px">02:10–03:40</div></div>
+                <div style="padding:11px 15px"><div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">RECOMMENDED</div><div style="font:500 13px/1 'IBM Plex Mono',monospace;margin-top:7px">300 × 10 s</div></div>
+              </div>
+              <div style="padding:12px 15px;border-top:1px solid #1f2327;flex:1">
+                <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em;margin-bottom:9px">WHY — REASON TAGS</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Bright broadband — tolerates the last hour before dawn</span></div>
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Compact enough to sit in the always-covered zone</span></div>
+                  <div style="display:flex;gap:8px;font:400 11.5px/1.45 'IBM Plex Sans',sans-serif;color:#a8a5a1"><span style="color:#c4643a;flex:none">+</span><span>Only 90 min of sweet band before the altitude floor</span></div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;padding:12px 15px;border-top:1px solid #1f2327">
+                <button onClick="{{ goLive }}" style="flex:1;padding:9px;border:none;border-radius:6px;background:#c4643a;color:#120d09;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer;white-space:nowrap" style-hover="background:#d97b51">Hand to run-session</button>
+                <button style="padding:9px 12px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#a8a5a1;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="border-color:#3f454b;color:#e9e7e4">Detail</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:14px;margin-top:14px">
+            <div style="flex:1;background:#131518;border:1px solid #222629;border-radius:10px;padding:14px 16px">
+              <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em;margin-bottom:10px">EXCLUDED BY THE RANKER — NOT ON THE PLAN</div>
+              <div style="display:flex;flex-direction:column;gap:7px;font:400 12px/1.5 'IBM Plex Sans',sans-serif;color:#8b8f95">
+                <div><span style="font-family:'IBM Plex Mono',monospace;color:#c5c2be">NGC 7000</span> — behind the horizon mask (arc 90–100° / alt 22°), learned from 4 clear nights</div>
+                <div><span style="font-family:'IBM Plex Mono',monospace;color:#c5c2be">M13</span> — no sweet-band pass: transits above the 60° field-rotation ceiling</div>
+                <div><span style="font-family:'IBM Plex Mono',monospace;color:#c5c2be">M51</span> — sets below the 25° floor 40 min after dark</div>
+              </div>
+            </div>
+            <div style="width:320px;flex:none;background:#131518;border:1px solid #222629;border-radius:10px;padding:14px 16px">
+              <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em;margin-bottom:10px">SUGGEST_HORIZON_MASK — AWAITING REVIEW</div>
+              <div style="font:400 12px/1.5 'IBM Plex Sans',sans-serif;color:#a8a5a1">Bearing 90–100° / ~22° failed on <span style="font-family:'IBM Plex Mono',monospace;color:#e9e7e4">4 clear nights</span> (5 of 6 solves). A fixed obstruction?</div>
+              <div style="display:flex;gap:8px;margin-top:12px">
+                <button style="padding:8px 11px;border:1px solid #3a2f26;border-radius:6px;background:#1c1712;color:#c4643a;font:500 11.5px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="background:#241d16">Add arc to mask</button>
+                <button style="padding:8px 11px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#8b8f95;font:500 11.5px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="color:#e9e7e4">Keep collecting</button>
+              </div>
+              <div style="font:400 10px/1.5 'IBM Plex Mono',monospace;color:#5f646a;margin-top:11px">Never auto-applied — user confirms each arc.</div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ atLive }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:16px;align-items:flex-start;min-width:1140px">
+
+          <div style="width:286px;flex:none;background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid #1f2327">
+              <div style="display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:#c4643a;animation:livePulse 1.8s ease-in-out infinite"></span><span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c4643a">Live stack</span></div>
+              <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:#6f747a">1080 × 1920</span>
+            </div>
+            <div style="position:relative;background:#000">
+              <img src="assets/sh2-142.jpg" alt="Live stack of SH2-142" style="display:block;width:100%;height:462px;object-fit:cover">
+              <sc-if value="{{ overlay }}" hint-placeholder-val="{{ true }}">
+                <div style="position:absolute;left:46.4%;top:47.1%;width:118px;height:118px;transform:translate(-50%,-50%);border:1px solid rgba(196,100,58,.85);border-radius:50%"></div>
+                <div style="position:absolute;left:46.4%;top:47.1%;width:1px;height:26px;transform:translate(-50%,-50%);background:rgba(196,100,58,.85)"></div>
+                <div style="position:absolute;left:46.4%;top:47.1%;width:26px;height:1px;transform:translate(-50%,-50%);background:rgba(196,100,58,.85)"></div>
+                <div style="position:absolute;left:calc(46.4% + 66px);top:44%;font:400 10px/1.4 'IBM Plex Mono',monospace;color:#e2a883;text-shadow:0 1px 3px #000">SH2-142<br>512, 934</div>
+                <div style="position:absolute;left:50%;top:50%;width:9px;height:1px;transform:translate(-50%,-50%);background:rgba(255,255,255,.5)"></div>
+                <div style="position:absolute;left:50%;top:50%;width:1px;height:9px;transform:translate(-50%,-50%);background:rgba(255,255,255,.5)"></div>
+                <div style="position:absolute;left:12px;bottom:12px;padding:5px 8px;border-radius:4px;background:rgba(10,11,13,.72);font:400 10px/1.5 'IBM Plex Mono',monospace;color:#c5c2be">frame centre 540, 960<br>offset 28 px left — in frame</div>
+              </sc-if>
+            </div>
+            <div style="padding:11px 13px;border-top:1px solid #1f2327;font:400 10.5px/1.7 'IBM Plex Mono',monospace;color:#8b8f95">
+              get_view_state → Stack.Annotate<br>
+              <span style="color:#4f9b7a">framing OK</span> · stars tight · background clean
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;padding:18px 20px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px">
+                <div>
+                  <div style="display:flex;align-items:center;gap:9px">
+                    <span style="font:600 24px/1 'IBM Plex Sans',sans-serif;letter-spacing:-.01em;white-space:nowrap">SH2-142</span>
+                    <span style="padding:3px 7px;border-radius:4px;background:#1c1712;border:1px solid #3a2f26;font:400 10px/1 'IBM Plex Mono',monospace;color:#c4643a">LP filter</span>
+                  </div>
+                  <div style="font:400 12px/1 'IBM Plex Mono',monospace;color:#8b8f95;margin-top:9px">Wizard Nebula · emission · 10.0 s subs · started 22:41 · elapsed 01:12:40</div>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button style="padding:9px 13px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#c5c2be;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="border-color:#3f454b;color:#e9e7e4">Refocus</button>
+                  <button style="padding:9px 13px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#c5c2be;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="border-color:#3f454b;color:#e9e7e4">Stop stack</button>
+                  <button style="padding:9px 13px;border:1px solid #4a2f2b;border-radius:6px;background:#1e1513;color:#d1554e;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="background:#271917" style="white-space:nowrap">Wind down &amp; park</button>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#1f2327;border:1px solid #1f2327;border-radius:8px;margin-top:16px;overflow:hidden">
+                <sc-for list="{{ stats }}" as="s" hint-placeholder-count="6">
+                  <div style="background:#181b1e;padding:13px 14px">
+                    <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">{{ s.label }}</div>
+                    <div style="{{ s.valStyle }}">{{ s.value }}</div>
+                    <div style="font:400 10px/1 'IBM Plex Mono',monospace;color:#6f747a;margin-top:6px">{{ s.sub }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:14px">
+              <div style="flex:1;background:#15171a;border:1px solid #262a2f;border-radius:10px;padding:16px 18px">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+                  <span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#6f747a">Sweet band</span>
+                  <span style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:#c9a24a">leaves band in 38 min</span>
+                </div>
+                <div style="display:flex;gap:14px;align-items:stretch">
+                  <div style="position:relative;width:56px;flex:none;height:126px;border-radius:5px;background:#101317;border:1px solid #1f2327">
+                    <div style="position:absolute;left:0;right:0;top:33.3%;bottom:0;background:rgba(196,100,58,.13);border-top:1px solid rgba(196,100,58,.5);border-bottom:1px solid rgba(196,100,58,.5)"></div>
+                    <div style="position:absolute;left:-1px;right:-1px;top:46.3%;height:2px;background:#c4643a"></div>
+                    <div style="position:absolute;left:0;right:0;top:46.3%;transform:translateY(-50%);text-align:center;font:500 10px/1 'IBM Plex Mono',monospace;color:#f0c6ab;text-shadow:0 1px 2px #000">54.2°</div>
+                  </div>
+                  <div style="flex:1;display:flex;flex-direction:column;justify-content:space-between;font:400 10.5px/1 'IBM Plex Mono',monospace;color:#8b8f95;padding:2px 0">
+                    <div>90° zenith</div>
+                    <div style="color:#c4643a">60° rotation ceiling</div>
+                    <div style="color:#c5c2be">current 54.2° · az 168.4°</div>
+                    <div style="color:#c4643a">25° altitude floor</div>
+                    <div>0° horizon</div>
+                  </div>
+                </div>
+                <div style="font:400 11.5px/1.5 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:14px;padding-top:12px;border-top:1px solid #1f2327">Descending toward the floor. Clean integration is the sweet-band figure, not the whole pass.</div>
+              </div>
+
+              <div style="flex:1;background:#15171a;border:1px solid #262a2f;border-radius:10px;padding:16px 18px">
+                <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#6f747a;margin-bottom:14px">check_night_guardrails</div>
+                <div style="display:flex;flex-direction:column;gap:0">
+                  <sc-for list="{{ guards }}" as="g" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1c1f22">
+                      <span style="{{ g.dot }}"></span>
+                      <span style="flex:1;font:400 12px/1 'IBM Plex Sans',sans-serif;color:#c5c2be">{{ g.label }}</span>
+                      <span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#8b8f95">{{ g.value }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font:400 11.5px/1.5 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:12px">Verdict <span style="color:#4f9b7a;font-family:'IBM Plex Mono',monospace">continue</span> — every hard stop ends in <span style="font-family:'IBM Plex Mono',monospace;color:#c5c2be">park</span>.</div>
+              </div>
+            </div>
+
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;padding:16px 18px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px">
+                <span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#6f747a">qa_tier1 · health telemetry</span>
+                <span style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:#c9a24a">Quality verdict pending — Tier-2 scores the FITS at wind-down</span>
+              </div>
+              <div style="font:400 11.5px/1.95 'IBM Plex Mono',monospace;color:#9aa0a6;max-height:132px;overflow:auto">
+                <sc-for list="{{ log }}" as="l" hint-placeholder-count="7">
+                  <div style="{{ l.style }}">{{ l.text }}</div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{ operator }}" hint-placeholder-val="{{ true }}">
+          <div style="width:336px;flex:none;background:#15171a;border:1px solid #262a2f;border-radius:10px;display:flex;flex-direction:column;max-height:calc(100vh - 140px)">
+            <div style="display:flex;align-items:center;gap:9px;padding:13px 15px;border-bottom:1px solid #1f2327">
+              <span style="width:6px;height:6px;border-radius:50%;background:#4f9b7a"></span>
+              <span style="font:500 12.5px/1 'IBM Plex Sans',sans-serif">Claude — session operator</span>
+              <span style="flex:1"></span>
+              <span style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a">run-session</span>
+            </div>
+            <div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:14px 15px;display:flex;flex-direction:column;gap:12px;min-width:0">
+              <sc-for list="{{ chat }}" as="m" hint-placeholder-count="4">
+                <div style="{{ m.wrap }}">
+                  <div style="{{ m.meta }}">{{ m.who }}</div>
+                  <div style="{{ m.bubble }}">{{ m.text }}</div>
+                </div>
+              </sc-for>
+
+              <div style="background:#1b1712;border:1px solid #3a2f26;border-radius:9px;padding:13px 14px">
+                <div style="display:flex;align-items:center;gap:7px"><span style="width:5px;height:5px;border-radius:50%;background:#c4643a"></span><span style="font:500 9.5px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#c4643a">Motion — needs approval</span></div>
+                <div style="font:400 12.5px/1.55 'IBM Plex Sans',sans-serif;color:#d5d2ce;margin-top:9px">Slew to <span style="font-family:'IBM Plex Mono',monospace">M31</span>, LP filter off (broadband), ~3 min acquisition through 3PPA. Logs SH2-142 to its project first.</div>
+                <div style="{{ approvalBox }}">{{ approvalText }}</div>
+                <div style="{{ btnRow }}">
+                  <button onClick="{{ approve }}" style="flex:1;padding:9px;border:none;border-radius:6px;background:#c4643a;color:#120d09;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="background:#d97b51">Approve slew</button>
+                  <button onClick="{{ decline }}" style="flex:1;padding:9px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#a8a5a1;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="color:#e9e7e4">Not yet</button>
+                </div>
+              </div>
+            </div>
+            <div style="padding:12px 15px;border-top:1px solid #1f2327">
+              <div style="display:flex;align-items:center;gap:9px;background:#101317;border:1px solid #262a2f;border-radius:7px;padding:9px 11px">
+                <span style="font:400 12px/1 'IBM Plex Mono',monospace;color:#5f646a">&gt;</span>
+                <span style="font:400 12px/1 'IBM Plex Sans',sans-serif;color:#5f646a">Ask about the session…</span>
+              </div>
+              <div style="font:400 9.5px/1.5 'IBM Plex Mono',monospace;color:#4d5257;margin-top:9px">Every tool call is written to provenance.jsonl</div>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ atReview }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:16px;align-items:flex-start;max-width:1320px;min-width:1120px">
+          <div style="width:300px;flex:none;display:flex;flex-direction:column;gap:14px">
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid #1f2327">
+                <span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:#6f747a">Master · pystack</span>
+                <span style="font:400 10px/1 'IBM Plex Mono',monospace;color:#6f747a">618 frames</span>
+              </div>
+              <img src="assets/m31.jpg" alt="M31 stacked master" style="display:block;width:100%;height:486px;object-fit:cover;background:#000">
+              <div style="padding:12px 13px;font:400 10.5px/1.75 'IBM Plex Mono',monospace;color:#8b8f95;border-top:1px solid #1f2327">
+                M31_20240104_master.fit<br>
+                kappa-sigma · GRBG debayer · auto-stretch<br>
+                gradient ✓ · white balance ✓ · deconv off
+              </div>
+            </div>
+            <div style="background:#131518;border:1px solid #222629;border-radius:10px;padding:14px 15px">
+              <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em;margin-bottom:11px">SEESTAR-REFINE</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <button style="padding:10px;border:none;border-radius:6px;background:#c4643a;color:#120d09;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="background:#d97b51">Re-stack keep-list</button>
+                <button style="padding:10px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#c5c2be;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="border-color:#3f454b">Stretch with deconvolution</button>
+                <button style="padding:10px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#c5c2be;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="border-color:#3f454b">Prepare PixInsight handoff</button>
+              </div>
+              <div style="font:400 10px/1.6 'IBM Plex Mono',monospace;color:#5f646a;margin-top:11px">DSS unavailable · pystack ready · PixInsight not configured</div>
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;padding:18px 20px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px">
+                <div>
+                  <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5f646a">qa_session_report</div>
+                  <div style="display:flex;align-items:baseline;gap:11px;margin-top:9px">
+                    <span style="font:600 24px/1 'IBM Plex Sans',sans-serif;letter-spacing:-.01em">M31</span>
+                    <span style="font:400 12px/1 'IBM Plex Mono',monospace;color:#8b8f95">04 Jan 2024 · IRCUT · 10.0 s · alt-az</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button style="padding:9px 13px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#c5c2be;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="border-color:#3f454b">Open report.md</button>
+                  <button onClick="{{ goProjects }}" style="padding:9px 13px;border:1px solid #2f343a;border-radius:6px;background:transparent;color:#c5c2be;font:500 12px/1 'IBM Plex Sans',sans-serif;cursor:pointer" style-hover="border-color:#3f454b">Logged to project ↗</button>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:#1f2327;border:1px solid #1f2327;border-radius:8px;margin-top:16px;overflow:hidden">
+                <sc-for list="{{ qaStats }}" as="s" hint-placeholder-count="5">
+                  <div style="background:#181b1e;padding:13px 15px">
+                    <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">{{ s.label }}</div>
+                    <div style="{{ s.valStyle }}">{{ s.value }}</div>
+                    <div style="font:400 10px/1 'IBM Plex Mono',monospace;color:#6f747a;margin-top:6px">{{ s.sub }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:12px 14px;background:#161311;border:1px solid #2d2621;border-radius:8px">
+                <span style="font:500 9.5px/1.6 'IBM Plex Mono',monospace;color:#c9a24a;flex:none">PATTERN</span>
+                <span style="font:400 12.5px/1.5 'IBM Plex Sans',sans-serif;color:#c5c2be">Eccentricity climbs monotonically after sub ~430 while FWHM holds flat — field rotation near transit, expected in alt-az. Not a focus fault and not a dew signature. The 17 scattered-light rejects around sub 700 are a thin-cirrus veil that slipped the SNR and star-count floors.</span>
+              </div>
+            </div>
+
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;padding:16px 18px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
+                <span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#6f747a">Per-sub eccentricity across the session</span>
+                <div style="display:flex;gap:14px;font:400 10px/1 'IBM Plex Mono',monospace;color:#6f747a">
+                  <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#4f9b7a"></span>pass</span>
+                  <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#c9a24a"></span>marginal</span>
+                  <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#d1554e"></span>reject</span>
+                </div>
+              </div>
+              <div style="position:relative;height:118px;margin-top:14px">
+                <div style="position:absolute;left:0;right:0;top:26.1%;border-top:1px dashed rgba(209,85,78,.6)"></div>
+                <div style="position:absolute;right:0;top:26.1%;transform:translateY(-140%);font:400 9.5px/1 'IBM Plex Mono',monospace;color:#d1554e">reject 0.575</div>
+                <div style="position:absolute;left:0;right:0;top:45.2%;border-top:1px dashed rgba(201,162,74,.45)"></div>
+                <div style="position:absolute;right:0;top:45.2%;transform:translateY(-140%);font:400 9.5px/1 'IBM Plex Mono',monospace;color:#c9a24a">marginal 0.42</div>
+                <div style="position:absolute;left:0;right:0;bottom:0;display:flex;align-items:flex-end;gap:2px;height:100%">
+                  <sc-for list="{{ eccBars }}" as="b" hint-placeholder-count="60">
+                    <div style="{{ b.style }}"></div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font:400 9.5px/1 'IBM Plex Mono',monospace;color:#4d5257;margin-top:8px">
+                <span>sub 0</span><span>190</span><span>380</span><span>570</span><span>766</span>
+              </div>
+              <div style="display:flex;gap:14px;margin-top:16px;padding-top:14px;border-top:1px solid #1f2327">
+                <div style="flex:1">
+                  <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em;margin-bottom:10px">STAR COUNT — CLOUD SIGNAL</div>
+                  <div style="display:flex;align-items:flex-end;gap:2px;height:44px">
+                    <sc-for list="{{ starBars }}" as="b" hint-placeholder-count="60">
+                      <div style="{{ b.style }}"></div>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="width:1px;background:#1f2327"></div>
+                <div style="width:300px;flex:none">
+                  <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em;margin-bottom:10px">REJECTIONS BY CAUSE</div>
+                  <div style="display:flex;flex-direction:column;gap:7px">
+                    <sc-for list="{{ causes }}" as="c" hint-placeholder-count="5">
+                      <div style="display:flex;align-items:center;gap:9px">
+                        <span style="width:96px;flex:none;font:400 10.5px/1 'IBM Plex Mono',monospace;color:#9aa0a6">{{ c.label }}</span>
+                        <span style="flex:1;height:7px;border-radius:3px;background:#1c1f22;overflow:hidden"><span style="{{ c.bar }}"></span></span>
+                        <span style="width:22px;flex:none;text-align:right;font:400 10.5px/1 'IBM Plex Mono',monospace;color:#c5c2be">{{ c.n }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #1f2327">
+                <span style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#6f747a">qa_tier2 · per-sub verdicts</span>
+                <span style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:#6f747a">thresholds session-relative · median wFWHM 3.42 px · median stars 612</span>
+              </div>
+              <div style="display:grid;grid-template-columns:232px 62px 58px 58px 62px 66px 1fr;gap:0;padding:9px 18px;border-bottom:1px solid #1f2327;background:#131518;font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">
+                <span>SUB</span><span>FWHM</span><span>ECC</span><span>SNR</span><span>STARS</span><span>SCATTER</span><span>VERDICT · REASON</span>
+              </div>
+              <sc-for list="{{ subs }}" as="s" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:232px 62px 58px 58px 62px 66px 1fr;gap:0;padding:11px 18px;border-bottom:1px solid #1c1f22;font:400 11.5px/1.3 'IBM Plex Mono',monospace;color:#c5c2be">
+                  <span style="color:#9aa0a6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.file }}</span>
+                  <span>{{ s.fwhm }}</span>
+                  <span style="{{ s.eccStyle }}">{{ s.ecc }}</span>
+                  <span>{{ s.snr }}</span>
+                  <span style="{{ s.starStyle }}">{{ s.stars }}</span>
+                  <span style="{{ s.scatStyle }}">{{ s.scatter }}</span>
+                  <span style="display:flex;align-items:center;gap:9px"><span style="{{ s.badge }}">{{ s.verdict }}</span><span style="font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;color:#8b8f95">{{ s.reason }}</span></span>
+                </div>
+              </sc-for>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;background:#131518">
+                <span style="font:400 11px/1 'IBM Plex Mono',monospace;color:#8b8f95">keep-list → data/reports/M31_20240104_keeplist.txt · 618 files · 103.0 min</span>
+                <span style="font:400 11px/1 'IBM Plex Sans',sans-serif;color:#6f747a">showing 6 of 766 — full breakdown on request</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ atProjects }}" hint-placeholder-val="{{ false }}">
+        <div style="max-width:1180px;min-width:1000px">
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px">
+            <div>
+              <div style="font:500 10px/1 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#5f646a">list_projects · multi-night integration</div>
+              <div style="font:600 19px/1.2 'IBM Plex Sans',sans-serif;margin-top:8px;letter-spacing:-.01em;white-space:nowrap">5 projects · 11.5 h collected · 3 need data</div>
+            </div>
+            <div style="font:400 11px/1 'IBM Plex Sans',sans-serif;color:#8b8f95">recommend_projects: NGC 1499 first — 6.9 h short of goal</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden;display:flex">
+              <img src="assets/m31.jpg" alt="M31" style="display:block;width:96px;flex:none;object-fit:cover;background:#000">
+              <div style="flex:1;min-width:0;padding:15px 16px;display:flex;flex-direction:column">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                  <span style="font:600 15px/1.1 'IBM Plex Sans',sans-serif;white-space:nowrap">M31</span>
+                  <span style="padding:3px 7px;border-radius:4px;flex:none;font:400 9.5px/1.4 'IBM Plex Mono',monospace;white-space:nowrap;background:#242015;color:#c9a24a">needs data</span>
+                </div>
+                <div style="font:400 11px/1.4 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:5px">Andromeda Galaxy</div>
+                <div style="flex:1;min-height:14px"></div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font:400 11px/1 'IBM Plex Mono',monospace;color:#8b8f95;margin-bottom:7px">
+                  <span style="color:#e9e7e4;font-size:14px;font-weight:500;white-space:nowrap">3.0 h</span>
+                  <span style="white-space:nowrap">of 6 h goal</span>
+                </div>
+                <div style="height:6px;border-radius:3px;background:#1c1f22;overflow:hidden">
+                  <div style="height:100%;border-radius:3px;background:#c4643a;width:50%"></div>
+                </div>
+                <div style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:#6f747a;margin-top:10px">7 sessions · last 19 Jul · med FWHM 3.42</div>
+              </div>
+            </div>
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden;display:flex">
+              <img src="assets/m42.jpg" alt="M42" style="display:block;width:96px;flex:none;object-fit:cover;background:#000">
+              <div style="flex:1;min-width:0;padding:15px 16px;display:flex;flex-direction:column">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                  <span style="font:600 15px/1.1 'IBM Plex Sans',sans-serif;white-space:nowrap">M42</span>
+                  <span style="padding:3px 7px;border-radius:4px;flex:none;font:400 9.5px/1.4 'IBM Plex Mono',monospace;white-space:nowrap;background:#12241d;color:#4f9b7a">complete</span>
+                </div>
+                <div style="font:400 11px/1.4 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:5px">Orion Nebula</div>
+                <div style="flex:1;min-height:14px"></div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font:400 11px/1 'IBM Plex Mono',monospace;color:#8b8f95;margin-bottom:7px">
+                  <span style="color:#e9e7e4;font-size:14px;font-weight:500;white-space:nowrap">4.2 h</span>
+                  <span style="white-space:nowrap">of 4 h goal</span>
+                </div>
+                <div style="height:6px;border-radius:3px;background:#1c1f22;overflow:hidden">
+                  <div style="height:100%;border-radius:3px;background:#4f9b7a;width:100%"></div>
+                </div>
+                <div style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:#6f747a;margin-top:10px">5 sessions · last 25 Feb · med FWHM 3.11</div>
+              </div>
+            </div>
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden;display:flex">
+              <img src="assets/ngc1499.jpg" alt="NGC 1499" style="display:block;width:96px;flex:none;object-fit:cover;background:#000">
+              <div style="flex:1;min-width:0;padding:15px 16px;display:flex;flex-direction:column">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                  <span style="font:600 15px/1.1 'IBM Plex Sans',sans-serif;white-space:nowrap">NGC 1499</span>
+                  <span style="padding:3px 7px;border-radius:4px;flex:none;font:400 9.5px/1.4 'IBM Plex Mono',monospace;white-space:nowrap;background:#242015;color:#c9a24a">needs data</span>
+                </div>
+                <div style="font:400 11px/1.4 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:5px">California Nebula</div>
+                <div style="flex:1;min-height:14px"></div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font:400 11px/1 'IBM Plex Mono',monospace;color:#8b8f95;margin-bottom:7px">
+                  <span style="color:#e9e7e4;font-size:14px;font-weight:500;white-space:nowrap">1.1 h</span>
+                  <span style="white-space:nowrap">of 8 h goal</span>
+                </div>
+                <div style="height:6px;border-radius:3px;background:#1c1f22;overflow:hidden">
+                  <div style="height:100%;border-radius:3px;background:#c4643a;width:14%"></div>
+                </div>
+                <div style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:#6f747a;margin-top:10px">2 sessions · last 01 Jan · med FWHM 3.68</div>
+              </div>
+            </div>
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden;display:flex">
+              <img src="assets/m45.jpg" alt="M45" style="display:block;width:96px;flex:none;object-fit:cover;background:#000">
+              <div style="flex:1;min-width:0;padding:15px 16px;display:flex;flex-direction:column">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                  <span style="font:600 15px/1.1 'IBM Plex Sans',sans-serif;white-space:nowrap">M45</span>
+                  <span style="padding:3px 7px;border-radius:4px;flex:none;font:400 9.5px/1.4 'IBM Plex Mono',monospace;white-space:nowrap;background:#1a1d21;color:#8b8f95">no goal</span>
+                </div>
+                <div style="font:400 11px/1.4 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:5px">Pleiades</div>
+                <div style="flex:1;min-height:14px"></div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font:400 11px/1 'IBM Plex Mono',monospace;color:#8b8f95;margin-bottom:7px">
+                  <span style="color:#e9e7e4;font-size:14px;font-weight:500;white-space:nowrap">2.6 h</span>
+                  <span style="white-space:nowrap">no goal set</span>
+                </div>
+                <div style="height:6px;border-radius:3px;background:#1c1f22;overflow:hidden">
+                  <div style="height:100%;border-radius:3px;background:#3a4046;width:0%"></div>
+                </div>
+                <div style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:#6f747a;margin-top:10px">4 sessions · last 02 Feb · med FWHM 3.29</div>
+              </div>
+            </div>
+            <div style="background:#15171a;border:1px solid #262a2f;border-radius:10px;overflow:hidden;display:flex">
+              <img src="assets/sh2-142.jpg" alt="SH2-142" style="display:block;width:96px;flex:none;object-fit:cover;background:#000">
+              <div style="flex:1;min-width:0;padding:15px 16px;display:flex;flex-direction:column">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+                  <span style="font:600 15px/1.1 'IBM Plex Sans',sans-serif;white-space:nowrap">SH2-142</span>
+                  <span style="padding:3px 7px;border-radius:4px;flex:none;font:400 9.5px/1.4 'IBM Plex Mono',monospace;white-space:nowrap;background:#1c1712;color:#c4643a">stacking now</span>
+                </div>
+                <div style="font:400 11px/1.4 'IBM Plex Sans',sans-serif;color:#8b8f95;margin-top:5px">Wizard Nebula</div>
+                <div style="flex:1;min-height:14px"></div>
+                <div style="display:flex;align-items:baseline;justify-content:space-between;font:400 11px/1 'IBM Plex Mono',monospace;color:#8b8f95;margin-bottom:7px">
+                  <span style="color:#e9e7e4;font-size:14px;font-weight:500;white-space:nowrap">0.6 h</span>
+                  <span style="white-space:nowrap">of 5 h goal</span>
+                </div>
+                <div style="height:6px;border-radius:3px;background:#1c1f22;overflow:hidden">
+                  <div style="height:100%;border-radius:3px;background:#c4643a;width:12%"></div>
+                </div>
+                <div style="font:400 10.5px/1 'IBM Plex Mono',monospace;color:#6f747a;margin-top:10px">1 session · live tonight · +71 min pending</div>
+              </div>
+            </div>
+          </div>
+          <div style="background:#131518;border:1px solid #222629;border-radius:10px;padding:16px 18px;margin-top:14px">
+            <div style="font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em;margin-bottom:12px">M31 · SESSION HISTORY — log_session_result</div>
+            <div style="display:grid;grid-template-columns:120px 1fr 90px 90px 96px 1fr;gap:0;padding-bottom:9px;border-bottom:1px solid #1f2327;font:400 9.5px/1 'IBM Plex Mono',monospace;color:#6f747a;letter-spacing:.08em">
+              <span>NIGHT</span><span>FILTER</span><span>KEPT</span><span>TOTAL</span><span>MED FWHM</span><span>INTEGRATION</span>
+            </div>
+            <sc-for list="{{ history }}" as="h" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:120px 1fr 90px 90px 96px 1fr;gap:0;padding:10px 0;border-bottom:1px solid #1c1f22;font:400 11.5px/1 'IBM Plex Mono',monospace;color:#c5c2be">
+                <span>{{ h.date }}</span><span style="color:#8b8f95">{{ h.filter }}</span><span>{{ h.kept }}</span><span style="color:#8b8f95">{{ h.total }}</span><span>{{ h.fwhm }}</span><span>{{ h.min }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;navLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;rail&quot;,&quot;topbar&quot;],&quot;default&quot;:&quot;rail&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;showOperatorPanel&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;showAnnotationOverlay&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Live session&quot;}}">
+class Component extends DCLogic {
+  state = { view: 'tonight', surface: 'desktop', approval: 'pending' };
+
+  go(v) { return () => this.setState({ view: v }); }
+
+  navStyle(active) {
+    return 'display:flex;align-items:center;gap:10px;width:100%;padding:9px 8px;margin-bottom:2px;border:none;border-radius:6px;cursor:pointer;'
+      + 'font:500 12.5px/1 "IBM Plex Sans",sans-serif;text-align:left;'
+      + (active ? 'background:#1e2226;color:#e9e7e4' : 'background:transparent;color:#9aa0a6');
+  }
+  tabStyle(active) {
+    return 'display:flex;align-items:center;padding:8px 12px;border:none;border-radius:6px;cursor:pointer;font:500 12.5px/1 "IBM Plex Sans",sans-serif;'
+      + (active ? 'background:#1e2226;color:#e9e7e4' : 'background:transparent;color:#9aa0a6');
+  }
+  dotStyle(color) { return 'width:6px;height:6px;border-radius:50%;flex:none;background:' + color; }
+  segBtn(active) {
+    return 'padding:5px 11px;border:none;border-radius:4px;cursor:pointer;font:500 11px/1 "IBM Plex Sans",sans-serif;'
+      + (active ? 'background:#2a2f34;color:#e9e7e4' : 'background:transparent;color:#8b8f95');
+  }
+  statVal(color) { return 'font:500 20px/1 "IBM Plex Mono",monospace;margin-top:8px;color:' + (color || '#e9e7e4'); }
+  badge(v) {
+    const c = { PASS: ['#12241d', '#4f9b7a'], MARGINAL: ['#242015', '#c9a24a'], REJECT: ['#241514', '#d1554e'] }[v];
+    return 'padding:2px 6px;border-radius:3px;flex:none;font:500 9.5px/1.5 "IBM Plex Mono",monospace;letter-spacing:.06em;background:' + c[0] + ';color:' + c[1];
+  }
+
+  renderVals() {
+    const v = this.state.view, mobile = this.state.surface === 'mobile';
+    const nav = [
+      { id: 'tonight', label: "Tonight's plan", meta: 'GO', color: '#4f9b7a' },
+      { id: 'live', label: 'Live session', meta: '428', color: '#c4643a' },
+      { id: 'review', label: 'Review & QA', meta: '618/766', color: '#4f9b7a' },
+      { id: 'projects', label: 'Projects', meta: '3 need data', color: '#c9a24a' }
+    ].map(n => ({
+      label: n.label, meta: n.meta, go: this.go(n.id),
+      style: this.navStyle(v === n.id && !mobile), tabStyle: this.tabStyle(v === n.id && !mobile),
+      dot: this.dotStyle(n.color)
+    }));
+
+    const seg = (a, b) => (b - a);
+    const pct = t => (t / 600) * 100;
+    const timeline = [
+      { name: 'SH2-142', a: 200, b: 400, band: [220, 370], window: '22:40–01:10', dur: '150 min' },
+      { name: 'M31', a: 340, b: 540, band: [380, 510], window: '01:20–03:30', dur: '130 min' },
+      { name: 'M45', a: 400, b: 560, band: [430, 520], window: '02:10–03:40', dur: '90 min' }
+    ].map(t => ({
+      name: t.name, window: t.window, dur: t.dur,
+      faintStyle: 'position:absolute;top:7px;height:6px;border-radius:3px;background:#2f353b;left:' + pct(t.a).toFixed(1) + '%;width:' + pct(seg(t.a, t.b)).toFixed(1) + '%',
+      bandStyle: 'position:absolute;top:0;bottom:0;border-radius:4px;background:#c4643a;color:#150d08;display:flex;align-items:center;padding:0 8px;font:500 10px/1 "IBM Plex Mono",monospace;left:'
+        + pct(t.band[0]).toFixed(1) + '%;width:' + pct(seg(t.band[0], t.band[1])).toFixed(1) + '%'
+    }));
+
+    const filterChip = on => 'padding:3px 7px;border-radius:4px;font:400 9.5px/1 "IBM Plex Mono",monospace;'
+      + (on ? 'background:#1c1712;border:1px solid #3a2f26;color:#c4643a' : 'background:#15191d;border:1px solid #2f343a;color:#8b8f95');
+
+    const plan = [
+      { id: 'SH2-142', name: 'Wizard Nebula · emission', score: 82, img: 'assets/sh2-142.jpg', window: '22:40–01:10', subs: '620 × 10 s', filter: 'LP on', on: true, type: 'nebula',
+        reasons: ['150 min in the sweet band — the longest clean pass tonight', 'Emission target suits Bortle 6: the dual-band filter passes Hα/OIII', 'Fits the 0.73° × 1.29° FOV with margin for the rotation crop', 'Moon 96° away and only 12% lit'] },
+      { id: 'M31', name: 'Andromeda Galaxy · broadband', score: 78, img: 'assets/m31.jpg', window: '01:20–03:30', subs: '460 × 10 s', filter: 'LP off', on: false, type: 'galaxy',
+        reasons: ['Project needs 3.0 h more to hit its 6 h goal', 'Broadband — sequenced into true dark, filter off', 'Large target: rotation crop costs the outer dust lanes', 'Transits at 58°, just under the rotation ceiling'] },
+      { id: 'M45', name: 'Pleiades · reflection cluster', score: 66, img: 'assets/m45.jpg', window: '02:10–03:40', subs: '300 × 10 s', filter: 'LP off', on: false, type: 'cluster',
+        reasons: ['Bright broadband — tolerates the last hour before dawn', 'Compact enough to sit in the always-covered zone', 'Only 90 min of sweet band before the altitude floor'] }
+    ].map(p => Object.assign({}, p, { filterStyle: filterChip(p.on), goLive: this.go('live') }));
+
+    const stats = [
+      { label: 'STACKED', value: '428', sub: '+6 last poll', color: null },
+      { label: 'DROPPED', value: '23', sub: '5.1% · rotation trailing', color: '#c9a24a' },
+      { label: 'INTEGRATION', value: '71.3', sub: 'minutes kept', color: null },
+      { label: 'PLATE SOLVE', value: 'OK', sub: 'annotate live', color: '#4f9b7a' },
+      { label: 'FOCUS', value: '1645', sub: 'baseline 1642 · Δ+3', color: null },
+      { label: 'STAGE', value: 'Stack', sub: '3PPA → AutoGoto ✓', color: null }
+    ].map(s => ({ label: s.label, value: s.value, sub: s.sub, valStyle: this.statVal(s.color) }));
+
+    const guards = [
+      { label: 'Dawn', value: '2 h 31 m of margin', color: '#4f9b7a' },
+      { label: 'Battery', value: '61% · ~3 h 40 m', color: '#4f9b7a' },
+      { label: 'Weather', value: 'go · 6% cloud, no precip', color: '#4f9b7a' },
+      { label: 'Connection', value: 'bridge + scope verified', color: '#4f9b7a' },
+      { label: 'Max duration', value: '3 h 12 m of 6 h', color: '#c9a24a' }
+    ].map(g => ({ label: g.label, value: g.value, dot: this.dotStyle(g.color) }));
+
+    const logLines = [
+      ['[71:20] stacked 428 (+6) | dropped 23 | solve OK | focus Δ=+3', '#c5c2be'],
+      ['[70:20] stacked 422 (+6) | dropped 23 | solve OK | focus Δ=+3', null],
+      ['[69:20] stacked 416 (+5) | dropped 22 | solve OK | focus Δ=+2', null],
+      ['[68:20] sweet-band watch: 38 min to the 60° rotation ceiling', '#c9a24a'],
+      ['[67:20] stacked 411 (+6) | dropped 21 | solve OK | focus Δ=+2', null],
+      ['[66:20] conditions watch: go=true (6% cloud) — next poll in 10 min', '#4f9b7a'],
+      ['[65:20] guardrails: continue — dawn 03:44, battery 61%, weather go', '#4f9b7a'],
+      ['[64:20] stacked 405 (+6) | dropped 20 | solve OK | focus Δ=+2', null]
+    ].map(l => ({ text: l[0], style: l[1] ? 'color:' + l[1] : 'color:#8b8f95' }));
+
+    const bubble = me => 'padding:10px 12px;border-radius:8px;font:400 12.5px/1.55 "IBM Plex Sans",sans-serif;'
+      + (me ? 'background:#1e2226;color:#e9e7e4' : 'background:#101317;border:1px solid #22262a;color:#c5c2be');
+    const chat = [
+      { who: 'Claude · 23:38', text: 'Dropped frames are up to 23, but eccentricity is flat at 0.31 and FWHM holds at 3.2 px. That is rotation trailing near transit — expected in alt-az, no action.', me: false },
+      { who: 'You · 23:46', text: 'how is the framing?', me: true },
+      { who: 'Claude · 23:46', text: 'Annotation puts SH2-142 at (512, 934) against a frame centre of (540, 960) — 28 px left, well inside frame. Stars tight, background clean.', me: false },
+      { who: 'Claude · 23:52', text: 'SH2-142 is 38 minutes from its rotation ceiling. Next in the plan is M31 (score 78), which enters true dark at 01:20.', me: false }
+    ].map(m => ({
+      who: m.who, text: m.text,
+      wrap: 'display:flex;flex-direction:column;gap:5px;min-width:0;max-width:100%;' + (m.me ? 'align-items:flex-end' : 'align-items:flex-start'),
+      meta: 'font:400 9.5px/1 "IBM Plex Mono",monospace;color:#5f646a',
+      bubble: bubble(m.me) + ';max-width:100%;overflow-wrap:anywhere'
+    }));
+
+    const ap = this.state.approval;
+    const apText = { approved: 'Approved 23:53 — logging SH2-142, then slewing. Provenance: goto_target(M31).', declined: 'Held. SH2-142 keeps stacking; I will ask again at the rotation ceiling.', pending: '' }[ap];
+    const apColor = ap === 'approved' ? '#4f9b7a' : '#c9a24a';
+
+    const rand = (i, k) => { const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
+    const eccBars = [];
+    for (let i = 0; i < 60; i++) {
+      const base = 0.26 + (i > 34 ? (i - 34) * 0.0125 : 0) + rand(i, 1) * 0.07;
+      const cloud = (i >= 53 && i <= 56) ? 0.03 : 0;
+      const e = base + cloud;
+      const h = Math.max(4, Math.min(100, (e / 0.78) * 100));
+      let c = '#4f9b7a';
+      if (e >= 0.575) c = '#d1554e'; else if (e >= 0.42) c = '#c9a24a';
+      if (i >= 53 && i <= 56) c = '#d1554e';
+      eccBars.push({ style: 'flex:1;border-radius:1.5px 1.5px 0 0;background:' + c + ';height:' + h.toFixed(1) + '%' });
+    }
+    const starBars = [];
+    for (let i = 0; i < 60; i++) {
+      let s = 0.72 + rand(i, 5) * 0.16;
+      if (i >= 53 && i <= 56) s = 0.34 - rand(i, 7) * 0.06;
+      const c = s < 0.5 ? '#d1554e' : '#3a4a44';
+      starBars.push({ style: 'flex:1;border-radius:1.5px 1.5px 0 0;background:' + c + ';height:' + (s * 100).toFixed(1) + '%' });
+    }
+
+    const causes = [
+      { label: 'eccentricity', n: 91, color: '#d1554e' },
+      { label: 'star count', n: 28, color: '#d1554e' },
+      { label: 'scattered light', n: 17, color: '#c9a24a' },
+      { label: 'FWHM', n: 9, color: '#c9a24a' },
+      { label: 'SNR', n: 3, color: '#8b8f95' }
+    ].map(c => ({ label: c.label, n: c.n, bar: 'display:block;height:100%;border-radius:3px;background:' + c.color + ';width:' + ((c.n / 91) * 100).toFixed(0) + '%' }));
+
+    const qaStats = [
+      { label: 'KEPT', value: '618', sub: 'of 766 · 80.7%', color: '#4f9b7a' },
+      { label: 'INTEGRATION', value: '103.0', sub: 'minutes kept', color: null },
+      { label: 'MEDIAN wFWHM', value: '3.42', sub: 'px · ranking metric', color: null },
+      { label: 'MEDIAN ECC', value: '0.34', sub: 'reject line 0.575', color: null },
+      { label: 'DOMINANT CAUSE', value: 'ecc', sub: '91 · rotation', color: '#c9a24a' }
+    ].map(s => ({ label: s.label, value: s.value, sub: s.sub, valStyle: this.statVal(s.color) }));
+
+    const num = c => 'color:' + c;
+    const subs = [
+      { file: 'Light_M 31_10.0s_IRCUT_…0412.fit', fwhm: '3.31', ecc: '0.28', snr: '41.2', stars: '612', scatter: '0.41', verdict: 'PASS', reason: 'clears every gate', eccC: '#c5c2be', starC: '#c5c2be', scatC: '#c5c2be' },
+      { file: 'Light_M 31_10.0s_IRCUT_…0577.fit', fwhm: '3.44', ecc: '0.44', snr: '39.8', stars: '588', scatter: '0.52', verdict: 'MARGINAL', reason: 'ecc 0.44 inside 0.42–0.575 band', eccC: '#c9a24a', starC: '#c5c2be', scatC: '#c5c2be' },
+      { file: 'Light_M 31_10.0s_IRCUT_…0612.fit', fwhm: '3.38', ecc: '0.61', snr: '38.9', stars: '574', scatter: '0.49', verdict: 'REJECT', reason: 'ecc 0.61 ≥ 0.575 — rotation trailing', eccC: '#d1554e', starC: '#c5c2be', scatC: '#c5c2be' },
+      { file: 'Light_M 31_10.0s_IRCUT_…0648.fit', fwhm: '3.52', ecc: '0.66', snr: '37.1', stars: '551', scatter: '0.55', verdict: 'REJECT', reason: 'ecc 0.66 ≥ 0.575 — rotation trailing', eccC: '#d1554e', starC: '#c5c2be', scatC: '#c5c2be' },
+      { file: 'Light_M 31_10.0s_IRCUT_…0701.fit', fwhm: '3.36', ecc: '0.30', snr: '22.4', stars: '286', scatter: '1.84', verdict: 'REJECT', reason: 'stars 286 < 306 floor; scatter +2.4σ — thin cirrus', eccC: '#c5c2be', starC: '#d1554e', scatC: '#d1554e' },
+      { file: 'Light_M 31_10.0s_IRCUT_…0733.fit', fwhm: '3.29', ecc: '0.27', snr: '40.6', stars: '604', scatter: '0.44', verdict: 'PASS', reason: 'clears every gate', eccC: '#c5c2be', starC: '#c5c2be', scatC: '#c5c2be' }
+    ].map(s => Object.assign({}, s, { badge: this.badge(s.verdict), eccStyle: num(s.eccC), starStyle: num(s.starC), scatStyle: num(s.scatC) }));
+
+    const tag = (t, c) => 'padding:3px 7px;border-radius:4px;flex:none;font:400 9.5px/1.4 "IBM Plex Mono",monospace;background:' + c[0] + ';color:' + c[1];
+    const bar = (p, c) => 'height:100%;border-radius:3px;background:' + c + ';width:' + p + '%';
+    const projects = [
+      { id: 'M31', name: 'Andromeda Galaxy', img: 'assets/m31.jpg', collected: '3.0 h', goal: 'of 6 h goal', p: 50, status: 'needs data', c: ['#242015', '#c9a24a'], bc: '#c4643a', meta: '7 sessions · last 19 Jul · med FWHM 3.42' },
+      { id: 'M42', name: 'Orion Nebula', img: 'assets/m42.jpg', collected: '4.2 h', goal: 'of 4 h goal', p: 100, status: 'complete', c: ['#12241d', '#4f9b7a'], bc: '#4f9b7a', meta: '5 sessions · last 25 Feb · med FWHM 3.11' },
+      { id: 'NGC 1499', name: 'California Nebula', img: 'assets/ngc1499.jpg', collected: '1.1 h', goal: 'of 8 h goal', p: 14, status: 'needs data', c: ['#242015', '#c9a24a'], bc: '#c4643a', meta: '2 sessions · last 01 Jan · med FWHM 3.68' },
+      { id: 'M45', name: 'Pleiades', img: 'assets/m45.jpg', collected: '2.6 h', goal: 'no goal set', p: 0, status: 'no goal', c: ['#1a1d21', '#8b8f95'], bc: '#3a4046', meta: '4 sessions · last 02 Feb · med FWHM 3.29' },
+      { id: 'SH2-142', name: 'Wizard Nebula', img: 'assets/sh2-142.jpg', collected: '0.6 h', goal: 'of 5 h goal', p: 12, status: 'stacking now', c: ['#1c1712', '#c4643a'], bc: '#c4643a', meta: '1 session · live tonight · +71 min pending' }
+    ].map(p => Object.assign({}, p, { tag: tag(p.status, p.c), bar: bar(p.p, p.bc) }));
+
+    const history = [
+      { date: '2026-07-19', filter: 'IRCUT · alt-az', kept: '412', total: '498', fwhm: '3.38 px', min: '68.7 min' },
+      { date: '2026-06-28', filter: 'IRCUT · alt-az', kept: '301', total: '388', fwhm: '3.51 px', min: '50.2 min' },
+      { date: '2024-01-04', filter: 'IRCUT · alt-az', kept: '618', total: '766', fwhm: '3.42 px', min: '103.0 min' },
+      { date: '2023-12-11', filter: 'IRCUT · alt-az', kept: '188', total: '294', fwhm: '3.74 px', min: '31.3 min' }
+    ];
+
+    return {
+      nav, timeline, plan, stats, guards, log: logLines, chat, eccBars, starBars, causes, qaStats, subs, projects, history,
+      isDesktop: !mobile, isMobile: mobile, phoneW: 393, phoneH: 852,
+      railNav: (this.props.navLayout ?? 'rail') === 'rail',
+      topNav: (this.props.navLayout ?? 'rail') === 'topbar' && !mobile,
+      operator: (this.props.showOperatorPanel ?? true) === true,
+      overlay: (this.props.showAnnotationOverlay ?? true) === true,
+      atTonight: v === 'tonight' && !mobile,
+      atLive: v === 'live' && !mobile,
+      atReview: v === 'review' && !mobile,
+      atProjects: v === 'projects' && !mobile,
+      goLive: this.go('live'), goProjects: this.go('projects'),
+      showDesktop: () => this.setState({ surface: 'desktop' }),
+      showMobile: () => this.setState({ surface: 'mobile' }),
+      deskBtn: this.segBtn(!mobile), mobBtn: this.segBtn(mobile),
+      approve: () => this.setState({ approval: 'approved' }),
+      decline: () => this.setState({ approval: 'declined' }),
+      approvalText: apText,
+      approvalBox: ap === 'pending' ? 'display:none' : 'margin-top:10px;padding:9px 11px;border-radius:6px;background:#101317;font:400 11.5px/1.5 "IBM Plex Mono",monospace;color:' + apColor,
+      btnRow: ap === 'pending' ? 'display:flex;gap:8px;margin-top:12px' : 'display:none'
+    };
+  }
+}
+</script>
+</body>
+</html>
