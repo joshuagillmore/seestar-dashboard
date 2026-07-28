@@ -1734,7 +1734,7 @@ export const fetchHealth = (): Promise<Health> => get('/api/health', HealthSchem
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- client`
-Expected: PASS — 5 tests
+Expected: PASS — 6 tests
 
 - [ ] **Step 5: Commit**
 
@@ -2696,7 +2696,7 @@ export const localHhMm = (ms: number): string =>
 - [ ] **Step 4: Run the scale tests and confirm they pass**
 
 Run: `cd web && npm test -- timeline`
-Expected: PASS — 5 tests
+Expected: PASS — 4 tests
 
 - [ ] **Step 5: Write the failing component test**
 
