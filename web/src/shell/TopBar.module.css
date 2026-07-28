@@ -28,6 +28,10 @@
 
 .divider { width: 1px; height: 20px; background: var(--border-default); }
 
+/* --text-faint, not the design's --text-dim. That value is specified for real
+   pills carrying live telemetry; this one is a placeholder admitting the data
+   has no source yet, so it should read quieter than real content, not equal to
+   it. Revert to --text-dim in slice 3 when the pills carry get_status. */
 .pill {
   padding: 4px 9px;
   border: 1px solid var(--border-default);

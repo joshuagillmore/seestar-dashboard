@@ -1,7 +1,7 @@
 import type { SiteProfile } from '../api/schemas'
 import styles from './TopBar.module.css'
 
-interface Props {
+export interface TopBarProps {
   site: SiteProfile | null
   replay: boolean
 }
@@ -19,7 +19,7 @@ interface Props {
  * from get_site_profile rather than the design's batt/eMMC figures, which
  * need get_device_state.
  */
-export function TopBar({ site, replay }: Props) {
+export function TopBar({ site, replay }: TopBarProps) {
   return (
     <header className={styles.bar}>
       <div className={styles.brand}>
@@ -31,11 +31,12 @@ export function TopBar({ site, replay }: Props) {
       <div className={styles.spacer} />
       {site && (
         <div className={styles.facts}>
-          <span>
+          <span data-testid="fact-site">
             site <span className={styles.factValue}>{site.profile.name}</span>
           </span>
-          <span>
-            bortle <span className={styles.factValue}>{site.profile.bortle ?? '—'}</span>
+          <span data-testid="fact-bortle">
+            bortle{' '}
+            <span className={styles.factValue}>{site.profile.bortle ?? '—'}</span>
           </span>
         </div>
       )}
