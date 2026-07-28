@@ -681,20 +681,46 @@ Copy `fixtures/assess_conditions.json` to `fixtures/synthetic/assess_conditions.
 }
 ```
 
-Copy it again to `fixtures/synthetic/assess_conditions.unknown.json` and set:
+Copy it again to `fixtures/synthetic/assess_conditions.unknown.json`. This one is
+**not** a free invention: the server has an authoritative fallback constructor,
+`_unknown()` at `SeeStar-AI/src/seestar_mcp/planning/weather.py:166`, and the
+fixture must reproduce its output exactly. Keep `ok` and `location` as recorded
+(the tool merges them in around the assessment), keep `dark_window_utc` as
+recorded (it is computed from ephemeris, not weather), and set:
 
 ```json
 {
   "go": null,
   "suitability": 0,
   "cloud_cover_pct": null,
+  "dew_risk": "unknown",
   "wind_kph": null,
   "transparency": null,
   "seeing": null,
-  "source": "unavailable",
-  "reasons": ["weather source unreachable — assess the sky manually"]
+  "moon_illum_frac": 0.0,
+  "source": "unknown",
+  "reasons": ["weather unavailable — assess the sky manually"]
 }
 ```
+
+Three of these are easy to get wrong by reasoning from first principles:
+
+- **`dew_risk` is `"unknown"`, not `null`.** The dataclass types it `str`, not
+  `str | None` — the server cannot emit a null there, and the Task 6 schema
+  types it `z.string()` accordingly. Leaving it at the recorded `"high"` would
+  be incoherent (it is derived from the same forecast as cloud and wind), but
+  nulling it would be a payload the server never produces.
+- **`moon_illum_frac` is `0.0`, not the recorded value.** Moon phase is
+  ephemeris rather than weather, so preserving it looks reasonable — but
+  `_unknown()` zeroes it, and the server is the authority.
+- **`source` is `"unknown"`**, matching the module docstring's stated contract
+  (`go=None` / `source="unknown"`), and the reason string is
+  `"weather unavailable — assess the sky manually"` verbatim.
+
+> **Consequence for Task 11:** on the UNKNOWN verdict, `moon_illum_frac` is `0.0`
+> — a placeholder, not a measurement. The banner must not render "MOON 0%"
+> there; that is exactly the plausible-looking-but-false value the spec forbids.
+> On UNKNOWN, the stat tiles render absent.
 
 These are the only synthetic fixtures in the repo, and they live under `synthetic/` so nobody mistakes them for recorded data.
 
@@ -2079,6 +2105,20 @@ describe('VerdictBanner', () => {
     render(<VerdictBanner conditions={unknown} />)
     expect(screen.getByTestId('stat-cloud')).toHaveTextContent('—')
   })
+
+  it('never shows MOON 0% on a weather outage', () => {
+    // _unknown() zeroes moon_illum_frac rather than nulling it, so a naive
+    // render reports a 0% moon that was never measured.
+    render(<VerdictBanner conditions={unknown} />)
+    const moon = screen.getByTestId('stat-moon')
+    expect(moon).toHaveTextContent('—')
+    expect(moon).not.toHaveTextContent('0%')
+  })
+
+  it('shows the honest "unknown" dew string rather than blanking it', () => {
+    render(<VerdictBanner conditions={unknown} />)
+    expect(screen.getByTestId('stat-dew')).toHaveTextContent('unknown')
+  })
 })
 ```
 
@@ -2193,6 +2233,11 @@ function Stat({ id, label, value, tone }: {
 export function VerdictBanner({ conditions }: { conditions: Conditions }) {
   const verdict = verdictFor(conditions.go)
   const tone = verdictTone(verdict)
+  // On a weather outage the server's _unknown() fallback zeroes moon_illum_frac
+  // rather than nulling it (weather.py:166). Rendering "MOON 0%" there would be
+  // a fabricated measurement, so UNKNOWN forces it absent. dew_risk needs no
+  // such guard — the server sets the honest string "unknown".
+  const unknown = verdict === 'UNKNOWN'
 
   return (
     <section className={styles.card}>
@@ -2219,7 +2264,8 @@ export function VerdictBanner({ conditions }: { conditions: Conditions }) {
             returned field — it appears only as prose inside reasons[]. Parsing
             it out would put server logic in the UI. See handback item 3. */}
         <Stat id="precip" label="PRECIP" value={null} />
-        <Stat id="moon" label="MOON" value={pct(conditions.moon_illum_frac)} />
+        <Stat id="moon" label="MOON"
+          value={unknown ? null : pct(conditions.moon_illum_frac)} />
         <Stat id="dew" label="DEW" value={conditions.dew_risk}
           tone={conditions.dew_risk === 'low' ? 'pass' : undefined} />
       </div>
@@ -2231,7 +2277,7 @@ export function VerdictBanner({ conditions }: { conditions: Conditions }) {
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- VerdictBanner`
-Expected: PASS — 6 tests
+Expected: PASS — 8 tests
 
 - [ ] **Step 5: Commit**
 
