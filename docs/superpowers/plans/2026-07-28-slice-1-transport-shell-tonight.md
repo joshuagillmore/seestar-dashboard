@@ -532,7 +532,7 @@ def _extract_payload(result: Any) -> dict:
 - [ ] **Step 5: Run tests and confirm they pass**
 
 Run: `cd sidecar && uv run pytest tests/test_proxy.py -v`
-Expected: PASS — 3 tests
+Expected: PASS — 5 tests
 
 - [ ] **Step 6: Commit**
 
