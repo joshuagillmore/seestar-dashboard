@@ -3167,8 +3167,16 @@ describe('TonightScreen', () => {
   it('renders the verdict, timeline and cards once loaded', async () => {
     stubApi()
     render(<TonightScreen />)
-    await waitFor(() => expect(screen.getByText('NO-GO')).toBeInTheDocument())
-    expect(screen.getByText('M76')).toBeInTheDocument()
+    // Two collisions appear only once the components are assembled, and
+    // neither is visible when each is tested in isolation:
+    //   "NO-GO" renders twice — the sidebar's nav meta (a <span>) and the
+    //   banner's headline word (a <div>) — so scope by tag to mean the banner.
+    //   "M76" renders twice too — the timeline lane label and the plan card id
+    //   — so assert presence rather than a single match.
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    expect(screen.getAllByText('M76').length).toBeGreaterThan(0)
     expect(screen.getByText(/sweet-band windows/i)).toBeInTheDocument()
   })
 
