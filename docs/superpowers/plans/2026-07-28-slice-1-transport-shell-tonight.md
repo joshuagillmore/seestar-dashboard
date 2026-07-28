@@ -748,10 +748,13 @@ git commit -m "feat(fixtures): record golden payloads from the live MCP server"
 `sidecar/tests/test_replay.py`:
 
 ```python
-"""Replay serves recorded fixtures byte-for-byte.
+"""Replay serves recorded fixtures unmodified.
 
-The byte-identity assertion is the point: it proves the sidecar is a pass-through
-and does not reshape tool payloads on the way out.
+The assertion compares parsed JSON, not raw bytes: JSONResponse emits compact
+JSON while the fixtures on disk are pretty-printed, so byte parity was never
+achievable and claiming it would be false. What it does prove is that no key is
+renamed, dropped, added or retyped on the way out — the pass-through property
+that actually matters.
 """
 import json
 from pathlib import Path
@@ -792,13 +795,63 @@ def test_transport_failure_uses_the_same_error_shape(monkeypatch):
 
     monkeypatch.delenv("SEESTAR_REPLAY", raising=False)
     monkeypatch.setattr(routes, "call_tool", boom)
-    response = TestClient(create_app(), raise_server_exceptions=False).get(
-        "/api/get_site_profile"
-    )
+    response = TestClient(create_app()).get("/api/get_site_profile")
     assert response.status_code == 502
     body = response.json()
     assert body["ok"] is False
     assert "subprocess died" in body["error"]
+
+
+def test_missing_fixture_uses_the_standard_error_shape(monkeypatch):
+    """A fixture that has not been recorded yet must stay diagnosable.
+
+    load_fixture raises FileNotFoundError with a pointer to record.py. If that
+    escapes _serve it becomes a generic 500 and the pointer is lost — on the one
+    path built specifically for offline work. This bites the first time a tool is
+    allowlisted before its fixture is recorded, which is what slice 2 does.
+    """
+    from seestar_sidecar import routes
+
+    def missing(tool: str) -> dict:
+        raise FileNotFoundError(f"no fixture for {tool!r} — run record.py")
+
+    monkeypatch.setenv("SEESTAR_REPLAY", "1")
+    monkeypatch.setattr(routes, "load_fixture", missing)
+    response = TestClient(create_app()).get("/api/get_site_profile")
+    assert response.status_code == 502
+    body = response.json()
+    assert body["ok"] is False
+    assert "record.py" in body["error"]
+
+
+# --- lifespan ------------------------------------------------------------
+#
+# TestClient only emits ASGI startup/shutdown events inside a `with` block.
+# Every test above constructs it bare, so none of them exercise the lifespan —
+# these do. Without them the connection wiring ships with no coverage at all.
+
+
+def test_lifespan_creates_a_connection_in_live_mode(monkeypatch):
+    monkeypatch.delenv("SEESTAR_REPLAY", raising=False)
+    app = create_app()
+    with TestClient(app):
+        assert app.state.connection is not None
+    assert app.state.connection is None  # closed and cleared on shutdown
+
+
+def test_lifespan_creates_no_connection_in_replay(monkeypatch):
+    monkeypatch.setenv("SEESTAR_REPLAY", "1")
+    app = create_app()
+    with TestClient(app):
+        assert app.state.connection is None
+
+
+def test_each_app_owns_its_connection(monkeypatch):
+    """Two apps in one process must not share connection state."""
+    monkeypatch.delenv("SEESTAR_REPLAY", raising=False)
+    first, second = create_app(), create_app()
+    with TestClient(first), TestClient(second):
+        assert first.state.connection is not second.state.connection
 ```
 
 - [ ] **Step 2: Run it and confirm it fails**
@@ -842,7 +895,7 @@ because no handler exists for it, not because a guard rejected it.
 """
 import os
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from seestar_sidecar.mcp_proxy import ProxyTransportError
@@ -855,21 +908,33 @@ def replay_enabled() -> bool:
     return os.environ.get("SEESTAR_REPLAY") == "1"
 
 
-async def call_tool(tool: str, arguments: dict) -> dict:
-    """Indirection so tests can substitute a failing transport."""
-    from seestar_sidecar.main import get_connection
+async def call_tool(request: Request, tool: str, arguments: dict) -> dict:
+    """Indirection so tests can substitute a failing transport.
 
-    return await get_connection().call(tool, arguments)
+    The connection lives on app.state, not a module global: one per app
+    instance, so two apps in a process cannot clobber each other.
+    """
+    connection = getattr(request.app.state, "connection", None)
+    if connection is None:
+        raise ProxyTransportError("MCP connection not started")
+    return await connection.call(tool, arguments)
 
 
-async def _serve(tool: str, arguments: dict) -> JSONResponse:
+async def _serve(request: Request, tool: str, arguments: dict) -> JSONResponse:
+    # Every failure below returns the same {ok, error} shape the tools
+    # themselves use, so the client parses one error format regardless of which
+    # layer failed. A tool RETURNING {"ok": false, ...} is not a failure — that
+    # is a valid response and forwards at 200.
     if replay_enabled():
-        return JSONResponse(load_fixture(tool))
+        try:
+            return JSONResponse(load_fixture(tool))
+        except FileNotFoundError as exc:
+            # Carries a "run record.py" pointer. Letting it escape turns a
+            # diagnosable message into a generic 500.
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
     try:
-        return JSONResponse(await call_tool(tool, arguments))
+        return JSONResponse(await call_tool(request, tool, arguments))
     except ProxyTransportError as exc:
-        # Same {ok, error} shape the tools themselves use on failure, so the
-        # client has exactly one error shape to handle.
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
 
 
@@ -879,18 +944,20 @@ async def health() -> dict:
 
 
 @router.get("/assess_conditions")
-async def assess_conditions() -> JSONResponse:
-    return await _serve("assess_conditions", {})
+async def assess_conditions(request: Request) -> JSONResponse:
+    return await _serve(request, "assess_conditions", {})
 
 
 @router.get("/plan_targets")
-async def plan_targets(limit: int = Query(default=3, ge=1, le=10)) -> JSONResponse:
-    return await _serve("plan_targets", {"limit": limit})
+async def plan_targets(
+    request: Request, limit: int = Query(default=3, ge=1, le=10)
+) -> JSONResponse:
+    return await _serve(request, "plan_targets", {"limit": limit})
 
 
 @router.get("/get_site_profile")
-async def get_site_profile() -> JSONResponse:
-    return await _serve("get_site_profile", {})
+async def get_site_profile(request: Request) -> JSONResponse:
+    return await _serve(request, "get_site_profile", {})
 ```
 
 - [ ] **Step 5: Add lifespan wiring to main.py**
@@ -911,20 +978,15 @@ from seestar_sidecar.routes import replay_enabled, router
 VITE_DEV_ORIGIN = "http://localhost:5173"
 SEESTAR_AI_DIR = os.environ.get("SEESTAR_AI_DIR", "C:/Users/<user>/SeeStar-AI")
 
-_connection: McpConnection | None = None
-
-
-def get_connection() -> McpConnection:
-    if _connection is None:
-        raise RuntimeError("MCP connection not started")
-    return _connection
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _connection
+    # The connection lives on app.state rather than a module global, so each
+    # create_app() owns its own and two apps in one process cannot clobber
+    # each other. Routes read it via request.app.state.
+    app.state.connection = None
     if not replay_enabled():
-        _connection = McpConnection(
+        app.state.connection = McpConnection(
             command="uv",
             args=["--directory", SEESTAR_AI_DIR, "run", "python", "-m", "seestar_mcp.server"],
         )
@@ -932,13 +994,17 @@ async def lifespan(app: FastAPI):
         # stop the sidecar booting. The first request starts it and surfaces
         # any failure as a 502 the UI can render.
     yield
-    if _connection is not None:
-        await _connection.aclose()
-        _connection = None
+    if app.state.connection is not None:
+        await app.state.connection.aclose()
+        app.state.connection = None
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="seestar-sidecar", version="0.1.0", lifespan=lifespan)
+    # Safe default for callers that never run the lifespan — a bare
+    # TestClient(create_app()) does exactly that. Routes then report
+    # "MCP connection not started" as a 502 rather than an AttributeError 500.
+    app.state.connection = None
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[VITE_DEV_ORIGIN],
@@ -952,7 +1018,7 @@ def create_app() -> FastAPI:
 - [ ] **Step 6: Run the whole sidecar suite**
 
 Run: `cd sidecar && uv run pytest -v`
-Expected: PASS — all tests from Tasks 1, 2 and 4
+Expected: PASS — all tests from Tasks 1, 2 and 4 (36 total)
 
 - [ ] **Step 7: Commit**
 
