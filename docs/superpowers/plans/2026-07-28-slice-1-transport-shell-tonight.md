@@ -1788,6 +1788,14 @@ describe('TopBar', () => {
     render(<TopBar site={site} replay />)
     expect(screen.getByText(/fixtures/i)).toBeInTheDocument()
   })
+
+  it('renders while the site profile is still loading', () => {
+    // Task 13 mounts the shell before data arrives, so site is null on first
+    // paint. The bar must render its chrome rather than crash or blank out.
+    render(<TopBar site={null} replay={false} />)
+    expect(screen.getByText('seestar')).toBeInTheDocument()
+    expect(screen.getByText(/slice 3/)).toBeInTheDocument()
+  })
 })
 ```
 
@@ -1831,13 +1839,17 @@ Expected: FAIL — cannot resolve `./TopBar`
 
 .divider { width: 1px; height: 20px; background: var(--border-default); }
 
+/* --text-faint, not the design's --text-dim. That value is specified for real
+   pills carrying live telemetry; this one is a placeholder admitting the data
+   has no source yet, so it should read quieter than real content, not equal to
+   it. Revert to --text-dim in slice 3 when the pills carry get_status. */
 .pill {
   padding: 4px 9px;
   border: 1px solid var(--border-default);
   border-radius: 5px;
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--text-dim);
+  color: var(--text-faint);
 }
 
 .spacer { flex: 1; }
