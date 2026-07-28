@@ -1037,7 +1037,15 @@ git commit -m "feat(sidecar): replay mode and the three read-only tool routes"
 - Create: `web/package.json`, `web/vite.config.ts`, `web/tsconfig.json`, `web/index.html`, `web/src/main.tsx`, `web/src/App.tsx`, `web/src/tokens.css`, `web/src/test/tokens.test.ts`, `web/src/test/no-thresholds.test.ts`
 
 **Interfaces:**
-- Produces: all 52 colour custom properties, the type scale, and the two guard tests
+- Produces: `web/src/tokens.css` — the 52 colour custom properties, the two
+  font-*family* tokens, the radii, the `--twilight-strip` gradient and the
+  `livePulse` keyframe — plus the two guard tests.
+- Deliberately **not** produced: a central type-size scale. Per-role sizes stay
+  in each component's CSS module. The design lists 21 type roles and only a few
+  genuinely repeat; abstracting before the components exist would be guessing at
+  which. The hex guard already prevents the drift that matters, and sizes are
+  visible in review. Revisit after slice 1, when repetition is evidence rather
+  than prediction.
 
 - [ ] **Step 1: Scaffold**
 
