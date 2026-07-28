@@ -89,14 +89,24 @@ legible in the UI rather than reducing it to a colour.
 - `seestar-mcp-design.md` — the original system design (architecture, the
   Jetson/Alpaca stack, QA tiers). Background; the dashboard is not in it.
 
-**Still to be supplied:** the dashboard design file and its `github.md` screen
-map (tying each screen to its source files). Those live in Claude Design and
-weren't retrievable when this was scaffolded — add them to `docs/` when
-available, then build screens against the map.
+- `design/` — the Claude Design handoff for the SeeStar Console (landed
+  2026-07-27). `design/README.md` is the authority on tokens, per-screen specs
+  and copy; `design/github.md` is the screen→source map. `Seestar Console.dc.html`
+  is the prototype — open it in a browser to interact with it, but **do not port
+  `support.js`**; it is a design-tool runtime, not production code.
+- `superpowers/specs/` — approved design specs, one per slice.
+- `handback-to-seestar-ai.md` — the running list of server-side gaps this repo
+  cannot fix under the hand-back rule.
 
 ## Conventions
 
-- Stack is undecided — pick it when the design lands, and record the choice here.
+- **Stack (decided 2026-07-27):** React + TypeScript + Vite, Vitest for the gate,
+  Playwright from slice 2. Python + FastAPI for the sidecar. **No charting
+  library** — the sweet-band timeline and the per-sub charts are
+  absolutely-positioned and flex-div bars driven by the token table; a chart lib
+  fights both. Reconsider only if a screen needs axes/scales these don't cover.
+- The sidecar exposes MCP tools over HTTP behind a **route allowlist**: a tool
+  with side effects has no route at all. Never add one to make a screen easier.
 - Add a real test gate early; this repo is a candidate for orchestrated
   refinement, which requires a fast deterministic gate.
 - Never commit secrets. SeeStar-AI uses age+sops (`.env.enc` committable, key
