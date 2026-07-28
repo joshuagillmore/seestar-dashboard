@@ -1,0 +1,30 @@
+# Node / frontend
+node_modules/
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# Python (if a thin backend appears)
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Env & secrets — never commit real values
+.env
+.env.local
+*.env.local
+secrets/
+*.pem
+*.key
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code personal layer (per-machine, not shared)
+CLAUDE.local.md
+.claude/settings.local.json
