@@ -3139,7 +3139,11 @@ Expected: PASS — 5 tests
 import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TonightScreen } from './TonightScreen'
+import { PlanTargetsSchema } from '../../api/schemas'
 import { recordedConditions, recordedPlan, recordedSite } from '../../test/fixtures'
+
+/** One card per ranked target — read from the fixture, not hardcoded. */
+const planTargetCount = PlanTargetsSchema.parse(recordedPlan()).targets.length
 
 function stubApi(overrides: Record<string, unknown> = {}) {
   const bodies: Record<string, unknown> = {
@@ -3176,8 +3180,14 @@ describe('TonightScreen', () => {
     await waitFor(() =>
       expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
     )
-    expect(screen.getAllByText('M76').length).toBeGreaterThan(0)
     expect(screen.getByText(/sweet-band windows/i)).toBeInTheDocument()
+    // Assert something ONLY PlanCard can produce. An earlier version used
+    // getAllByText('M76'), which the timeline's lane label satisfies on its own
+    // — both are spans — so it passed even if the card grid were deleted, i.e.
+    // it verified nothing about the wiring this task exists to deliver.
+    expect(
+      screen.getAllByRole('button', { name: /Hand to run-session/ }),
+    ).toHaveLength(planTargetCount)
   })
 
   it('shows an error banner when the sidecar is unreachable', async () => {
