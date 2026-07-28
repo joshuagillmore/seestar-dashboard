@@ -4,15 +4,23 @@
 .legend { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); }
 .swatch { width: 16px; height: 3px; background: var(--accent); }
 
+/* .strip, .bracketLabels and .axis all plot the same buildScale() percentages
+   as .laneTrack, but .strip/.bracketLabels are full-width block children of
+   .card while .laneTrack sits inside .lane behind a 74px name column + 12px
+   gap on the left and a 78px window column + 12px gap on the right. Without
+   matching insets, identical percentages land at different pixel offsets —
+   the same instant renders tens of pixels apart. Keep these three in register:
+   86px left / 90px right, everywhere a percentage from buildScale is drawn. */
 .strip {
   position: relative;
   height: 14px;
   border-radius: 3px;
   background: var(--twilight-strip);
+  margin: 0 90px 0 86px;
 }
 
 .bracket { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--chart-rail-empty); border-right: 1px solid var(--chart-rail-empty); }
-.bracketLabels { position: relative; height: 14px; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dimmer); }
+.bracketLabels { position: relative; height: 14px; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dimmer); margin: 0 90px 0 86px; }
 .bracketLabel { position: absolute; top: 0; }
 .bracketLabelEnd { transform: translateX(-100%); }
 
@@ -38,4 +46,4 @@
   overflow: hidden;
 }
 
-.axis { display: flex; justify-content: space-between; padding: 8px 86px 0; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-ghost); }
+.axis { display: flex; justify-content: space-between; padding: 8px 90px 0 86px; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-ghost); }
