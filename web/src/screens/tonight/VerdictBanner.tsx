@@ -5,10 +5,8 @@ import styles from './VerdictBanner.module.css'
 const SPINE = { pass: styles.spinePass, reject: styles.spineReject, marginal: styles.spineMarginal } as const
 const WORD = { pass: styles.wordPass, reject: styles.wordReject, marginal: styles.wordMarginal } as const
 
-// Percentages are floored, not rounded: 0.9877644441237166 moon illumination
-// is "98%", not rounded up to "99%" — a figure the source never reported, and
-// one that would collide on-screen with an unrelated 99% cloud reading.
-const pct = (fraction: number) => `${Math.floor(fraction * 100)}%`
+/** Round, don't truncate: the recorded moon is 0.9877, which is 99% not 98%. */
+const pct = (fraction: number) => `${Math.round(fraction * 100)}%`
 
 function Stat({ id, label, value, tone }: {
   id: string
@@ -67,7 +65,7 @@ export function VerdictBanner({ conditions }: { conditions: Conditions }) {
       </div>
       <div className={styles.stats}>
         <Stat id="cloud" label="CLOUD"
-          value={conditions.cloud_cover_pct === null ? null : `${Math.floor(conditions.cloud_cover_pct)}%`} />
+          value={conditions.cloud_cover_pct === null ? null : `${Math.round(conditions.cloud_cover_pct)}%`} />
         {/* Precipitation is scored on server-side and gates `go`, but is not a
             returned field — it appears only as prose inside reasons[]. Parsing
             it out would put server logic in the UI. See handback item 3. */}
