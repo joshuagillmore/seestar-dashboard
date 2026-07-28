@@ -1734,7 +1734,7 @@ export const fetchHealth = (): Promise<Health> => get('/api/health', HealthSchem
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- client`
-Expected: PASS — 6 tests
+Expected: PASS — 5 tests
 
 - [ ] **Step 5: Commit**
 
@@ -1779,14 +1779,17 @@ describe('TopBar', () => {
   })
 
   it('never shows fabricated connection telemetry', () => {
-    render(<TopBar site={site} replay={false} />)
+    const { container } = render(<TopBar site={site} replay={false} />)
     // Assert on the design's literal pill copy, which is what a regression
-    // would actually reintroduce. An earlier version of this test queried
-    // [data-dot="pass"] — an attribute nothing in the codebase sets — so it
-    // passed vacuously and would have missed a dot added any other way.
-    expect(screen.queryByText(/bridge/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/fw \d/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/alt-az/i)).not.toBeInTheDocument()
+    // would actually reintroduce. Two earlier versions of this test were
+    // weaker: one queried [data-dot="pass"], an attribute nothing in the
+    // codebase sets, so it passed vacuously; the next used queryByText, which
+    // reads only an element's DIRECT text nodes — so a pill written the way
+    // this file already writes its facts row (`fw <span>7.75</span>`) would
+    // have slipped through. textContent concatenates the whole subtree.
+    expect(container.textContent).not.toMatch(/bridge/i)
+    expect(container.textContent).not.toMatch(/fw \d/i)
+    expect(container.textContent).not.toMatch(/alt-az/i)
     expect(screen.getByText(/slice 3/)).toBeInTheDocument()
   })
 
@@ -1936,7 +1939,7 @@ export function TopBar({ site, replay }: TopBarProps) {
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- TopBar`
-Expected: PASS — 6 tests
+Expected: PASS — 5 tests
 
 - [ ] **Step 5: Commit**
 
@@ -2644,7 +2647,7 @@ export const localHhMm = (ms: number): string =>
 - [ ] **Step 4: Run the scale tests and confirm they pass**
 
 Run: `cd web && npm test -- timeline`
-Expected: PASS — 6 tests
+Expected: PASS — 5 tests
 
 - [ ] **Step 5: Write the failing component test**
 
