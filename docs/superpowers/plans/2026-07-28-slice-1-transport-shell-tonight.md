@@ -790,7 +790,9 @@ def test_transport_failure_uses_the_same_error_shape(monkeypatch):
     from seestar_sidecar import routes
     from seestar_sidecar.mcp_proxy import ProxyTransportError
 
-    async def boom(tool, arguments):
+    # Arity must match call_tool's (request, tool, arguments) — a 2-arg stub
+    # raises TypeError instead, and the test passes for the wrong reason.
+    async def boom(request, tool, arguments):
         raise ProxyTransportError("subprocess died")
 
     monkeypatch.delenv("SEESTAR_REPLAY", raising=False)
