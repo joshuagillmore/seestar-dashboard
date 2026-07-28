@@ -582,7 +582,7 @@ def _extract_payload(result: Any) -> dict:
 - [ ] **Step 5: Run tests and confirm they pass**
 
 Run: `cd sidecar && uv run pytest tests/test_proxy.py -v`
-Expected: PASS — 9 tests
+Expected: PASS — 7 tests
 
 - [ ] **Step 6: Commit**
 
@@ -3067,7 +3067,7 @@ export function PlanCard({ target }: { target: PlanTarget }) {
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- PlanCard`
-Expected: PASS — 9 tests
+Expected: PASS — 5 tests
 
 - [ ] **Step 5: Write the failing screen test**
 
