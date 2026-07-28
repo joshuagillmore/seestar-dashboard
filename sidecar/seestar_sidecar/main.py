@@ -11,20 +11,15 @@ from seestar_sidecar.routes import replay_enabled, router
 VITE_DEV_ORIGIN = "http://localhost:5173"
 SEESTAR_AI_DIR = os.environ.get("SEESTAR_AI_DIR", "C:/Users/<user>/SeeStar-AI")
 
-_connection: McpConnection | None = None
-
-
-def get_connection() -> McpConnection:
-    if _connection is None:
-        raise RuntimeError("MCP connection not started")
-    return _connection
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _connection
+    # The connection lives on app.state rather than a module global, so each
+    # create_app() owns its own and two apps in one process cannot clobber
+    # each other. Routes read it via request.app.state.
+    app.state.connection = None
     if not replay_enabled():
-        _connection = McpConnection(
+        app.state.connection = McpConnection(
             command="uv",
             args=["--directory", SEESTAR_AI_DIR, "run", "python", "-m", "seestar_mcp.server"],
         )
@@ -32,13 +27,17 @@ async def lifespan(app: FastAPI):
         # stop the sidecar booting. The first request starts it and surfaces
         # any failure as a 502 the UI can render.
     yield
-    if _connection is not None:
-        await _connection.aclose()
-        _connection = None
+    if app.state.connection is not None:
+        await app.state.connection.aclose()
+        app.state.connection = None
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="seestar-sidecar", version="0.1.0", lifespan=lifespan)
+    # Safe default for callers that never run the lifespan — a bare
+    # TestClient(create_app()) does exactly that. Routes then report
+    # "MCP connection not started" as a 502 rather than an AttributeError 500.
+    app.state.connection = None
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[VITE_DEV_ORIGIN],
