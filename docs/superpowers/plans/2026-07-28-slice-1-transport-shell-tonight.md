@@ -301,6 +301,8 @@ git commit -m "feat(sidecar): allowlist-gated FastAPI skeleton with health endpo
 Speaks the same protocol as seestar-mcp but needs no telescope, no astropy and
 no SeeStar-AI checkout, so proxy tests stay fast and hermetic.
 """
+import os
+
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("stub-seestar")
@@ -315,6 +317,16 @@ CANNED_PROFILE = {
 async def get_site_profile() -> dict:
     """Return a fixed profile."""
     return CANNED_PROFILE
+
+
+@mcp.tool()
+async def whoami() -> dict:
+    """Return this server process's pid.
+
+    Exists so a test can tell session reuse from a per-call respawn: a canned
+    payload is identical either way, but the pid is not.
+    """
+    return {"pid": os.getpid()}
 
 
 @mcp.tool()
@@ -362,12 +374,45 @@ async def test_unreachable_subprocess_raises_transport_error():
         await conn.start()
 
 
-async def test_repeated_calls_reuse_one_session(connection):
-    first = await connection.call("get_site_profile", {})
-    second = await connection.call("get_site_profile", {})
-    assert first == second
+async def test_repeated_calls_reuse_one_subprocess(connection):
+    """Same pid twice proves one session.
+
+    Comparing canned payloads would NOT prove it — a regressed call() that tore
+    down and respawned the server on every invocation returns identical dicts
+    and still leaves is_started true. The pid is what distinguishes reuse from
+    the per-call spawn this design rules out.
+    """
+    first = await connection.call("whoami", {})
+    second = await connection.call("whoami", {})
+    assert first["pid"] == second["pid"]
     assert connection.is_started
+
+
+async def test_tool_level_failure_surfaces_as_transport_error(connection):
+    """A tool that RAISED must not be mistaken for a payload.
+
+    Distinct from a tool that RETURNS {"ok": false, "error": ...} — that is a
+    valid response the sidecar forwards untouched (see Task 4). This covers the
+    tool raising, where the result carries a traceback rather than JSON.
+    """
+    with pytest.raises(ProxyTransportError):
+        await connection.call("failing_tool", {})
+
+
+async def test_session_recovers_after_a_failed_call(connection):
+    with pytest.raises(ProxyTransportError):
+        await connection.call("failing_tool", {})
+    from tests.stub_mcp_server import CANNED_PROFILE
+
+    assert await connection.call("get_site_profile", {}) == CANNED_PROFILE
 ```
+
+**SDK uncertainty, same class as `_extract_payload`'s:** a FastMCP tool that raises
+may surface either as an exception out of `session.call_tool()` or as a returned
+result with `isError=True` — the SDK does the latter in recent versions. The
+implementation below handles the `isError` case explicitly. If the tests show it
+arrives the other way, adjust the implementation and **report which it was**;
+do not weaken the tests.
 
 - [ ] **Step 3: Run it and confirm it fails**
 
@@ -442,7 +487,13 @@ class McpConnection:
         return _extract_payload(result)
 
     async def aclose(self) -> None:
-        await self._reset()
+        # Under the lock: shutdown can race an in-flight call(). Tearing the
+        # subprocess out from under one turns a clean failure into a raw
+        # transport error, and Task 4 wires this into FastAPI's lifespan
+        # shutdown, where exactly that race is reachable. Neither path
+        # re-acquires the lock, so this cannot deadlock.
+        async with self._lock:
+            await self._reset()
 
     async def _reset(self) -> None:
         if self._stack is not None:
@@ -455,7 +506,19 @@ class McpConnection:
 
 
 def _extract_payload(result: Any) -> dict:
-    """Pull the tool's dict out of an MCP CallToolResult."""
+    """Pull the tool's dict out of an MCP CallToolResult.
+
+    A tool that RAISED is not a payload: the SDK flags it via isError and the
+    text block holds a traceback, not JSON. That is a different thing from a
+    tool that RETURNS {"ok": false, "error": ...} — the MCP server's never-raise
+    contract makes that a valid response, and the sidecar forwards it untouched.
+    """
+    if getattr(result, "isError", False):
+        detail = next(
+            (getattr(b, "text", None) for b in getattr(result, "content", []) or []),
+            None,
+        )
+        raise ProxyTransportError(f"tool reported an error: {detail or 'no detail'}")
     for block in getattr(result, "content", []) or []:
         text = getattr(block, "text", None)
         if text is not None:
