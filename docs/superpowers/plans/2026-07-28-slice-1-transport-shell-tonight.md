@@ -1596,8 +1596,8 @@ git commit -m "feat(web): verdict mapping with CONDITIONAL deliberately unrender
 
 ```ts
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, fetchConditions } from './client'
-import { recordedConditions } from '../test/fixtures'
+import { ApiError, fetchConditions, fetchPlan } from './client'
+import { recordedConditions, recordedPlan } from '../test/fixtures'
 
 const mockFetch = (body: unknown, status = 200) =>
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -1622,6 +1622,26 @@ describe('api client', () => {
   it('raises ApiError when the payload fails schema validation', async () => {
     mockFetch({ ok: true, go: 'yes' })
     await expect(fetchConditions()).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it('puts the limit in the plan query string', async () => {
+    // fetchPlan is the only wrapper with interpolation. A typo here yields a
+    // URL the sidecar 404s or silently ignores, and nothing else would catch it.
+    const spy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => recordedPlan(),
+    })
+    vi.stubGlobal('fetch', spy)
+    await fetchPlan(3)
+    expect(spy).toHaveBeenCalledWith('/api/plan_targets?limit=3')
+  })
+
+  it('raises ApiError when the sidecar cannot be reached at all', async () => {
+    // A fourth failure mode, distinct from the sidecar's own 502: the browser
+    // never reaches it. Task 13 renders this as the screen-level error banner.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')))
+    await expect(fetchConditions()).rejects.toThrow(/unreachable/)
   })
 
   it('surfaces a tool-level failure message, not a schema complaint', async () => {
@@ -1714,7 +1734,7 @@ export const fetchHealth = (): Promise<Health> => get('/api/health', HealthSchem
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- client`
-Expected: PASS — 4 tests
+Expected: PASS — 6 tests
 
 - [ ] **Step 5: Commit**
 
@@ -1890,7 +1910,7 @@ export function TopBar({ site, replay }: Props) {
 - [ ] **Step 4: Run and confirm it passes**
 
 Run: `cd web && npm test -- TopBar`
-Expected: PASS — 4 tests
+Expected: PASS — 6 tests
 
 - [ ] **Step 5: Commit**
 
@@ -2504,7 +2524,7 @@ export const localHhMm = (ms: number): string =>
 - [ ] **Step 4: Run the scale tests and confirm they pass**
 
 Run: `cd web && npm test -- timeline`
-Expected: PASS — 4 tests
+Expected: PASS — 6 tests
 
 - [ ] **Step 5: Write the failing component test**
 
