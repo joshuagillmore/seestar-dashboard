@@ -225,6 +225,45 @@ which is the honest picture.
 
 ---
 
+## 10. Provenance records cannot tell one client from another
+
+**Blocks:** the Live session screen's operator panel (slice 5) — the dashboard
+cannot show what Claude is doing while it runs the `run-session` skill.
+
+`data/provenance.jsonl` is the only record shared between the agent and the
+dashboard. It has 537 records, and each is exactly this:
+
+```json
+{"ts": "2026-07-29T01:17:25.103569+00:00", "tool": "list_projects", "args": {}}
+```
+
+Three fields. **No client id, no session id, no result.** The dashboard and
+Claude Code each spawn their own `seestar_mcp.server` process against the same
+`data/` directory, so both write here — and nothing distinguishes them. Verified
+directly: the three most recent records are the dashboard's own calls, sitting
+indistinguishably alongside the agent's.
+
+The design's operator panel assumes otherwise. Its composer footnote reads
+*"Every tool call is written to provenance.jsonl"*, which is true, but a panel
+that says "Claude just slewed to M31" needs to know which calls were Claude's.
+
+**The hook already exists and is simply unused.** `ProvenanceLog.log_call()`
+(`provenance.py:70`) already accepts `request`, `client_txn_id`,
+`server_txn_id`, `response_code`, `fits_hash` and `note` — the `@mcp.tool()`
+wrappers pass none of them. `SessionManifest` (`provenance.py:138`) already
+carries a `session_id`, but only materialises at QA wind-down.
+
+**Asked for:** populate a stable per-process client identifier and, where a
+session exists, its `session_id` on every `log_call`. A client sets it once at
+initialise; the server stamps each record. That is enough for the dashboard to
+tail the log and attribute each call correctly.
+
+Two smaller things would make the panel materially better and cost little:
+`response_code` (so a failed call is visible as failed) and the elapsed time of
+each call.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
@@ -238,7 +277,11 @@ which is the honest picture.
 | 7 | `median_fwhm` always null | Projects meta + history column | Unknown — possible write-path bug |
 | 8 | ~~No target imagery~~ — **not a server gap**, the archive is on disk | All thumbnails | N/A — dashboard feature, see `slice-2-backlog.md` |
 | 9 | Only the longest sweet-band span returned | Fragmented-band rendering; ranker figure and chart disagree | Yes — the mask exists, `_longest_run` is one reduction over it |
+| 10 | Provenance cannot distinguish clients | Live operator panel (slice 5) | Partly — `log_call` already accepts the fields, the wrappers never pass them |
+| 11 | Catalogue covers 120 objects; half the user's targets are absent | Suggested integration targets; **and the ranker can never suggest IC 405, NGC 1499, SH2-142** | No — but a filtered OpenNGC extension is supplied, see below |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
 explicit absent state for each rather than a plausible-looking placeholder, so nothing on screen is
 a lie. Item 1 **blocks** the Review screen outright. Item 7 may indicate a real server-side defect.
+Item 10 blocks slice 5. Item 11 is the only one that degrades a tool the *agent* uses rather than
+just the dashboard — the ranker's blind spot is the user's most-imaged object.
