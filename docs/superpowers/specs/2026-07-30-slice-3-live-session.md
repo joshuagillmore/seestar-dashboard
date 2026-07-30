@@ -53,8 +53,84 @@ carries the constraints rather than the decision being revisited:
 - **Say when the image is from.** A stale frame presented as current is the dishonesty this project
   avoids everywhere else; timestamp it.
 
+#### D2 resolved — investigated 2026-07-30, and the caution above was miscalibrated
+
+Measured, not assumed:
+
+| File | Size | Written |
+|---|---|---|
+| per-sub thumbnail `Light_*_thn.jpg` | **15.3 KB** | every ~10 s, as each sub lands |
+| stacked thumbnail `Stacked_*_thn.jpg` | 14.7 KB | once per session |
+| stacked full `Stacked_*.jpg` | 476 KB | once per session |
+| per-sub FITS | 4,056 KB | every ~10 s |
+
+**The hazard was mis-scoped, including by me.** The field note warns against a *heavy* offload —
+7,804 FITS at ~4 MB is roughly 31 GB, and that is what starves the control link. Polling a single
+15 KB thumbnail once a minute is 0.25 KB/s. It is a trickle, not an offload, and the note does not
+describe it. The constraints above still stand as good practice; the risk does not justify refusing
+the feature.
+
+**What exists, established rather than inferred:**
+
+- **No image-shaped MCP tool exists at all.** All 33 tools read end to end: `Annotate` is geometry
+  only, `list_subs`/`download_subs` are FITS. So there is no read-only tool to call, and this is a
+  hand-back candidate (see below).
+- **The vendor app uses RTSP (4554/4555) plus a binary live-stack stream (4800/4804)** —
+  reverse-engineered, unwrapped by anything in this codebase. Building a client for it would put a
+  fragile raw protocol in the dashboard, violating `seestar-mcp`'s own "confine the fragile surface
+  to one place" rule, and it is a continuous stream, the wrong shape for an interval fetch. Rejected.
+- **`SEESTAR_ARCHIVE_DIR` is not a live mirror.** Confirmed empirically: newest file is 24 days old,
+  zero files in the last five days. It is a periodic export. Rejected as a live source.
+- **`AllowInsecureGuestAuth` is already enabled** on this machine, so the scope's SMB share needs no
+  new security change here. **It is still a prerequisite for anyone else** and must be documented —
+  it is a host-wide relaxation, and a community user should be told what they are turning on and why.
+- **`Stacked_21_…` and `Stacked_97_…` are different sessions, not increments.** The exported archive
+  holds one stacked image per session, written at the end. The live-updating artifact is the
+  per-sub thumbnail.
+
+**Source strategy: prefer a live stacked preview on the share if one exists, else the newest
+per-sub thumbnail.** Whether the scope writes intermediate stacked JPEGs during a session is
+unknown — an export made afterwards would not show them either way. Preferring one and falling back
+to the other resolves the question the first time a real session runs, without blocking on it now.
+
+The difference matters to the user and should be visible: a single 10-second sub is what the camera
+just captured, but it is noisy and dark next to the accumulating stack the vendor app displays. If
+the fallback is what is showing, the UI should say so rather than letting a grainy frame read as a
+poor result.
+
+**Hand-back candidate:** a read-only tool returning the latest preview JPEG would put this in the
+one place the architecture wants it, and would remove the SMB prerequisite from every client. Not
+raised yet — worth doing only once the source question above is settled by a real session.
+
 **D3 — my call, unchanged:** add the read-only tools this screen needs to `ALLOWED_TOOLS`, each
 verified read-only against the server source rather than assumed from its name.
+
+### Follow-up clarifications, same session
+
+> *"controls are not needed. feel free to keep status indicators in if it's not too difficult or
+> problematic."*
+
+**Status indicators stay, controls go.** The distinction is actionable-vs-informational, not
+which card something sits in: the telemetry grid, stage, plate-solve state, focus reading,
+guardrail dots and sweet-band gauge are all read-only status and all stay. What goes is anything
+that would *do* something. Where a design element was a button, it becomes either a plain readout
+or nothing — never a disabled button, which reads as "broken" rather than "not offered".
+
+> *"for the view, not reticle required and if the LLM has a sentence on stacking assessment like in
+> the design or an automated status from the Seestar, great, but if not, we can always reassess."*
+
+**The overlay defaults off.** The design already calls it toggleable, so this is a default rather
+than a removal: the frame-centre reticle, target circle and crosshair are decoration over the one
+thing the screen exists to show, and the user asked for the picture. Keep the **framing readout as
+text** — `offset 28 px left — in frame` is information, not decoration, and it is how the known
+~20–30′ frame-left characteristic of this unit stays visible without cluttering the image.
+
+**The stacking-assessment sentence is best-effort.** The design's `framing OK · stars tight ·
+background clean` is an *assessment*, not telemetry — the sort of thing the agent produces, and the
+operator panel that would carry it is deferred. So: render whatever the server actually returns,
+and if nothing does, omit the line rather than deriving one. The UI does not author assessments,
+the same way it does not author QA verdicts or the verdict-banner headline. Revisit when the
+operator panel lands — that is where a sentence like this naturally lives.
 
 ---
 
