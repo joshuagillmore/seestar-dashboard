@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchConditions, fetchHealth, fetchPlan, fetchSite } from '../../api/client'
+import { fetchConditions, fetchPlan } from '../../api/client'
 import type { Conditions, Health, PlanTargets, SiteProfile } from '../../api/schemas'
 import { verdictFor } from '../../api/verdict'
 import { Sidebar } from '../../shell/Sidebar'
@@ -14,24 +14,27 @@ import styles from './TonightScreen.module.css'
 interface Data {
   conditions: Conditions
   plan: PlanTargets
-  site: SiteProfile
-  health: Health
 }
 
 export interface TonightScreenProps {
   view: View
   onNavigate: (view: View) => void
+  /** Shell-level data owned by App.tsx (useShellData) — fetched once, shared
+   * across screens, so it survives a view switch instead of blanking and
+   * re-fetching. See useShellData's docstring. */
+  site: SiteProfile | null
+  health: Health | null
 }
 
-export function TonightScreen({ view, onNavigate }: TonightScreenProps) {
+export function TonightScreen({ view, onNavigate, site, health }: TonightScreenProps) {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetchConditions(), fetchPlan(12), fetchSite(), fetchHealth()])
-      .then(([conditions, plan, site, health]) => {
-        if (!cancelled) setData({ conditions, plan, site, health })
+    Promise.all([fetchConditions(), fetchPlan(12)])
+      .then(([conditions, plan]) => {
+        if (!cancelled) setData({ conditions, plan })
       })
       .catch((cause: Error) => {
         if (!cancelled) setError(cause.message)
@@ -45,10 +48,10 @@ export function TonightScreen({ view, onNavigate }: TonightScreenProps) {
 
   return (
     <AppShell
-      topBar={<TopBar site={data?.site ?? null} replay={data?.health.replay ?? false} />}
+      topBar={<TopBar site={site} replay={health?.replay ?? false} />}
       sidebar={
         <Sidebar
-          site={data?.site ?? null}
+          site={site}
           verdict={verdict}
           gpsWarning={data?.conditions.location.warning ?? null}
           view={view}

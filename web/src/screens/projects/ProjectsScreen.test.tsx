@@ -1,18 +1,23 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProjectsScreen } from './ProjectsScreen'
-import { ListProjectsSchema, ProjectsCombinedSchema } from '../../api/schemas'
-import { recordedListProjects, recordedProjectsCombined } from '../../test/fixtures'
+import { ListProjectsSchema, ProjectsCombinedSchema, SiteProfileSchema, type Health } from '../../api/schemas'
+import { recordedListProjects, recordedProjectsCombined, recordedSite } from '../../test/fixtures'
 
 const combined = ProjectsCombinedSchema.parse(recordedProjectsCombined())
 const listed = ListProjectsSchema.parse(recordedListProjects())
 const totalHoursText = `${(combined.totals.total_minutes / 60).toFixed(1)} h`
 
+// site/health are shell-level data owned by App.tsx's useShellData() and
+// passed in as props (see ProjectsScreenProps) — this screen fetches only
+// projects_combined and list_projects itself.
+const site = SiteProfileSchema.parse(recordedSite())
+const notReplaying: Health = { ok: true, replay: false }
+
 function stubApi(overrides: Record<string, unknown> = {}) {
   const bodies: Record<string, unknown> = {
     '/api/projects_combined': recordedProjectsCombined(),
     '/api/list_projects': recordedListProjects(),
-    '/api/health': { ok: true, replay: false },
     ...overrides,
   }
   vi.stubGlobal(
@@ -22,7 +27,7 @@ function stubApi(overrides: Record<string, unknown> = {}) {
 }
 
 async function renderLoaded(view: 'projects' = 'projects', onNavigate = vi.fn()) {
-  render(<ProjectsScreen view={view} onNavigate={onNavigate} />)
+  render(<ProjectsScreen view={view} onNavigate={onNavigate} site={site} health={notReplaying} />)
   await waitFor(() => expect(screen.queryByTestId('projects-loading')).not.toBeInTheDocument())
   return onNavigate
 }
@@ -32,7 +37,7 @@ afterEach(() => vi.unstubAllGlobals())
 describe('ProjectsScreen', () => {
   it('shows a loading state first', () => {
     stubApi()
-    render(<ProjectsScreen view="projects" onNavigate={vi.fn()} />)
+    render(<ProjectsScreen view="projects" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     expect(screen.getByTestId('projects-loading')).toBeInTheDocument()
   })
 
@@ -73,6 +78,9 @@ describe('ProjectsScreen', () => {
     expect(screen.queryByText(/appears only in the archive scan/)).not.toBeInTheDocument()
     // The real M31 record has 3 sessions in the store — 1 header row + 3 data rows.
     expect(screen.getAllByRole('row')).toHaveLength(1 + m31Sessions.length)
+    // M31 is one of the four overlapping targets — its table only ever shows
+    // the store's 3 sessions, so the un-itemised-archive note must appear.
+    expect(screen.getByText(/plus 38\.3 min from the archive, not itemised per night here/)).toBeInTheDocument()
   })
 
   it('shows the provenance split on an overlapping target rather than only its merged total', async () => {
@@ -115,9 +123,29 @@ describe('ProjectsScreen', () => {
     expect(onNavigate).toHaveBeenCalledWith('tonight')
   })
 
+  it('renders the site profile passed in from the shared app shell', async () => {
+    // Regression test for the "site block blanks on navigation" bug: this
+    // screen no longer fetches get_site_profile itself, so the ONLY way this
+    // can pass is if the `site` prop is actually threaded to Sidebar/TopBar.
+    stubApi()
+    await renderLoaded()
+    // Renders in two places (Sidebar's site block, TopBar's facts row), so
+    // scope by element type/testid rather than a bare getByText.
+    expect(screen.getByText('Example Observatory (scope GPS)', { selector: 'div' })).toBeInTheDocument()
+    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory (scope GPS)')
+  })
+
+  it('renders gracefully when site/health have not arrived yet (null props)', async () => {
+    stubApi()
+    render(<ProjectsScreen view="projects" onNavigate={vi.fn()} site={null} health={null} />)
+    await waitFor(() => expect(screen.queryByTestId('projects-loading')).not.toBeInTheDocument())
+    expect(screen.queryByText('Example Observatory (scope GPS)')).not.toBeInTheDocument()
+    expect(screen.getByText(`${combined.count} projects · ${totalHoursText} collected`)).toBeInTheDocument()
+  })
+
   it('shows an error banner when the sidecar is unreachable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')))
-    render(<ProjectsScreen view="projects" onNavigate={vi.fn()} />)
+    render(<ProjectsScreen view="projects" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent(/unreachable/i)
   })

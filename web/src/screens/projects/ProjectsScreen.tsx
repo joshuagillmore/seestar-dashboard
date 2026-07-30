@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchHealth, fetchProjects, fetchProjectsCombined } from '../../api/client'
-import type { Health, ListProjects, ProjectsCombined } from '../../api/schemas'
+import { fetchProjects, fetchProjectsCombined } from '../../api/client'
+import type { Health, ListProjects, ProjectsCombined, SiteProfile } from '../../api/schemas'
 import { AppShell } from '../../shell/AppShell'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
@@ -13,39 +13,38 @@ import styles from './ProjectsScreen.module.css'
 interface Data {
   combined: ProjectsCombined
   listed: ListProjects
-  health: Health
 }
 
 export interface ProjectsScreenProps {
   view: View
   onNavigate: (view: View) => void
+  /** Shell-level data owned by App.tsx (useShellData) — fetched once, shared
+   * across screens, so it survives a view switch instead of blanking and
+   * re-fetching. See useShellData's docstring. */
+  site: SiteProfile | null
+  health: Health | null
 }
 
 /**
  * Integration-led per the phase-2 ruling (docs/superpowers/specs/2026-07-28-
  * slice-2-runnable-and-projects.md): every real project has goal_minutes 0,
  * so hours collected leads and cards sort by most time invested, rather than
- * by shortfall against a goal nothing has. Only two endpoints are called —
- * projects_combined (union + provenance) and list_projects (goals, status,
- * session history) — joined client-side by target_id in mergeProjects().
- *
- * Deliberately does NOT fetch get_site_profile: the site/GPS block in the
- * sidebar is therefore absent while this screen is mounted (Sidebar already
- * renders that gracefully for a null site — see its own tests). Fetching it
- * here just to keep that block populated would be a third endpoint beyond
- * what this slice's data contract calls for, for a screen that has nothing
- * to do with site geometry.
+ * by shortfall against a goal nothing has. Only two endpoints are fetched
+ * HERE — projects_combined (union + provenance) and list_projects (goals,
+ * status, session history) — joined client-side by target_id in
+ * mergeProjects(). site/health come from the shared useShellData() in
+ * App.tsx, not a third fetch of this screen's own.
  */
-export function ProjectsScreen({ view, onNavigate }: ProjectsScreenProps) {
+export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScreenProps) {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetchProjectsCombined(), fetchProjects(), fetchHealth()])
-      .then(([combined, listed, health]) => {
-        if (!cancelled) setData({ combined, listed, health })
+    Promise.all([fetchProjectsCombined(), fetchProjects()])
+      .then(([combined, listed]) => {
+        if (!cancelled) setData({ combined, listed })
       })
       .catch((cause: Error) => {
         if (!cancelled) setError(cause.message)
@@ -64,10 +63,10 @@ export function ProjectsScreen({ view, onNavigate }: ProjectsScreenProps) {
 
   return (
     <AppShell
-      topBar={<TopBar site={null} replay={data?.health.replay ?? false} />}
+      topBar={<TopBar site={site} replay={health?.replay ?? false} />}
       sidebar={
         <Sidebar
-          site={null}
+          site={site}
           verdict={null}
           gpsWarning={null}
           view={view}

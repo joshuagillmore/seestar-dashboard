@@ -59,3 +59,13 @@
   line-height: 1.5;
   color: var(--text-dimmer);
 }
+
+.archiveNote {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-faint);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-dimmer);
+}

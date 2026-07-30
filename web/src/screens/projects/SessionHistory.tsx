@@ -1,4 +1,4 @@
-import type { MergedProject } from './projects'
+import { formatMinutes, type MergedProject } from './projects'
 import styles from './SessionHistory.module.css'
 
 const FWHM_ABSENT_TITLE =
@@ -21,6 +21,16 @@ const FILTER_ABSENT_TITLE = 'list_projects does not return a per-session filter 
  * the UTC calendar date, not necessarily the observing night — see the
  * slice-2-backlog's "Timezone marker" note for the same accepted gap
  * elsewhere in the app.
+ *
+ * For the four targets recorded in both sources (M31, M27, NGC281, M57), the
+ * table above only ever shows the store's own sessions — the archive side of
+ * the union isn't broken out per night anywhere this screen can reach, so
+ * the table's own total reads lower than the card's `total_minutes`. A note
+ * below the table says so whenever `archiveMinutes > 0`, rather than leaving
+ * the gap unexplained. This is a display limitation, not a permanent one:
+ * `scan_archive()` already computes a per-night `ArchiveNight` record
+ * internally (see archive.py) — `/api/projects_combined` just doesn't expose
+ * it yet. See docs/slice-2-backlog.md.
  */
 export function SessionHistory({ project }: { project: MergedProject }) {
   const label = `${project.targetId} · SESSION HISTORY — list_projects`
@@ -39,12 +49,19 @@ export function SessionHistory({ project }: { project: MergedProject }) {
   }
 
   const sessions = project.store.sessions
+  const archiveNote = project.archiveMinutes > 0 && (
+    <div className={styles.archiveNote}>
+      plus {formatMinutes(project.archiveMinutes)} from the archive, not itemised per night
+      here.
+    </div>
+  )
 
   if (sessions.length === 0) {
     return (
       <section className={styles.card}>
         <div className={styles.label}>{label}</div>
         <div className={styles.empty}>No sessions logged for {project.targetName} yet.</div>
+        {archiveNote}
       </section>
     )
   }
@@ -77,6 +94,7 @@ export function SessionHistory({ project }: { project: MergedProject }) {
           <div className={styles.cell}>{session.integration_minutes.toFixed(1)} min</div>
         </div>
       ))}
+      {archiveNote}
     </section>
   )
 }

@@ -120,4 +120,37 @@ describe('SessionHistory', () => {
     const [, row] = screen.getAllByRole('row')
     expect(within(row).getByText('3.42 px')).toBeInTheDocument()
   })
+
+  it('notes the un-itemised archive minutes when the target also has archive data (e.g. M31)', () => {
+    render(
+      <SessionHistory
+        project={merged({
+          archiveMinutes: 38.3333,
+          store: project({ sessions: [session()] }),
+        })}
+      />,
+    )
+    expect(
+      screen.getByText('plus 38.3 min from the archive, not itemised per night here.'),
+    ).toBeInTheDocument()
+  })
+
+  it('omits the archive note for a target with no archive contribution', () => {
+    render(<SessionHistory project={merged({ archiveMinutes: 0, store: project({ sessions: [session()] }) })} />)
+    expect(screen.queryByText(/from the archive/)).not.toBeInTheDocument()
+  })
+
+  it('still notes un-itemised archive minutes when the tracked project has no sessions yet', () => {
+    render(
+      <SessionHistory
+        project={merged({ archiveMinutes: 17, store: project({ sessions: [] }) })}
+      />,
+    )
+    expect(screen.getByText(/plus 17\.0 min from the archive/)).toBeInTheDocument()
+  })
+
+  it('does not duplicate the archive-minutes note for an archive-only target — its empty state already explains the provenance', () => {
+    render(<SessionHistory project={merged({ store: null, archiveMinutes: 217.2 })} />)
+    expect(screen.queryByText(/not itemised per night here/)).not.toBeInTheDocument()
+  })
 })
