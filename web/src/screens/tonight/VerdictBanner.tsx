@@ -20,7 +20,9 @@ const DEW_TONE: Partial<Record<string, 'pass' | 'marginal' | 'reject'>> = {
   high: 'reject',
 }
 
-/** Round, don't truncate: the recorded moon is 0.9877, which is 99% not 98%. */
+/** Round, don't truncate — a fraction like 0.995 should read 100%, not 99%.
+ *  (Illustrative only: pinning this to today's recorded moon value would make
+ *  the comment wrong again the next time the fixture is re-recorded.) */
 const pct = (fraction: number) => `${Math.round(fraction * 100)}%`
 
 function Stat({ id, label, value, tone, absentTitle }: {

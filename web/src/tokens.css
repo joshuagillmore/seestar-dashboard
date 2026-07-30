@@ -104,7 +104,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbars are restyled globally per the handoff. */
+/* Scrollbars are restyled globally per the handoff. scrollbar-width/-color are
+   the standard-properties equivalent of the ::-webkit-scrollbar rules below,
+   for engines (Firefox) that ignore the webkit pseudo-elements entirely —
+   without this, "restyled globally" would only be true in Chromium, and any
+   layout that assumes a specific reserved scrollbar-gutter width (see
+   SweetBandTimeline.module.css) would only hold in one engine. */
+* { scrollbar-width: thin; scrollbar-color: #2b3036 transparent; }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: #2b3036; border-radius: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
