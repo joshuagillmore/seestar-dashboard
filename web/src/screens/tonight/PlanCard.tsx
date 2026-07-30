@@ -134,7 +134,7 @@ export function PlanCard({
         <button
           className={styles.primary}
           disabled
-          title="Motion requires the approval gate — slice 3"
+          title="Motion requires an approval gate that doesn't exist yet — slice 3 shipped the Live session screen without one by deliberate choice (docs/superpowers/specs/2026-07-30-slice-3-live-session.md §0: the user does not want telescope control from the dashboard); a future slice would need a real coordination protocol with the run-session skill first"
         >
           Hand to run-session
         </button>

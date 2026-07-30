@@ -1,6 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, fetchConditions, fetchPlan } from './client'
-import { recordedConditions, recordedPlan } from '../test/fixtures'
+import {
+  ApiError,
+  fetchConditions,
+  fetchFocuserPosition,
+  fetchGuardrails,
+  fetchLivePreview,
+  fetchPlan,
+  fetchStatus,
+  fetchTargetObservability,
+  fetchTier1,
+  fetchViewState,
+} from './client'
+import {
+  liveFocuserPosition,
+  liveGuardrails,
+  livePreviewStacked,
+  liveStatus,
+  liveTargetObservability,
+  liveTier1,
+  liveViewState,
+  recordedConditions,
+  recordedPlan,
+} from '../test/fixtures'
 
 const mockFetch = (body: unknown, status = 200) =>
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -69,5 +90,54 @@ describe('api client', () => {
     mockFetch({ ok: false, error: 'no site profile has been set' })
     await expect(fetchConditions()).rejects.toThrow(/no site profile has been set/)
     await expect(fetchConditions()).rejects.not.toThrow(/unexpected payload/)
+  })
+
+  describe('live-session fetchers (slice 3)', () => {
+    it('parses a good get_view_state response, including the nested Stack/Annotate', async () => {
+      mockFetch(liveViewState())
+      const viewState = await fetchViewState()
+      expect(viewState.result?.View?.Stack?.stacked_frame).toBe(428)
+    })
+
+    it('parses get_status', async () => {
+      mockFetch(liveStatus())
+      expect((await fetchStatus()).connected).toBe(true)
+    })
+
+    it('parses check_night_guardrails', async () => {
+      mockFetch(liveGuardrails())
+      expect((await fetchGuardrails()).verdict).toBe('continue')
+    })
+
+    it('parses qa_tier1', async () => {
+      mockFetch(liveTier1())
+      expect((await fetchTier1()).stacked_frame).toBe(428)
+    })
+
+    it('parses get_focuser_position', async () => {
+      mockFetch(liveFocuserPosition())
+      expect((await fetchFocuserPosition()).position).toBe(1645)
+    })
+
+    it('parses get_target_observability', async () => {
+      mockFetch(liveTargetObservability())
+      expect((await fetchTargetObservability()).in_sweet_band).toBe(true)
+    })
+
+    it('parses live_preview', async () => {
+      mockFetch(livePreviewStacked())
+      expect((await fetchLivePreview()).source).toBe('stacked')
+    })
+
+    it('raises ApiError (not a hang) when get_view_state times out on an idle scope — the sidecar 502s, it does not leave the request open', async () => {
+      // The spec is explicit that state methods time out on an idle scope,
+      // but that means the SIDECAR's call to the MCP tool times out — the
+      // HTTP response to the browser still comes back promptly as a 502 (see
+      // routes.py's _serve). This client has no special-cased "wait longer"
+      // path; a slow upstream is just another ApiError to the caller.
+      mockFetch({ ok: false, error: 'get_view_state timed out — scope not observing' }, 502)
+      await expect(fetchViewState()).rejects.toBeInstanceOf(ApiError)
+      await expect(fetchViewState()).rejects.toThrow(/timed out/)
+    })
   })
 })

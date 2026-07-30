@@ -12,6 +12,12 @@ export interface DotProps {
    * `data-dot` itself, so a caller can add to the element but never touch the
    * attribute that makes it a guarantee (see the class doc comment below). */
   className?: string
+  /** Plays `tokens.css`'s `livePulse` keyframe (opacity 1 → 0.25 → 1), already
+   * guarded there by `prefers-reduced-motion`. Off by default — every dot
+   * before slice 3 was static, and a caller that wants the pulse (the Live
+   * preview header's "Live stack" indicator, its first call site) opts in
+   * explicitly rather than every dot gaining motion silently. */
+  pulse?: boolean
 }
 
 /**
@@ -27,12 +33,12 @@ export interface DotProps {
  * component's own `${styles[size]} ${styles[tone]}` classes. A caller cannot
  * reach `data-dot` at all, by construction, whatever it tries to pass.
  */
-export function Dot({ tone, size = 'md', className }: DotProps) {
+export function Dot({ tone, size = 'md', className, pulse = false }: DotProps) {
   return (
     <span
       data-testid="dot"
       data-dot={tone}
-      className={`${styles.dot} ${styles[size]} ${styles[tone]}${className ? ` ${className}` : ''}`}
+      className={`${styles.dot} ${styles[size]} ${styles[tone]}${pulse ? ` ${styles.pulse}` : ''}${className ? ` ${className}` : ''}`}
     />
   )
 }

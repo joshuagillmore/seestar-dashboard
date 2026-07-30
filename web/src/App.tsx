@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LiveScreen } from './screens/live/LiveScreen'
 import { ProjectsScreen } from './screens/projects/ProjectsScreen'
 import { TonightScreen } from './screens/tonight/TonightScreen'
 import { useShellData } from './shell/useShellData'
@@ -14,7 +15,10 @@ export default function App() {
   if (view === 'projects') {
     return <ProjectsScreen view={view} onNavigate={setView} site={site} health={health} />
   }
-  // 'live' and 'review' have no screen yet (their nav rows stay disabled),
-  // so anything other than 'projects' falls through to Tonight.
+  if (view === 'live') {
+    return <LiveScreen view={view} onNavigate={setView} site={site} health={health} />
+  }
+  // 'review' has no screen yet (its nav row stays disabled), so anything
+  // other than 'projects'/'live' falls through to Tonight.
   return <TonightScreen view={view} onNavigate={setView} site={site} health={health} />
 }

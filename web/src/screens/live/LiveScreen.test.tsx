@@ -1,0 +1,241 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { LiveScreen } from './LiveScreen'
+import { SiteProfileSchema, type Health } from '../../api/schemas'
+import {
+  liveFocuserPosition,
+  liveGuardrails,
+  livePreviewSub,
+  livePreviewStale,
+  livePreviewStacked,
+  liveStatus,
+  liveTargetObservability,
+  liveTier1,
+  liveViewState,
+  recordedSite,
+} from '../../test/fixtures'
+
+const site = SiteProfileSchema.parse(recordedSite())
+const notReplaying: Health = { ok: true, replay: false }
+
+type Body = unknown
+
+/** A per-URL fetch stub, defaulting every live-session endpoint to a happy
+ * "session active" response — override individual URLs per test. Bodies
+ * that are functions are invoked per call, so a test can vary the response
+ * across successive polls (see the newest-first / multi-poll tests). */
+function stubApi(overrides: Record<string, Body | (() => Body)> = {}) {
+  const bodies: Record<string, Body | (() => Body)> = {
+    '/api/get_status': liveStatus(),
+    '/api/get_view_state': liveViewState(),
+    '/api/check_night_guardrails': liveGuardrails(),
+    '/api/qa_tier1': liveTier1(),
+    '/api/get_focuser_position': liveFocuserPosition(),
+    '/api/get_target_observability': liveTargetObservability(),
+    '/api/live_preview': livePreviewStacked(),
+    ...overrides,
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (!(url in bodies)) {
+        return { ok: false, status: 404, json: async () => ({ ok: false, error: `no stub for ${url}` }) }
+      }
+      const entry = bodies[url]
+      const body = typeof entry === 'function' ? (entry as () => Body)() : entry
+      return { ok: true, status: 200, json: async () => body }
+    }),
+  )
+}
+
+/** `get_status` succeeds but `get_view_state` fails/times out — the
+ * documented idle-scope case (slice-3 spec §4), not a bridge problem. */
+function stubIdle() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/api/get_status') return { ok: true, status: 200, json: async () => liveStatus() }
+      if (url === '/api/get_view_state') {
+        return {
+          ok: false,
+          status: 502,
+          json: async () => ({ ok: false, error: 'get_view_state timed out — scope not observing' }),
+        }
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: false, error: 'unused' }) }
+    }),
+  )
+}
+
+/** `get_status` itself fails — the connection is gone, not merely idle. */
+function stubBridgeDown() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/api/get_status') {
+        return {
+          ok: false,
+          status: 502,
+          json: async () => ({ ok: false, error: 'bridge unreachable: connection refused' }),
+        }
+      }
+      return { ok: false, status: 502, json: async () => ({ ok: false, error: 'unreachable' }) }
+    }),
+  )
+}
+
+afterEach(() => vi.unstubAllGlobals())
+
+describe('LiveScreen', () => {
+  it('shows a loading state first', () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    expect(screen.getByTestId('live-loading')).toBeInTheDocument()
+  })
+
+  it('renders a distinct idle state — not an error banner — when the scope is not observing', async () => {
+    stubIdle()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    expect(screen.getByText(/Scope idle/i)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('live-bridge-down')).not.toBeInTheDocument()
+  })
+
+  it('renders a distinct bridge-down state when the connection check itself fails', async () => {
+    stubBridgeDown()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-bridge-down')).toBeInTheDocument())
+    // Scoped to the title (a <div>) — the body text below it also contains
+    // "unreachable" (it's the raw ApiError message), which would collide
+    // with an unscoped match.
+    expect(screen.getByText('Bridge unreachable', { selector: 'div' })).toBeInTheDocument()
+    expect(screen.queryByTestId('live-idle')).not.toBeInTheDocument()
+  })
+
+  it('renders idle and bridge-down with different sidebar dot tones', async () => {
+    stubIdle()
+    const { unmount } = render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    const idleTone = screen.getAllByTestId('dot')[1].getAttribute('data-dot')
+    unmount()
+
+    stubBridgeDown()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-bridge-down')).toBeInTheDocument())
+    const bridgeDownTone = screen.getAllByTestId('dot')[1].getAttribute('data-dot')
+
+    expect(idleTone).not.toBe(bridgeDownTone)
+    expect(idleTone).toBe('idle')
+    expect(bridgeDownTone).toBe('reject')
+  })
+
+  it('renders the active session once get_status and get_view_state both succeed', async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument()
+    // The grid reads Stack.stacked_frame/dropped_frame from the nested
+    // get_view_state shape (428/23 in the synthetic fixture) — proof the
+    // nesting was actually parsed, not merely that SOME number rendered.
+    expect(screen.getByText('428')).toBeInTheDocument()
+    expect(screen.getByText('23')).toBeInTheDocument()
+  })
+
+  it('falls back to idle (not a crash, and not fabricated telemetry) when get_view_state answers ok but with View.Stack hoisted to the top level', async () => {
+    // The exact bug the slice-3 spec warns about: a parser reading
+    // stacked_frame/dropped_frame at the top level "silently produced empty
+    // telemetry" once already. ViewStateSchema requires the real nesting, so
+    // this malformed-but-200-OK payload fails schema validation inside
+    // fetchViewState, which useLiveSession reads as "idle" — proving the
+    // nesting is actually load-bearing, not just documented.
+    stubApi({ '/api/get_view_state': { ok: true, stacked_frame: 428, dropped_frame: 23 } })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    expect(screen.queryByText('428')).not.toBeInTheDocument()
+  })
+
+  it('marks a "sub" source preview as a single frame, visibly, not just via a data attribute', async () => {
+    stubApi({ '/api/live_preview': livePreviewSub() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('preview-source-sub')).toBeInTheDocument())
+    expect(screen.getByText(/single 10 s sub — not the accumulating stack/i)).toBeInTheDocument()
+  })
+
+  it('does not show the single-frame badge for a stacked-source preview', async () => {
+    stubApi({ '/api/live_preview': livePreviewStacked() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    expect(screen.queryByTestId('preview-source-sub')).not.toBeInTheDocument()
+  })
+
+  it('makes a stale preview frame visible, with when it is actually from', async () => {
+    stubApi({ '/api/live_preview': livePreviewStale() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('preview-stale')).toBeInTheDocument())
+    expect(screen.getByText(/stale — from/i)).toBeInTheDocument()
+  })
+
+  it('does not show a stale badge for a fresh preview', async () => {
+    stubApi({ '/api/live_preview': livePreviewStacked() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    expect(screen.queryByTestId('preview-stale')).not.toBeInTheDocument()
+  })
+
+  it('keeps the plate-solve overlay off by default, and toggles it on', async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    expect(screen.queryByTestId('preview-overlay')).not.toBeInTheDocument()
+    // But the framing readout — information, not decoration — is visible
+    // regardless, per the slice-3 spec's own ruling.
+    expect(screen.getByTestId('framing-readout')).toHaveTextContent(/offset 28 px left — in frame/)
+
+    fireEvent.click(screen.getByRole('button', { name: /show plate-solve overlay/i }))
+    expect(screen.getByTestId('preview-overlay')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /hide plate-solve overlay/i }))
+    expect(screen.queryByTestId('preview-overlay')).not.toBeInTheDocument()
+  })
+
+  it('renders the telemetry log with at least the current poll\'s entry', async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('telemetry-log-body')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByTestId('telemetry-log-line').length).toBeGreaterThan(0))
+    expect(screen.getByText(/Quality verdict pending/i)).toBeInTheDocument()
+  })
+
+  it('never shows a per-sub PASS/MARGINAL/REJECT verdict during the session', async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    expect(screen.queryByText(/\bREJECT\b/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\bMARGINAL\b/)).not.toBeInTheDocument()
+  })
+
+  it('renders no telescope-control buttons at all — the whole slice-3 §0 point', async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /refocus/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /stop stack/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /wind down/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument()
+  })
+
+  it('the telemetry grid uses minmax(0,1fr), not a bare 1fr, so a label cannot overflow the container', () => {
+    // Regression guard for the exact bug the design's own handoff warns
+    // about twice (README.md:424) — a bare `1fr`'s min-content default
+    // overflowed the prototype's container. Read from source: jsdom does not
+    // compute intrinsic min-content sizing, so this property cannot be
+    // observed by measuring a rendered grid in this test environment.
+    const css = readFileSync(join(__dirname, 'TelemetryGrid.module.css'), 'utf8')
+    const gridRule = css.match(/\.grid\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(gridRule).toMatch(/minmax\(0,\s*1fr\)/)
+    expect(gridRule).not.toMatch(/repeat\(3,\s*1fr\)/)
+  })
+})

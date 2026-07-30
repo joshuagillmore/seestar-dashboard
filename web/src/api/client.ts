@@ -1,19 +1,33 @@
 import type { ZodType } from 'zod'
 import {
   ConditionsSchema,
+  FocuserPositionSchema,
+  GuardrailsSchema,
   HealthSchema,
   ListProjectsSchema,
+  LivePreviewSchema,
   PlanTargetsSchema,
   ProjectsCombinedSchema,
   RecommendProjectsSchema,
   SiteProfileSchema,
+  StatusSchema,
+  TargetObservabilitySchema,
+  Tier1Schema,
+  ViewStateSchema,
   type Conditions,
+  type FocuserPosition,
+  type Guardrails,
   type Health,
   type ListProjects,
+  type LivePreview,
   type PlanTargets,
   type ProjectsCombined,
   type RecommendProjects,
   type SiteProfile,
+  type Status,
+  type TargetObservability,
+  type Tier1,
+  type ViewState,
 } from './schemas'
 
 export class ApiError extends Error {}
@@ -104,3 +118,32 @@ export const fetchRecommendProjects = (limit?: number): Promise<RecommendProject
     `/api/recommend_projects${limit !== undefined ? `?limit=${limit}` : ''}`,
     RecommendProjectsSchema,
   )
+
+/**
+ * Live-session fetchers (slice 3). Every one of these is expected to fail
+ * or time out while the scope is idle — that is the documented normal case
+ * (CLAUDE.md, "Known gap" / slice-3 spec §4), not a bug to retry around. Each
+ * throws `ApiError` exactly like every fetcher above; screens/live/
+ * useLiveSession.ts is what turns those failures into the idle/bridge-down
+ * distinction, by seeing which calls fail together — see its own doc comment
+ * for why that's a more honest signal than pattern-matching error text.
+ */
+export const fetchViewState = (): Promise<ViewState> => get('/api/get_view_state', ViewStateSchema)
+
+export const fetchStatus = (): Promise<Status> => get('/api/get_status', StatusSchema)
+
+export const fetchGuardrails = (): Promise<Guardrails> =>
+  get('/api/check_night_guardrails', GuardrailsSchema)
+
+export const fetchTier1 = (): Promise<Tier1> => get('/api/qa_tier1', Tier1Schema)
+
+export const fetchFocuserPosition = (): Promise<FocuserPosition> =>
+  get('/api/get_focuser_position', FocuserPositionSchema)
+
+export const fetchTargetObservability = (): Promise<TargetObservability> =>
+  get('/api/get_target_observability', TargetObservabilitySchema)
+
+/** Metadata only — `stale`, `source`, `captured_at`, and the `url` to point
+ * an `<img>` at (see PreviewCard). Never fetches the image bytes itself. */
+export const fetchLivePreview = (): Promise<LivePreview> =>
+  get('/api/live_preview', LivePreviewSchema)

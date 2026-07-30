@@ -221,6 +221,138 @@ export const ProjectsCombinedSchema = z.object({
   }),
 })
 
+/**
+ * Live-session shapes (slice 3). Unlike every schema above, none of these has
+ * a payload recorded off the live server yet — `record.py` hasn't captured
+ * them (see fixtures/synthetic/live_*.json, hand-built pending a real
+ * recording). Two things are verified rather than guessed, per the slice-3
+ * spec's own field notes:
+ *
+ * 1. `get_view_state` nests everything under `result.View` —
+ *    `View.Stack.stacked_frame` / `dropped_frame` / `View.Stack.Annotate.
+ *    {state,pixelx,pixely,radius}`. A parser reading those at the top level
+ *    gets nothing; this has already silently produced empty telemetry once.
+ * 2. `/api/live_preview` and `/api/live_preview/image` — given verbatim by
+ *    the slice lead: `{ok, source, captured_at, stack_count, target, stale,
+ *    url}`, with a distinct `reason` when `source` is null.
+ *
+ * Everything else here (guardrails/tier1/focuser/observability field names)
+ * is this repo's best reasoned guess from the design handoff's own sample
+ * values, not a confirmed server contract — deliberately optional/nullable
+ * throughout so a real payload that omits or renames a field degrades to an
+ * honest absent state per card (see screens/live/) instead of failing schema
+ * validation outright. Tighten each one the moment a real fixture exists.
+ */
+export const AnnotateSchema = z.object({
+  /** Plate-solve success. The server's actual type for this is not yet
+   * confirmed — accepting either shape rather than guessing wrong and
+   * failing validation on every real payload. */
+  state: z.union([z.boolean(), z.string()]).nullable(),
+  pixelx: z.number().nullable(),
+  pixely: z.number().nullable(),
+  radius: z.number().nullable(),
+})
+
+export const StackStateSchema = z.object({
+  stacked_frame: z.number(),
+  dropped_frame: z.number(),
+  Annotate: AnnotateSchema.nullable().optional(),
+})
+
+export const ViewStateSchema = z.object({
+  ok: z.boolean(),
+  result: z
+    .object({
+      View: z
+        .object({
+          /** e.g. "3PPA", "AutoGoto", "Stack" — the design's STAGE cell.
+           * Not yet confirmed as a field name; optional so its absence just
+           * renders the cell as "—" rather than failing the whole parse. */
+          stage: z.string().nullable().optional(),
+          target_name: z.string().nullable().optional(),
+          /** Absent/null during a pre-stack stage (3PPA, AutoGoto) — a
+           * session can be "ok" without stacking having started yet. */
+          Stack: StackStateSchema.nullable().optional(),
+        })
+        .nullable(),
+    })
+    .nullable(),
+})
+
+export const StatusSchema = z.object({
+  ok: z.boolean(),
+  connected: z.boolean().nullable().optional(),
+  rightascension: z.number().nullable().optional(),
+  declination: z.number().nullable().optional(),
+  tracking: z.boolean().nullable().optional(),
+  slewing: z.boolean().nullable().optional(),
+})
+
+/** One row of `check_night_guardrails` — design README.md:448-459. `tone` is
+ * the server's own judgement (pass/marginal/reject), rendered as the row's
+ * dot; this client never derives it from `value`. */
+export const GuardrailCheckSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  value: z.string(),
+  tone: z.enum(['pass', 'marginal', 'reject']),
+})
+
+export const GuardrailsSchema = z.object({
+  ok: z.boolean(),
+  checks: z.array(GuardrailCheckSchema),
+  /** "Verdict continue — every hard stop ends in park" (design README.md:460)
+   * — a closed two-state field, not synthesised from the checks above. */
+  verdict: z.enum(['continue', 'park']).nullable().optional(),
+})
+
+/** One `qa_tier1` poll — a snapshot, not a pre-built log. The Telemetry log
+ * card (design README.md:463-476) is this client's own rolling history of
+ * snapshots like this one, timestamped at fetch time — see
+ * screens/live/telemetryLog.ts. Tier-1 is cheap health polling; it never
+ * carries a per-sub quality verdict (that's Tier-2, at wind-down only). */
+export const Tier1Schema = z.object({
+  ok: z.boolean(),
+  stacked_frame: z.number().nullable().optional(),
+  dropped_frame: z.number().nullable().optional(),
+  solve_ok: z.boolean().nullable().optional(),
+  focus_position: z.number().nullable().optional(),
+})
+
+export const FocuserPositionSchema = z.object({
+  ok: z.boolean(),
+  position: z.number().nullable(),
+})
+
+/** Per-target live observability — the sweet-band gauge's *dynamic* half.
+ * The gauge's static boundaries (rotation ceiling, altitude floor) come from
+ * `get_site_profile`'s already-typed `field_rotation_ceiling_deg` /
+ * `min_altitude_deg` (see SiteProfileSchema above), not from here — this
+ * tool only needs to supply what changes during the session. */
+export const TargetObservabilitySchema = z.object({
+  ok: z.boolean(),
+  current_alt_deg: z.number().nullable().optional(),
+  current_az_deg: z.number().nullable().optional(),
+  minutes_to_band_exit: z.number().nullable().optional(),
+  in_sweet_band: z.boolean().nullable().optional(),
+})
+
+/** `/api/live_preview` — given verbatim, see this section's module comment.
+ * `source: null` always carries a `reason` (e.g. no session, nothing written
+ * yet); `stacked`/`sub` distinguishes the accumulating stack from a single
+ * noisy 10 s sub, which the preview card must say out loud rather than let a
+ * grainy frame read as a poor result. */
+export const LivePreviewSchema = z.object({
+  ok: z.boolean(),
+  source: z.enum(['stacked', 'sub']).nullable(),
+  captured_at: z.string().nullable(),
+  stack_count: z.number().nullable().optional(),
+  target: z.string().nullable().optional(),
+  stale: z.boolean(),
+  url: z.string().nullable(),
+  reason: z.string().nullable().optional(),
+})
+
 export type Conditions = z.infer<typeof ConditionsSchema>
 export type PlanTargets = z.infer<typeof PlanTargetsSchema>
 export type PlanTarget = z.infer<typeof PlanTargetSchema>
@@ -235,3 +367,14 @@ export type IntegrationGoal = z.infer<typeof IntegrationGoalSchema>
 export type ArchiveNight = z.infer<typeof ArchiveNightSchema>
 export type ProjectsCombinedEntry = z.infer<typeof ProjectsCombinedEntrySchema>
 export type ProjectsCombined = z.infer<typeof ProjectsCombinedSchema>
+
+export type Annotate = z.infer<typeof AnnotateSchema>
+export type StackState = z.infer<typeof StackStateSchema>
+export type ViewState = z.infer<typeof ViewStateSchema>
+export type Status = z.infer<typeof StatusSchema>
+export type GuardrailCheck = z.infer<typeof GuardrailCheckSchema>
+export type Guardrails = z.infer<typeof GuardrailsSchema>
+export type Tier1 = z.infer<typeof Tier1Schema>
+export type FocuserPosition = z.infer<typeof FocuserPositionSchema>
+export type TargetObservability = z.infer<typeof TargetObservabilitySchema>
+export type LivePreview = z.infer<typeof LivePreviewSchema>

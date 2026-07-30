@@ -67,4 +67,30 @@ describe('Dot', () => {
       expect(dots[0]).toHaveAttribute('data-dot', 'pass')
     })
   })
+
+  describe('pulse', () => {
+    it('is off by default — no animation class on an ordinary dot', () => {
+      render(<Dot tone="accent" />)
+      expect(screen.getByTestId('dot').className).not.toMatch(/pulse/i)
+    })
+
+    it('adds the pulse class only when explicitly requested', () => {
+      const { rerender } = render(<Dot tone="accent" />)
+      const bare = screen.getByTestId('dot').className
+      rerender(<Dot tone="accent" pulse />)
+      const pulsing = screen.getByTestId('dot').className
+      expect(pulsing).not.toBe(bare)
+      expect(pulsing).toMatch(/pulse/i)
+    })
+
+    it('reads the same animation name tokens.css declares, so the two cannot drift apart silently', () => {
+      // Dot.module.css names the keyframe by hand (`animation: livePulse ...`)
+      // rather than importing it — nothing at build time would catch a typo
+      // against tokens.css's own `@keyframes livePulse`. Cross-check both files.
+      const dotCss = readFileSync(join(__dirname, 'Dot.module.css'), 'utf8')
+      const tokensCss = readFileSync(join(__dirname, '..', 'tokens.css'), 'utf8')
+      expect(tokensCss).toMatch(/@keyframes livePulse/)
+      expect(dotCss).toMatch(/animation:\s*livePulse\b/)
+    })
+  })
 })
