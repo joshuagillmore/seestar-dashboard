@@ -54,6 +54,7 @@ const merged = (overrides: Partial<MergedProject> = {}): MergedProject => ({
   sources: ['store'],
   store: project(),
   goal: null,
+  image: null,
   ...overrides,
 })
 
@@ -81,6 +82,38 @@ describe('ProjectCard', () => {
     expect(screen.getByText('M1')).toBeInTheDocument()
     expect(screen.getByText('Crab Nebula')).toBeInTheDocument()
     expect(screen.getByText('1.4 h')).toBeInTheDocument()
+  })
+
+  describe('the cover image (own / survey / absent — the three states TargetThumb renders)', () => {
+    it('renders the own capture with no survey marker', () => {
+      const image = { url: '/api/target_image/M1', source: 'own' as const, credit: null }
+      render(<ProjectCard project={merged({ image })} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByRole('img', { name: 'Crab Nebula' })).toHaveAttribute('src', '/api/target_image/M1')
+      expect(screen.queryByTestId('survey-badge')).not.toBeInTheDocument()
+    })
+
+    it('renders a survey image with the SURVEY marker and the credit reachable on hover', () => {
+      const image = { url: '/api/target_image/M1', source: 'survey' as const, credit: 'DSS2 · STScI' }
+      render(<ProjectCard project={merged({ image })} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByRole('img', { name: 'Crab Nebula' })).toBeInTheDocument()
+      const badge = screen.getByTestId('survey-badge')
+      expect(badge).toHaveTextContent('SURVEY')
+      expect(badge).toHaveAttribute('title', 'DSS2 · STScI')
+    })
+
+    it('renders the empty placeholder, not a broken image, when the target has no image', () => {
+      render(<ProjectCard project={merged({ image: null })} selected={false} onSelect={vi.fn()} />)
+      expect(screen.queryByRole('img')).not.toBeInTheDocument()
+      expect(screen.getByTestId('thumb-empty')).toBeInTheDocument()
+    })
+
+    it('falls back to the same empty placeholder when the image fails to load', () => {
+      const image = { url: '/api/target_image/M1', source: 'own' as const, credit: null }
+      render(<ProjectCard project={merged({ image })} selected={false} onSelect={vi.fn()} />)
+      fireEvent.error(screen.getByRole('img', { name: 'Crab Nebula' }))
+      expect(screen.queryByRole('img')).not.toBeInTheDocument()
+      expect(screen.getByTestId('thumb-empty')).toBeInTheDocument()
+    })
   })
 
   describe('the four honest states for a target with no numeric goal to show', () => {

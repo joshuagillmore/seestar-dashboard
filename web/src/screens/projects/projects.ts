@@ -1,5 +1,5 @@
 import { describeGoal, goalProgressPct } from '../../api/integrationGoal'
-import type { IntegrationGoal, Project, ProjectsCombinedEntry } from '../../api/schemas'
+import type { IntegrationGoal, Project, ProjectsCombinedEntry, TargetImage } from '../../api/schemas'
 
 /**
  * One row for the Projects screen: projects_combined's totals/provenance for
@@ -25,6 +25,13 @@ export interface MergedProject {
    * archive-only target (e.g. IC 405, never logged as a project) still gets
    * an honest goal state instead of one gated on `store` existing. */
   goal: IntegrationGoal | null
+  /** The cover image for this target's card — the user's own capture, a
+   * sky-survey cutout, or `null` when neither resolves. Normalized from
+   * `ProjectsCombinedEntry.image`'s `undefined | null` (the field hasn't
+   * shipped on every payload yet) to a plain `null`, so ProjectCard has one
+   * absent case to handle, not two. See TargetImageSchema and TargetThumb,
+   * which actually renders it. */
+  image: TargetImage | null
 }
 
 /**
@@ -46,6 +53,7 @@ export function mergeProjects(
     archiveMinutes: entry.archive_minutes,
     sources: entry.sources,
     goal: entry.goal,
+    image: entry.image ?? null,
     store: byId.get(entry.target_id) ?? null,
   }))
 }

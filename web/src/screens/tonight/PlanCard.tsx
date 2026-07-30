@@ -1,5 +1,6 @@
 import { formatHours, goalLabel, goalProgressPct } from '../../api/integrationGoal'
 import type { IntegrationGoal, PlanTarget } from '../../api/schemas'
+import { TargetThumb } from '../../ui/TargetThumb'
 import { localHhMm, parse } from './timeline'
 import styles from './PlanCard.module.css'
 
@@ -23,9 +24,13 @@ export interface PlanCardProgress {
  * so the ranker shows its work. These strings come from ranker.py, not from the
  * client.
  *
- * Two elements of the handoff card are absent by design: the thumbnail (no tool
- * returns imagery, handback 8) and the LP filter chip (lp_fit is computed
- * server-side but not returned, handback 5). Neither is faked.
+ * The thumbnail (handback 8) is no longer absent by design — `plan_targets`
+ * gains an optional `image` per target (the user's own capture, a sky-survey
+ * cutout, or `null`/absent when neither resolves), rendered through the
+ * shared TargetThumb so Tonight and Projects get the same three states and
+ * the same own-vs-survey honesty guarantee. The LP filter chip stays absent
+ * (lp_fit is computed server-side but not returned, handback 5) — that gap
+ * is unrelated to imagery and still not faked.
  */
 export function PlanCard({
   target,
@@ -42,16 +47,19 @@ export function PlanCard({
   return (
     <article className={styles.card}>
       <div className={styles.head}>
-        <div className={styles.titleRow}>
-          <span className={styles.id}>{target.id}</span>
-          <span className={styles.scoreWrap}>
-            <span className={styles.score}>{target.score}</span>
-            <span className={styles.scoreLabel}>score</span>
-          </span>
-        </div>
-        <div className={styles.name}>{target.name}</div>
-        <div className={styles.chips}>
-          <span className={styles.chip}>{target.type}</span>
+        <TargetThumb image={target.image} alt={target.name} className={styles.thumb} />
+        <div className={styles.headBody}>
+          <div className={styles.titleRow}>
+            <span className={styles.id}>{target.id}</span>
+            <span className={styles.scoreWrap}>
+              <span className={styles.score}>{target.score}</span>
+              <span className={styles.scoreLabel}>score</span>
+            </span>
+          </div>
+          <div className={styles.name}>{target.name}</div>
+          <div className={styles.chips}>
+            <span className={styles.chip}>{target.type}</span>
+          </div>
         </div>
       </div>
 

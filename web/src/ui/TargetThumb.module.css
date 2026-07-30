@@ -1,0 +1,49 @@
+/* Box size, radius and clipping come entirely from the caller's className
+   (see TargetThumb.tsx) — this file only fills whatever box it is given. */
+.thumb {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-root);
+}
+
+.img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Same treatment for "no image resolved" and "image failed to load" — reuses
+   `--chart-rail-empty`, the exact gray ProjectCard's own progress track
+   already uses for "no goal to show a bar against" (see .trackEmpty in
+   ProjectCard.module.css). One visual language for "nothing to show here,
+   deliberately" across the card, not a broken-image glyph or an icon (the
+   design uses none, see docs/design/README.md § Assets). `--bg-cell` reads
+   as barely-there against `--bg-card` here — it is a lighter cell tone for
+   stat grids, not a recessed "empty well". */
+.empty {
+  width: 100%;
+  height: 100%;
+  background: var(--chart-rail-empty);
+}
+
+/* A caption band across the bottom of the image, not a corner badge — it
+   must be visible without hovering, so it can't rely on a tooltip alone.
+   The credit string itself (required survey attribution) is reachable via
+   `title`, per this codebase's existing convention for hover detail. */
+.surveyBadge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2px 5px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-align: center;
+}

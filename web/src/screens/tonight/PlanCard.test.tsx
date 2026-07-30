@@ -32,11 +32,31 @@ describe('PlanCard', () => {
     expect(screen.getByText(/sweet-band time/)).toBeInTheDocument()
   })
 
-  it('renders no thumbnail and no filter chip, since neither has a source', () => {
+  it('renders the empty thumbnail placeholder (no <img>) when the fixture carries no image data, and no filter chip either, since neither has a source', () => {
     const { container } = render(<PlanCard target={target} />)
     expect(container.querySelector('img')).toBeNull()
+    expect(screen.getByTestId('thumb-empty')).toBeInTheDocument()
     expect(screen.queryByText(/^LP /)).not.toBeInTheDocument()
     expect(screen.getByText(target.type)).toBeInTheDocument()
+  })
+
+  it('renders the own capture with no survey marker when the target carries an own image', () => {
+    const withImage = { ...target, image: { url: '/api/target_image/M76', source: 'own' as const, credit: null } }
+    render(<PlanCard target={withImage} />)
+    expect(screen.getByRole('img', { name: target.name })).toHaveAttribute('src', '/api/target_image/M76')
+    expect(screen.queryByTestId('survey-badge')).not.toBeInTheDocument()
+  })
+
+  it('renders a survey image with the SURVEY marker and the credit reachable on hover', () => {
+    const withImage = {
+      ...target,
+      image: { url: '/api/target_image/M76', source: 'survey' as const, credit: 'DSS2 · STScI' },
+    }
+    render(<PlanCard target={withImage} />)
+    expect(screen.getByRole('img', { name: target.name })).toBeInTheDocument()
+    const badge = screen.getByTestId('survey-badge')
+    expect(badge).toHaveTextContent('SURVEY')
+    expect(badge).toHaveAttribute('title', 'DSS2 · STScI')
   })
 
   it('disables the hand-off action until the approval gate exists', () => {
