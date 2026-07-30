@@ -1,18 +1,20 @@
 """Read-only scan of the Seestar photo archive on disk.
 
 The archive at SEESTAR_ARCHIVE_DIR holds one directory pair per target:
-`<name>/` (stacked results — not read here, no imagery yet) and
-`<name>-sub/` (seen once as `<name>_sub/`) holding one `Light_*.fit` per
-captured sub-frame. Exposure is fixed at 10.0s across the whole archive —
-confirmed by the user, and every filename encodes it — so integration is
-`count(Light_*.fit) x EXPOSURE_SECONDS`. No per-file exposure parsing; this
-module only checks the filename's exposure token agrees with that constant
-and reports when it does not (see `ArchiveScan.warnings`).
+`<name>/` (stacked results — the master JPEG/FITS pairs `scan_stacked_images()`
+reads for imagery) and `<name>-sub/` (seen once as `<name>_sub/`) holding one
+`Light_*.fit` per captured sub-frame, read by `scan_archive()`. Exposure is
+fixed at 10.0s across the whole archive — confirmed by the user, and every
+filename encodes it — so integration is `count(Light_*.fit) x
+EXPOSURE_SECONDS`. No per-file exposure parsing; this module only checks the
+filename's exposure token agrees with that constant and reports when it does
+not (see `ArchiveScan.warnings`).
 
 No cache, no database: this is a per-request scan (measured ~0.04s for the
 archive's 7,500+ frames). A cache here would be a third source of truth
 beside the projects store and the filesystem itself — see
-docs/slice-2-backlog.md.
+docs/slice-2-backlog.md. `scan_stacked_images()` follows the same no-cache
+rule — it's a local disk read, not the network fetch imagery.py caches.
 
 Each frame's filename also encodes a LOCAL wall-clock timestamp (verified
 against the file's own mtime — no offset applied), while the projects
@@ -44,6 +46,13 @@ EXPOSURE_SECONDS = 10.0
 _SUB_DIR_SUFFIX = re.compile(r"(-sub|_sub)$")
 _LIGHT_FILENAME = re.compile(
     r"^Light_.+_(?P<exposure>\d+(?:\.\d+)?)s_.+_(?P<date>\d{8})-(?P<time>\d{6})\.fit$"
+)
+#: A stacked master JPEG, same shape as `_LIGHT_FILENAME` but "Stacked_" and
+#: an optional `_thn` thumbnail marker before the extension — see
+#: `scan_stacked_images()`. Deliberately `.jpg` only: no FITS decoding here.
+_STACKED_JPEG = re.compile(
+    r"^Stacked_.+_(?P<exposure>\d+(?:\.\d+)?)s_.+_(?P<date>\d{8})-(?P<time>\d{6})"
+    r"(?P<thumb>_thn)?\.jpg$"
 )
 #: A spaced catalog designator: letters, whitespace, then a numeric id —
 #: "M 31", "NGC 281", "IC 405", "LDN 1625". Directories that instead lead
@@ -164,6 +173,20 @@ class ArchiveScan:
     warnings: list[str]
 
 
+@dataclass
+class StackedImage:
+    """One target's chosen stacked-master JPEG — see `scan_stacked_images()`.
+
+    `captured_at` is the stack's own filename timestamp, used only to compare
+    several stacks for the same target and keep the most recent — it is not
+    a freshness signal for whatever serves this over HTTP.
+    """
+
+    path: Path
+    is_thumbnail: bool  # True when only the `_thn` sibling exists, no full-res .jpg
+    captured_at: datetime
+
+
 def scan_archive(root: Path, local_tz: timezone | None = None) -> ArchiveScan:
     """Scan every `<target>-sub` / `<target>_sub` directory under `root`.
 
@@ -221,6 +244,60 @@ def scan_archive(root: Path, local_tz: timezone | None = None) -> ArchiveScan:
             "; ".join(warnings[:5]),
         )
     return ArchiveScan(targets=targets, warnings=warnings)
+
+
+def scan_stacked_images(root: Path, local_tz: timezone | None = None) -> dict[str, StackedImage]:
+    """The most recent stacked-master JPEG per target, full resolution
+    preferred over its `_thn` thumbnail sibling — the imagery counterpart to
+    `scan_archive()`, reading the *other* half of each target's directory
+    pair (the plain `<name>/` directory, not `<name>-sub/`).
+
+    One capture session writes a `.fit`, and usually (not always — an early
+    IC 405 stack has only the thumbnail) a full-resolution `.jpg` alongside
+    its `_thn.jpg`, all three sharing one filename timestamp. Grouping by
+    that timestamp is what lets "prefer full-res" apply per stack rather than
+    comparing one stack's thumbnail against a different stack's full JPEG.
+    "Most recent" is by that same timestamp — an arbitrary but explainable
+    rule; there is no way to know which stack is "best".
+
+    A missing root degrades to an empty dict, same as `scan_archive()` — no
+    archive configured is a normal state, not an error. `local_tz` is
+    test-only, exactly as in `scan_archive()`; production leaves it `None`
+    and reads the system's own timezone (see `_local_capture_instant_utc`).
+    """
+    if not root.is_dir():
+        return {}
+
+    latest: dict[str, StackedImage] = {}
+    for entry in sorted(root.iterdir()):
+        if not entry.is_dir():
+            continue
+        if _SUB_DIR_SUFFIX.search(entry.name):
+            continue  # the "-sub"/"_sub" sibling holds individual frames, not stacks
+        target_id = normalize_target_id(entry.name)
+
+        by_stamp: dict[tuple[str, str], dict[str, Path]] = {}
+        for jpg in entry.glob("Stacked_*.jpg"):
+            match = _STACKED_JPEG.match(jpg.name)
+            if not match:
+                continue
+            key = (match["date"], match["time"])
+            kind = "thumbnail" if match["thumb"] else "full"
+            by_stamp.setdefault(key, {})[kind] = jpg
+
+        for (date_str, time_str), files in by_stamp.items():
+            path = files.get("full") or files.get("thumbnail")
+            if path is None:
+                continue  # unreachable in practice — by_stamp is only ever seeded with one of the two
+            candidate = StackedImage(
+                path=path,
+                is_thumbnail="full" not in files,
+                captured_at=_local_capture_instant_utc(date_str, time_str, local_tz),
+            )
+            current = latest.get(target_id)
+            if current is None or candidate.captured_at > current.captured_at:
+                latest[target_id] = candidate
+    return latest
 
 
 def _parse_light_filename(

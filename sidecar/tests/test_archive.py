@@ -12,6 +12,7 @@ from seestar_sidecar.archive import (
     normalize_target_id,
     observing_night,
     scan_archive,
+    scan_stacked_images,
 )
 
 #: A fixed offset, not a tzdata zone: no DST-table dependency, and it
@@ -227,7 +228,8 @@ def test_unparseable_filename_is_warned_and_not_counted(tmp_path):
 
 def test_non_sub_directories_are_ignored(tmp_path):
     # Only "*-sub"/"*_sub" holds individual subs; the paired plain directory
-    # holds stacked master files this phase doesn't read.
+    # holds stacked master files — scan_archive() doesn't read those (see
+    # scan_stacked_images() below, which does).
     plain = tmp_path / "M 81"
     plain.mkdir()
     (plain / "Stacked_M 81_10.0s_IRCUT_20240101-000000.fit").write_text("x", encoding="utf-8")
@@ -235,3 +237,114 @@ def test_non_sub_directories_are_ignored(tmp_path):
     scan = scan_archive(tmp_path, local_tz=EDT)
 
     assert scan.targets == {}
+
+
+# --- scan_stacked_images -----------------------------------------------
+
+
+def _stacked_jpg(dir_path, target_display, date_str, time_str, content, thumbnail=False):
+    """Write one stacked-master JPEG (or its `_thn` thumbnail sibling) with
+    distinguishable `content` bytes, so a test can tell which file scan_
+    stacked_images() actually picked rather than only that something was
+    picked.
+    """
+    suffix = "_thn" if thumbnail else ""
+    name = f"Stacked_{target_display}_10.0s_LP_{date_str}-{time_str}{suffix}.jpg"
+    (dir_path / name).write_bytes(content)
+
+
+def test_missing_root_returns_an_empty_dict_not_an_error(tmp_path):
+    assert scan_stacked_images(tmp_path / "does-not-exist", local_tz=EDT) == {}
+
+
+def test_finds_the_stacked_image_in_the_plain_directory_not_the_sub_directory(tmp_path):
+    plain = tmp_path / "M 31"
+    plain.mkdir()
+    _stacked_jpg(plain, "M 31", "20240104", "230352", b"full-res-bytes")
+    subs = tmp_path / "M 31-sub"
+    subs.mkdir()
+    (subs / "Light_M 31_10.0s_IRCUT_20240104-213812.fit").write_text("x", encoding="utf-8")
+
+    images = scan_stacked_images(tmp_path, local_tz=EDT)
+
+    assert set(images) == {"M31"}
+    assert images["M31"].path.read_bytes() == b"full-res-bytes"
+    assert images["M31"].is_thumbnail is False
+
+
+def test_underscore_sub_suffix_directory_is_not_mistaken_for_a_stack(tmp_path):
+    # Mirrors test_underscore_sub_suffix_is_recognised above, from the
+    # imagery side: "M27 Dumbbell Nebula_sub" must not itself be scanned for
+    # stacked masters just because it doesn't end in "-sub".
+    plain = tmp_path / "M27 Dumbbell Nebula"
+    plain.mkdir()
+    _stacked_jpg(plain, "M27 Dumbbell Nebula", "20260705", "010735", b"m27-full")
+    subs = tmp_path / "M27 Dumbbell Nebula_sub"
+    subs.mkdir()
+    _stacked_jpg(subs, "M27 Dumbbell Nebula", "20260705", "010735", b"should-not-be-picked-up")
+
+    images = scan_stacked_images(tmp_path, local_tz=EDT)
+
+    assert set(images) == {"M27"}
+    assert images["M27"].path.read_bytes() == b"m27-full"
+
+
+def test_full_resolution_preferred_over_thumbnail_for_the_same_stack(tmp_path):
+    plain = tmp_path / "IC 405"
+    plain.mkdir()
+    _stacked_jpg(plain, "IC 405", "20240206", "004006", b"thumb-bytes", thumbnail=True)
+    _stacked_jpg(plain, "IC 405", "20240206", "004006", b"full-bytes", thumbnail=False)
+
+    images = scan_stacked_images(tmp_path, local_tz=EDT)
+
+    assert images["IC405"].path.read_bytes() == b"full-bytes"
+    assert images["IC405"].is_thumbnail is False
+
+
+def test_thumbnail_only_stack_is_still_served(tmp_path):
+    # The real IC 405 case: its earliest stack (2024-01-19) only ever wrote a
+    # _thn.jpg, no full-resolution sibling — must still resolve to something
+    # rather than being skipped for lacking the preferred file.
+    plain = tmp_path / "IC 405"
+    plain.mkdir()
+    _stacked_jpg(plain, "IC 405", "20240119", "191930", b"only-a-thumbnail", thumbnail=True)
+
+    images = scan_stacked_images(tmp_path, local_tz=EDT)
+
+    assert images["IC405"].path.read_bytes() == b"only-a-thumbnail"
+    assert images["IC405"].is_thumbnail is True
+
+
+def test_most_recent_stack_is_chosen_among_several(tmp_path):
+    plain = tmp_path / "IC 405"
+    plain.mkdir()
+    _stacked_jpg(plain, "IC 405", "20240119", "191930", b"oldest")
+    _stacked_jpg(plain, "IC 405", "20240301", "000138", b"newest")
+    _stacked_jpg(plain, "IC 405", "20240229", "212739", b"middle")
+
+    images = scan_stacked_images(tmp_path, local_tz=EDT)
+
+    assert images["IC405"].path.read_bytes() == b"newest"
+
+
+def test_a_target_with_no_plain_directory_is_absent_from_the_result(tmp_path):
+    # Only the "-sub" directory exists (e.g. captured but never stacked yet,
+    # or a fixture that only wrote subs) — must not raise or invent an entry.
+    subs = tmp_path / "M 45-sub"
+    subs.mkdir()
+    (subs / "Light_M 45_10.0s_LP_20240101-000000.fit").write_text("x", encoding="utf-8")
+
+    images = scan_stacked_images(tmp_path, local_tz=EDT)
+
+    assert images == {}
+
+
+def test_non_stacked_files_in_the_plain_directory_are_ignored(tmp_path):
+    plain = tmp_path / "M 45"
+    plain.mkdir()
+    (plain / "Stacked_M 45_10.0s_LP_20240101-000000.fit").write_bytes(b"not-a-jpeg")
+    (plain / "notes.txt").write_text("hello", encoding="utf-8")
+
+    images = scan_stacked_images(tmp_path, local_tz=EDT)
+
+    assert images == {}

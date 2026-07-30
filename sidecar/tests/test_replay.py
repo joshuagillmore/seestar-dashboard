@@ -19,16 +19,60 @@ FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     monkeypatch.setenv("SEESTAR_REPLAY", "1")
-    return TestClient(create_app())
+    # plan_targets is enriched with an `image` field computed from the real
+    # archive scan and DSO catalogue (see routes.py's _attach_images).
+    # Pointing both at a tmp_path that holds neither keeps this file's result
+    # independent of whatever the dev machine's real OneDrive archive/
+    # catalogue happen to contain right now — the same discipline
+    # test_archive.py/test_catalog.py already hold their own suites to.
+    return TestClient(
+        create_app(
+            archive_dir=tmp_path / "no-archive",
+            catalog_path=tmp_path / "no-catalog.json",
+            aliases_path=tmp_path / "no-aliases.json",
+        )
+    )
 
 
-@pytest.mark.parametrize("tool", sorted(ALLOWED_TOOLS))
+#: plan_targets is the one allowlisted tool this sidecar enriches (an
+#: `image` field per target — see routes._attach_images), so it is no longer
+#: a byte-for-byte passthrough and gets its own test below instead of this
+#: parametrization.
+_PASSTHROUGH_TOOLS = sorted(ALLOWED_TOOLS - {"plan_targets"})
+
+
+@pytest.mark.parametrize("tool", _PASSTHROUGH_TOOLS)
 def test_replay_returns_the_fixture_unmodified(client, tool):
     response = client.get(f"/api/{tool}")
     assert response.status_code == 200
     assert response.json() == json.loads((FIXTURES / f"{tool}.json").read_text())
+
+
+def test_plan_targets_replay_adds_only_the_image_field(client):
+    """The same "nothing renamed/dropped/retyped" property the parametrized
+    test above proves for every other tool, proven here for plan_targets
+    once its one deliberate addition is accounted for: strip `image` back out
+    of every target and the rest must match the fixture exactly.
+
+    The `client` fixture points `archive_dir`/`catalog_path` at nothing, so
+    `image` is deterministically `None` for every target — this also proves
+    the field is actually being computed (present, not merely absent because
+    the route silently failed), not just that the key exists.
+    """
+    response = client.get("/api/plan_targets")
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["targets"], "fixture must have at least one target for this to test anything"
+    assert all("image" in target for target in body["targets"])
+    assert all(target["image"] is None for target in body["targets"])
+
+    stripped = json.loads(json.dumps(body))
+    for target in stripped["targets"]:
+        del target["image"]
+    assert stripped == json.loads((FIXTURES / "plan_targets.json").read_text())
 
 
 def test_recorded_night_is_a_no_go(client):

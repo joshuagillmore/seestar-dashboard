@@ -4,18 +4,29 @@ read-only computation. Routes are literal — an unlisted tool 404s because no
 handler exists for it, not because a guard rejected it.
 """
 import os
+from datetime import timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from seestar_sidecar.allowlist import ALLOWED_TOOLS
-from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR, scan_archive
+from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR, scan_archive, scan_stacked_images
 from seestar_sidecar.catalog import (
     DEFAULT_ALIASES_PATH,
     DEFAULT_CATALOG_PATH,
     load_aliases,
     load_catalog,
+)
+from seestar_sidecar.catalog import resolve as resolve_catalog_entry
+from seestar_sidecar.imagery import (
+    DEFAULT_IMAGE_CACHE_DIR,
+    DEFAULT_IMAGE_SIZE_PX,
+    MAX_IMAGE_SIZE_PX,
+    MIN_IMAGE_SIZE_PX,
+    fetch_survey_cutout,
+    is_plausible_target_id,
+    resolve_image_pointer,
 )
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
@@ -98,11 +109,53 @@ async def assess_conditions(request: Request) -> JSONResponse:
     return await _serve(request, "assess_conditions", {})
 
 
+def _catalog_paths(request: Request) -> tuple[Path, Path]:
+    catalog_path = getattr(request.app.state, "catalog_path", None) or DEFAULT_CATALOG_PATH
+    aliases_path = getattr(request.app.state, "aliases_path", None) or DEFAULT_ALIASES_PATH
+    return Path(catalog_path), Path(aliases_path)
+
+
+def _archive_dir_and_tz(request: Request) -> tuple[Path, timezone | None]:
+    archive_dir = getattr(request.app.state, "archive_dir", None) or DEFAULT_ARCHIVE_DIR
+    local_tz = getattr(request.app.state, "local_tz", None)
+    return Path(archive_dir), local_tz
+
+
+def _attach_images(entries: list[dict], id_key: str, request: Request) -> None:
+    """Attach an `image` pointer (see imagery.resolve_image_pointer) to each
+    entry in place, keyed by `id_key` — "target_id" for projects_combined's
+    entries, "id" for plan_targets' (the two payloads disagree on the field
+    name; this is the one place that has to know both).
+
+    Local-only, like the rest of this function's callers: an archive
+    directory scan and a catalogue lookup, never a network call. The actual
+    bytes are fetched lazily, and cached, by GET /api/target_image/<id> — see
+    imagery.py's module docstring for why the split matters.
+    """
+    archive_dir, local_tz = _archive_dir_and_tz(request)
+    stacked_images = scan_stacked_images(archive_dir, local_tz=local_tz)
+    catalog_path, aliases_path = _catalog_paths(request)
+    catalog = load_catalog(catalog_path)
+    aliases = load_aliases(aliases_path)
+    for entry in entries:
+        entry["image"] = resolve_image_pointer(entry[id_key], stacked_images, catalog, aliases)
+
+
 @router.get("/plan_targets")
 async def plan_targets(
     request: Request, limit: int = Query(default=12, ge=1, le=50)
 ) -> JSONResponse:
-    return await _serve(request, "plan_targets", {"limit": limit})
+    try:
+        payload = await _fetch(request, "plan_targets", {"limit": limit})
+    except (ProxyTransportError, FileNotFoundError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
+    if not payload.get("ok"):
+        # Same rule as projects_combined: a valid {ok: false, ...} tool
+        # response is forwarded as-is, not papered over with an enrichment
+        # that has nothing to attach to.
+        return JSONResponse(payload)
+    _attach_images(payload.get("targets", []), "id", request)
+    return JSONResponse(payload)
 
 
 @router.get("/get_site_profile")
@@ -144,12 +197,17 @@ async def _fetch_bortle(request: Request) -> int | None:
 async def projects_combined(request: Request) -> JSONResponse:
     """Union of the store's list_projects with the on-disk archive scan,
     each target's suggested integration-time goal attached (see
-    projects_union.attach_integration_goals / integration_goal.py).
+    projects_union.attach_integration_goals / integration_goal.py) and an
+    `image` pointer attached (see imagery.resolve_image_pointer) — the same
+    fields plan_targets gets via `_attach_images`, computed inline here since
+    the archive scan and catalogue are already loaded for the goal model.
 
     Not a tool call itself — see allowlist.SIDECAR_ROUTES — but it never
     reads or computes anything list_projects, a filesystem scan, the
     checked-in DSO catalogue and get_site_profile (already allowlisted)
-    couldn't already give it: no side effects, nothing written.
+    couldn't already give it: no side effects, nothing written, and no
+    network call — see imagery.py's module docstring for why `image` here is
+    only ever a pointer, never a fetch.
     """
     try:
         store = await _fetch(request, "list_projects", {})
@@ -161,17 +219,21 @@ async def projects_combined(request: Request) -> JSONResponse:
         # over it with an archive-only result.
         return JSONResponse(store)
 
-    archive_dir = getattr(request.app.state, "archive_dir", None) or DEFAULT_ARCHIVE_DIR
-    local_tz = getattr(request.app.state, "local_tz", None)
-    scan = scan_archive(Path(archive_dir), local_tz=local_tz)
+    archive_dir, local_tz = _archive_dir_and_tz(request)
+    scan = scan_archive(archive_dir, local_tz=local_tz)
     projects = combine_projects(store["projects"], scan.targets)
 
-    catalog_path = getattr(request.app.state, "catalog_path", None) or DEFAULT_CATALOG_PATH
-    aliases_path = getattr(request.app.state, "aliases_path", None) or DEFAULT_ALIASES_PATH
-    catalog = load_catalog(Path(catalog_path))
-    aliases = load_aliases(Path(aliases_path))
+    catalog_path, aliases_path = _catalog_paths(request)
+    catalog = load_catalog(catalog_path)
+    aliases = load_aliases(aliases_path)
     bortle = await _fetch_bortle(request)
     projects = attach_integration_goals(projects, catalog, aliases, bortle)
+
+    stacked_images = scan_stacked_images(archive_dir, local_tz=local_tz)
+    for project in projects:
+        project["image"] = resolve_image_pointer(
+            project["target_id"], stacked_images, catalog, aliases
+        )
 
     totals = {
         "store_minutes": round(sum(p["store_minutes"] for p in projects), 4),
@@ -181,3 +243,61 @@ async def projects_combined(request: Request) -> JSONResponse:
     return JSONResponse(
         {"ok": True, "projects": projects, "count": len(projects), "totals": totals}
     )
+
+
+@router.get("/target_image/{target_id}")
+async def target_image(
+    request: Request,
+    target_id: str,
+    size: int = Query(default=DEFAULT_IMAGE_SIZE_PX, ge=MIN_IMAGE_SIZE_PX, le=MAX_IMAGE_SIZE_PX),
+) -> Response:
+    """The bytes `image.url` in projects_combined/plan_targets points at:
+    the user's own stacked master where the archive has one, otherwise a
+    cached-or-freshly-fetched DSS2 cutout, otherwise an honest 404.
+
+    Not a tool call — see allowlist.SIDECAR_ROUTES — and not a general
+    static mount either: `target_id` is validated against
+    imagery.is_plausible_target_id() before it ever reaches a filesystem
+    path or a cache key, the own-image path always comes from
+    scan_stacked_images()'s own directory walk (never a path built directly
+    from the URL), and the only network call this route can make is the
+    single, timeout-bounded, cached hips2fits fetch in
+    imagery.fetch_survey_cutout().
+    """
+    if not is_plausible_target_id(target_id):
+        return JSONResponse(
+            {"ok": False, "error": f"not a recognised target id: {target_id!r}"},
+            status_code=404,
+        )
+
+    archive_dir, local_tz = _archive_dir_and_tz(request)
+    stacked_images = scan_stacked_images(archive_dir, local_tz=local_tz)
+    own = stacked_images.get(target_id)
+    if own is not None:
+        return FileResponse(own.path, media_type="image/jpeg")
+
+    catalog_path, aliases_path = _catalog_paths(request)
+    catalog = load_catalog(catalog_path)
+    aliases = load_aliases(aliases_path)
+    entry = resolve_catalog_entry(target_id, catalog, aliases)
+    if entry is None or entry.get("ra_deg") is None or entry.get("dec_deg") is None:
+        return JSONResponse(
+            {"ok": False, "error": f"no imagery available for {target_id!r}"},
+            status_code=404,
+        )
+
+    cache_dir = getattr(request.app.state, "image_cache_dir", None) or DEFAULT_IMAGE_CACHE_DIR
+    image_bytes = await fetch_survey_cutout(
+        target_id=target_id,
+        ra_deg=entry["ra_deg"],
+        dec_deg=entry["dec_deg"],
+        size_arcmin=entry.get("size_arcmin"),
+        size_px=size,
+        cache_dir=Path(cache_dir),
+    )
+    if image_bytes is None:
+        return JSONResponse(
+            {"ok": False, "error": f"survey image unavailable for {target_id!r}"},
+            status_code=404,
+        )
+    return Response(content=image_bytes, media_type="image/jpeg")
