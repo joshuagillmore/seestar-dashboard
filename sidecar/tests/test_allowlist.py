@@ -9,9 +9,43 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.routing import Route
 
 from seestar_sidecar.allowlist import ALLOWED_TOOLS, FORBIDDEN_TOOLS, SIDECAR_ROUTES
 from seestar_sidecar.main import create_app
+
+#: FastAPI registers these itself (interactive docs + the OpenAPI schema) on
+#: every app unless explicitly disabled, which this one isn't — not part of
+#: our declared read surface, but real registered routes all the same, so
+#: they belong in the expected set rather than being filtered out before the
+#: comparison even starts (see _registered_routes' docstring below for why
+#: that filtering was itself the gap).
+_FASTAPI_DOC_ROUTES: dict[str, frozenset[str]] = {
+    "/openapi.json": frozenset({"GET", "HEAD"}),
+    "/docs": frozenset({"GET", "HEAD"}),
+    "/docs/oauth2-redirect": frozenset({"GET", "HEAD"}),
+    "/redoc": frozenset({"GET", "HEAD"}),
+}
+
+
+def _registered_routes(app) -> dict[str, frozenset[str]]:
+    """path -> methods for every real Route in the app, at ANY prefix — not
+    pre-filtered to paths already starting with "/api". The old version of
+    this filtered first and compared paths second, which meant a route
+    registered under a different prefix altogether was invisible to the
+    check by construction, not merely unlisted by it. Mount (the frontend
+    static-files mount at "/") is not a Route subclass and has no `.methods`,
+    so it never appears here — see test_the_only_non_route_entry_is_the_
+    frontend_mount for the check that covers it instead.
+    """
+    return {route.path: frozenset(route.methods) for route in app.routes if isinstance(route, Route)}
+
+
+def _expected_routes() -> dict[str, frozenset[str]]:
+    api_names = {"health"} | ALLOWED_TOOLS | SIDECAR_ROUTES
+    expected = {f"/api/{name}": frozenset({"GET"}) for name in api_names}
+    expected.update(_FASTAPI_DOC_ROUTES)
+    return expected
 
 
 @pytest.fixture
@@ -63,7 +97,7 @@ def test_registered_routes_are_exactly_health_plus_the_allowlist_plus_sidecar_ro
     server already has several ALLOWED_TOOLS and FORBIDDEN_TOOLS both miss
     (simulate_night, check_night_guardrails, suggest_horizon_mask, qa_tier1,
     qa_tier2) — sails straight through it. This does not enumerate tools at
-    all: it demands the registered /api/* route set equal exactly what the
+    all: it demands the registered route set equal exactly what the
     allowlist permits, so ANY unlisted route fails it, named or not.
 
     SIDECAR_ROUTES is folded into the same equality rather than the
@@ -72,15 +106,77 @@ def test_registered_routes_are_exactly_health_plus_the_allowlist_plus_sidecar_ro
     is still part of this app's declared read surface, and an equality check
     that quietly ignored it would stop catching an undeclared third route
     the same way it already catches an undeclared tool route.
+
+    Tightened (2026-07-30, see docs/slice-2-backlog.md's "Route invariant is
+    path-only") to close two gaps the original, path-only version had:
+
+    - **Method.** The old check built a set of paths and compared sets of
+      paths — a POST handler added to an already-allowlisted path changed
+      nothing about that set, so it passed silently. `_registered_routes()`
+      compares path -> methods dicts instead, so a new method anywhere is a
+      value change the equality catches. Proven by mutation in
+      test_a_post_added_to_an_allowed_path_would_be_caught.
+    - **Prefix.** The old check filtered `app.routes` down to paths already
+      starting with "/api" *before* comparing anything, which made a route
+      registered under any other prefix invisible to the check by
+      construction, not merely unlisted by it — filtering out exactly the
+      thing a foreign route would need to be caught. `_registered_routes()`
+      inspects the whole `app.routes`, with FastAPI's own doc/schema routes
+      named explicitly in `_expected_routes()` rather than filtered away, so
+      there is no filter left for an unexpected prefix to hide behind. Proven
+      by mutation in test_a_route_under_a_foreign_prefix_would_be_caught.
     """
     app = create_app()
-    registered = {route.path for route in app.routes if route.path.startswith("/api")}
-    expected = (
-        {"/api/health"}
-        | {f"/api/{tool}" for tool in ALLOWED_TOOLS}
-        | {f"/api/{name}" for name in SIDECAR_ROUTES}
-    )
-    assert registered == expected
+    assert _registered_routes(app) == _expected_routes()
+
+
+def test_the_only_non_route_entry_is_the_frontend_mount():
+    """_registered_routes() above only inspects `Route` instances — a Mount
+    (like the frontend's) has no `.methods` and isn't a Route subclass, so
+    it's invisible to that check by the same kind of construction the
+    path-only filter used to hide a foreign prefix behind. This closes that
+    residual blind spot for mounts specifically: exactly one non-Route entry
+    may exist in the whole app, and it must be the static-files frontend
+    mount, not some new sub-application quietly mounted elsewhere.
+    """
+    app = create_app()
+    non_routes = [route for route in app.routes if not isinstance(route, Route)]
+    assert len(non_routes) == 1
+    assert non_routes[0].name == "frontend"
+
+
+def test_a_post_added_to_an_allowed_path_would_be_caught():
+    """Proves the method comparison above is not vacuous — the exact gap the
+    old path-only invariant had (see docs/slice-2-backlog.md's "Route
+    invariant is path-only"): a POST handler added to /api/health, an
+    already-allowlisted GET path, changes nothing about a *set of paths* but
+    does change the path's own methods. Registers the extra route on the app
+    directly rather than editing routes.py's source, so this is a permanent
+    regression test rather than the one-off manual check the same mutation
+    got during development (see this file's git history).
+    """
+    app = create_app()
+
+    @app.post("/health")
+    async def _extra_post_on_an_allowed_path() -> dict:
+        return {"ok": True}
+
+    assert _registered_routes(app) != _expected_routes()
+
+
+def test_a_route_under_a_foreign_prefix_would_be_caught():
+    """Proves the whole-app inspection above is not vacuous — the other gap
+    the old path-only invariant had: a route registered under a prefix other
+    than "/api" was invisible to a check that filtered `app.routes` down to
+    "/api"-prefixed paths *before* comparing anything.
+    """
+    app = create_app()
+
+    @app.get("/internal/debug")
+    async def _route_under_a_foreign_prefix() -> dict:
+        return {"ok": True}
+
+    assert _registered_routes(app) != _expected_routes()
 
 
 async def test_call_tool_refuses_a_non_allowlisted_tool_name():

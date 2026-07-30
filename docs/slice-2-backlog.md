@@ -110,8 +110,19 @@ path-constrained, not a general static mount.
 ## Decide before slice 3
 
 - **`Dot` API.** `web/src/ui/Dot.tsx` has no `className` passthrough. Deliberately not added in slice 1 — Sidebar was its only caller, so it would have been speculative. Slice 3 brings guardrail rows, the chat header and chips; decide before the third caller, not after. (`aria-hidden` specifically is not needed: an empty decorative `<span>` is already skipped by assistive tech.)
+
+  > **Decided 2026-07-30.** Added, ahead of slice 3's third caller as planned. `className?: string` is appended after the component's own `${styles[size]} ${styles[tone]}` classes — additive only, never a replacement, and there is no way to author `data-dot` through the prop (the component still destructures exactly `{tone, size, className}` and never spreads a rest object onto the element), so the guarantee the component exists for is untouched. No `aria-hidden` added, per the note above. Tests: an append-only merge check against a same-props baseline (not a hash-matching guess — CSS Modules give the own classes opaque names), a source-level check that no rest-spread exists, and a render through the one real caller (Sidebar) as regression coverage. There is no real caller of `className` yet — that's still slice 3 — so the new prop itself is only exercised in isolation; flagging that rather than fabricating a speculative call site to test through.
+
 - **Route invariant is path-only.** `sidecar/tests/test_allowlist.py` now asserts the registered `/api/*` path set exactly equals `{health} ∪ ALLOWED_TOOLS`. It compares paths, not methods — a `POST` added to an already-allowed path, or a route under a different prefix, still passes. Worth tightening when slice 3 adds the approval gate, which is the first thing that will want a non-GET route.
+
+  > **Tightened 2026-07-30**, ahead of slice 3 as planned. `test_registered_routes_are_exactly_health_plus_the_allowlist_plus_sidecar_routes` now compares `path -> methods` across the *whole* `app.routes` (FastAPI's own doc/schema routes named explicitly in the expected set), not a path-only set pre-filtered to `/api/*` — closing both gaps in the same change, since the old filter was itself what made a foreign-prefix route invisible. A second test (`test_the_only_non_route_entry_is_the_frontend_mount`) closes the symmetric blind spot for `Mount`s, which have no `.methods` and are invisible to the same check for a different reason. Proven by mutation, both permanently (as tests) and by hand against the real `create_app()` during development: a `POST` added to an already-allowed path, and a `GET` added under `/internal/debug`, each independently made the tightened test fail; both were removed and the suite returned to green.
 - **Timezone marker.** Four surfaces render browser-local clock times with no zone label; the design labels one `BEST WINDOW UTC` and another `23:53 local`. `timeline.ts` notes the browser zone "matches the site only when the user is at the site" — the screen does not say which zone it is showing.
+
+  > **Decided 2026-07-30.** The four surfaces are `PlanCard`'s `BEST WINDOW` stat, and three within `SweetBandTimeline` (the dark/dawn bracket labels, each lane's window column, and the hour axis) — verified by grepping every call site of `localHhMm`, not assumed from the count above. (The `23:53 local` example itself is the top bar's not-yet-built "session facts" row, slice 3 — nothing on screen today renders it.)
+  >
+  > Checked whether the *site's* zone (not the browser's) is knowable first, per the brief: it is not. `get_site_profile` returns `lat_deg`/`lon_deg` but no IANA zone name (checked both `SiteProfileSchema` here and the server's `SiteProfile` dataclass in `SeeStar-AI/src/seestar_mcp/server.py`), and the sidecar's own `local_tz` (`archive.py`) is not derived from the site's coordinates either — it is "whichever zone the machine running the sidecar is in", used only to parse archive filenames, with no route exposing it regardless. So this is a genuine gap, not an assumption to unwind in the UI — written up as **handback item 16**.
+  >
+  > What's left to do honestly with what's knowable: name the *browser's* zone explicitly (`timeline.ts`'s new `zoneLabel`, a UTC-offset string like `UTC-6`, computed via `Date.getTimezoneOffset()` so it needs no new dependency and is correct on any machine, not just this installation). `BEST WINDOW` gets its own label, matching the design's `BEST WINDOW UTC` pattern exactly at zero offset and truthfully otherwise (never copies "UTC" outright — this app's values usually are not UTC). The three `SweetBandTimeline` surfaces share one zone note in the card's legend line instead of each repeating it — none of the three has room for a per-instance marker (the axis ticks are a bare `19`, the lane-window column is 78px), and repeating it three times in the same 900px-wide card would be closer to clutter than to honesty.
 
 ## Accepted as-is, with reasoning
 
@@ -295,3 +306,33 @@ came from where.
 
 This is ours, not a hand-back: no server change is needed. Worth doing before
 the Review screen (slice 4), which will want per-session detail anyway.
+
+> **Done 2026-07-30.** `combine_projects()` (`projects_union.py`) now attaches
+> exactly this shape to every entry — `nights: []` for a store-only target
+> (its detail is already fully available as `sessions` on the matching
+> `list_projects` entry, joined client-side), the archive's per-night detail
+> for the rest. Built from the same `known_nights`-filtered list
+> `archive_minutes` already used, not recomputed independently, so
+> `sum(n["minutes"] for n in nights) == archive_minutes` holds by
+> construction rather than by two calculations happening to agree — proven in
+> `test_projects_union.py` (unit level, plus a dedicated mutation test) and
+> again end-to-end through `/api/projects_combined` in
+> `test_projects_combined_route.py`, including a synthetic overlapping-night
+> fixture routed through the real store payload and archive scan, not just
+> `combine_projects()` called directly with hand-built objects. The web side
+> (rendering this in the session table, replacing the stopgap note) is a
+> separate, not-yet-done change.
+>
+> **Web side done, same day.** `ProjectsCombinedEntrySchema`/`MergedProject`
+> carry `nights` through unchanged, and `SessionHistory.tsx` renders each one
+> as its own row alongside the store's sessions — visually marked `archive`,
+> with FILTER/KEPT/TOTAL/MED FWHM honestly absent (no QA ever ran on a raw
+> archive frame) rather than padded, and NIGHT/INTEGRATION carrying the two
+> real numbers a night has. M31's table now reconciles to 122.5 min instead
+> of the 84.2 min the store alone knew about, and the stopgap note above the
+> table is gone, replaced by the rows it was standing in for.
+> `fixtures/projects_combined.json` was regenerated for `nights` only —
+> diffed field-by-field against the previously-committed fixture to confirm
+> nothing else changed, since a full end-to-end regeneration would also have
+> pulled in real `image`/`archive_status` data from an unrelated,
+> separately-tracked change and widened this past its scope.

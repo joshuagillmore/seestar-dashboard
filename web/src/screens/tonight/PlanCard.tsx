@@ -2,7 +2,7 @@ import { formatHours, goalLabel, goalProgressPct } from '../../api/integrationGo
 import type { IntegrationGoal, PlanTarget } from '../../api/schemas'
 import { TargetThumb } from '../../ui/TargetThumb'
 import { targetTypeLabel } from './targetType'
-import { localHhMm, parse } from './timeline'
+import { localHhMm, parse, zoneLabel } from './timeline'
 import styles from './PlanCard.module.css'
 
 /** Time captured and the suggested goal for this target, joined client-side
@@ -70,7 +70,17 @@ export function PlanCard({
 
       <div className={styles.stats}>
         <div className={styles.stat}>
-          <div className={styles.statLabel}>BEST WINDOW</div>
+          {/* The design's own label is `BEST WINDOW UTC` — but this value is
+              not UTC, it's the browser's local clock (see timeline.ts's
+              localHhMm/zoneLabel), so copying that text verbatim would be
+              actively false. zoneLabel names the zone actually being shown
+              instead: it reads "UTC" when that happens to be zero offset —
+              matching the design exactly in that one case — and "UTC±H[:MM]"
+              otherwise. See handback-to-seestar-ai.md item 16 for why the
+              observing site's own zone isn't nameable here today. */}
+          <div className={styles.statLabel} title="Browser-local clock time — may not match the observing site's zone.">
+            BEST WINDOW {zoneLabel(parse(from))}
+          </div>
           <div className={styles.statValue}>
             {localHhMm(parse(from))}–{localHhMm(parse(to))}
           </div>

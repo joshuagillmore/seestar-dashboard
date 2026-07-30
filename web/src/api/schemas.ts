@@ -169,6 +169,17 @@ export const IntegrationGoalSchema = z.object({
   note: z.string(),
 })
 
+/** One archive night's captures for one target (see the sidecar's
+ * `archive.ArchiveNight`) — a night, not a session: no filter, no median
+ * FWHM, no kept/total split, because the archive scan has none of those to
+ * report. A row built from this must render those columns as absent, not as
+ * a zero or a dash that would imply a measured value — see SessionHistory.tsx. */
+export const ArchiveNightSchema = z.object({
+  night: z.string(),
+  frames: z.number(),
+  minutes: z.number(),
+})
+
 /** From the sidecar-computed `/api/projects_combined` — not an MCP tool
  * response, so it has no `goal_minutes`/`status`/`sessions`: those live only
  * on the matching `list_projects` entry, joined by `target_id` client-side
@@ -176,13 +187,24 @@ export const IntegrationGoalSchema = z.object({
  * minutes came from, so a merged total is never shown unexplained. `goal` is
  * `null` only when the target doesn't resolve to a single catalogued object
  * at all (e.g. the archive's own "Unknown" bucket, or a Caldwell id with no
- * canonical target) — see `IntegrationGoalSchema`. */
+ * canonical target) — see `IntegrationGoalSchema`.
+ *
+ * `nights` is the archive's per-night detail, already filtered server-side
+ * through the exact same de-duplication `archive_minutes` uses (a night the
+ * store already has a session record for is excluded before this array is
+ * built) — so `nights.reduce((sum, n) => sum + n.minutes, 0) ===
+ * archive_minutes` holds by construction and this client must not re-filter
+ * or reconcile it further. Always an array, never nullable/optional: a
+ * store-only target gets `nights: []` (its detail already exists as
+ * `sessions` on the matching `list_projects` entry), same convention as
+ * `sources` above. */
 export const ProjectsCombinedEntrySchema = z.object({
   target_id: z.string(),
   target_name: z.string(),
   store_minutes: z.number(),
   archive_minutes: z.number(),
   sources: z.array(z.enum(['store', 'archive'])),
+  nights: z.array(ArchiveNightSchema),
   total_minutes: z.number(),
   goal: IntegrationGoalSchema.nullable(),
   image: TargetImageSchema.nullable().optional(),
@@ -210,5 +232,6 @@ export type Project = z.infer<typeof ProjectSchema>
 export type ListProjects = z.infer<typeof ListProjectsSchema>
 export type RecommendProjects = z.infer<typeof RecommendProjectsSchema>
 export type IntegrationGoal = z.infer<typeof IntegrationGoalSchema>
+export type ArchiveNight = z.infer<typeof ArchiveNightSchema>
 export type ProjectsCombinedEntry = z.infer<typeof ProjectsCombinedEntrySchema>
 export type ProjectsCombined = z.infer<typeof ProjectsCombinedSchema>

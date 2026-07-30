@@ -19,7 +19,24 @@
         "bortle_multiplier": 1.0,
         "reason": "photometry_unreliable",
         "note": "SB 27.12 mag/arcsec\u00b2 computes to ~158 h, which is not credible for this object class \u2014 treating the catalogued magnitude as unreliable, not the target as unreachable."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-19",
+          "frames": 211,
+          "minutes": 35.1667
+        },
+        {
+          "night": "2024-02-05",
+          "frames": 452,
+          "minutes": 75.3333
+        },
+        {
+          "night": "2024-02-29",
+          "frames": 640,
+          "minutes": 106.6667
+        }
+      ]
     },
     {
       "target_id": "M42",
@@ -39,7 +56,34 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 22.40 mag/arcsec\u00b2 \u2192 suggested 1.2 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-14",
+          "frames": 90,
+          "minutes": 15.0
+        },
+        {
+          "night": "2024-01-15",
+          "frames": 510,
+          "minutes": 85.0
+        },
+        {
+          "night": "2024-01-21",
+          "frames": 4,
+          "minutes": 0.6667
+        },
+        {
+          "night": "2024-02-24",
+          "frames": 311,
+          "minutes": 51.8333
+        },
+        {
+          "night": "2024-03-12",
+          "frames": 289,
+          "minutes": 48.1667
+        }
+      ]
     },
     {
       "target_id": "M31",
@@ -60,7 +104,14 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 23.28 mag/arcsec\u00b2 \u2192 suggested 2.9 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-04",
+          "frames": 230,
+          "minutes": 38.3333
+        }
+      ]
     },
     {
       "target_id": "NGC1499",
@@ -80,7 +131,19 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 24.65 mag/arcsec\u00b2 \u2192 suggested 12.1 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-01",
+          "frames": 314,
+          "minutes": 52.3333
+        },
+        {
+          "night": "2024-01-16",
+          "frames": 333,
+          "minutes": 55.5
+        }
+      ]
     },
     {
       "target_id": "M81",
@@ -100,7 +163,19 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 22.20 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-04",
+          "frames": 103,
+          "minutes": 17.1667
+        },
+        {
+          "night": "2024-03-12",
+          "frames": 484,
+          "minutes": 80.6667
+        }
+      ]
     },
     {
       "target_id": "SH2-142",
@@ -120,7 +195,19 @@
         "bortle_multiplier": null,
         "reason": "no_magnitude",
         "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-01",
+          "frames": 318,
+          "minutes": 53.0
+        },
+        {
+          "night": "2024-01-04",
+          "frames": 240,
+          "minutes": 40.0
+        }
+      ]
     },
     {
       "target_id": "M27",
@@ -141,7 +228,19 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 20.16 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 coarse: planetary-nebula sizes in this catalogue run ~35% smaller than the convention this curve was checked against, and the curve itself has no planetary-nebula anchor (see integration_goal.py)."
-      }
+      },
+      "nights": [
+        {
+          "night": "2026-07-04",
+          "frames": 21,
+          "minutes": 3.5
+        },
+        {
+          "night": "2026-07-06",
+          "frames": 97,
+          "minutes": 16.1667
+        }
+      ]
     },
     {
       "target_id": "Unknown",
@@ -152,7 +251,14 @@
         "archive"
       ],
       "total_minutes": 89.1667,
-      "goal": null
+      "goal": null,
+      "nights": [
+        {
+          "night": "2024-02-24",
+          "frames": 535,
+          "minutes": 89.1667
+        }
+      ]
     },
     {
       "target_id": "NGC2244",
@@ -172,7 +278,14 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-03-24",
+          "frames": 484,
+          "minutes": 80.6667
+        }
+      ]
     },
     {
       "target_id": "NGC281",
@@ -193,7 +306,19 @@
         "bortle_multiplier": null,
         "reason": "no_magnitude",
         "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-04",
+          "frames": 77,
+          "minutes": 12.8333
+        },
+        {
+          "night": "2024-01-16",
+          "frames": 206,
+          "minutes": 34.3333
+        }
+      ]
     },
     {
       "target_id": "M45",
@@ -213,7 +338,24 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
-      }
+      },
+      "nights": [
+        {
+          "night": "2023-12-22",
+          "frames": 31,
+          "minutes": 5.1667
+        },
+        {
+          "night": "2024-01-04",
+          "frames": 62,
+          "minutes": 10.3333
+        },
+        {
+          "night": "2024-02-01",
+          "frames": 354,
+          "minutes": 59.0
+        }
+      ]
     },
     {
       "target_id": "LDN1625",
@@ -233,7 +375,14 @@
         "bortle_multiplier": null,
         "reason": "no_magnitude",
         "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-21",
+          "frames": 418,
+          "minutes": 69.6667
+        }
+      ]
     },
     {
       "target_id": "M15",
@@ -253,7 +402,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "NGC7635",
@@ -273,7 +423,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 25.51 mag/arcsec\u00b2 \u2192 suggested 29.6 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "M1",
@@ -293,7 +444,24 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 21.54 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2023-12-22",
+          "frames": 30,
+          "minutes": 5.0
+        },
+        {
+          "night": "2024-01-04",
+          "frames": 36,
+          "minutes": 6.0
+        },
+        {
+          "night": "2024-03-11",
+          "frames": 199,
+          "minutes": 33.1667
+        }
+      ]
     },
     {
       "target_id": "M13",
@@ -313,7 +481,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "M103",
@@ -333,7 +502,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "NGC2237",
@@ -353,7 +523,14 @@
         "bortle_multiplier": null,
         "reason": "no_magnitude",
         "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-19",
+          "frames": 199,
+          "minutes": 33.1667
+        }
+      ]
     },
     {
       "target_id": "M2",
@@ -373,7 +550,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "NGC7380",
@@ -393,7 +571,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "C14_DoubleCluster",
@@ -404,7 +583,8 @@
         "store"
       ],
       "total_minutes": 28.0,
-      "goal": null
+      "goal": null,
+      "nights": []
     },
     {
       "target_id": "IC5146",
@@ -424,7 +604,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 20.83 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "M57",
@@ -445,7 +626,14 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 18.00 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 coarse: planetary-nebula sizes in this catalogue run ~35% smaller than the convention this curve was checked against, and the curve itself has no planetary-nebula anchor (see integration_goal.py)."
-      }
+      },
+      "nights": [
+        {
+          "night": "2026-07-06",
+          "frames": 102,
+          "minutes": 17.0
+        }
+      ]
     },
     {
       "target_id": "M101",
@@ -465,7 +653,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 23.43 mag/arcsec\u00b2 \u2192 suggested 3.4 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "NGC7000",
@@ -485,7 +674,14 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 23.02 mag/arcsec\u00b2 \u2192 suggested 2.3 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-02",
+          "frames": 123,
+          "minutes": 20.5
+        }
+      ]
     },
     {
       "target_id": "C33",
@@ -505,7 +701,14 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 24.52 mag/arcsec\u00b2 \u2192 suggested 10.6 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-04",
+          "frames": 86,
+          "minutes": 14.3333
+        }
+      ]
     },
     {
       "target_id": "M76",
@@ -525,7 +728,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 18.94 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 coarse: planetary-nebula sizes in this catalogue run ~35% smaller than the convention this curve was checked against, and the curve itself has no planetary-nebula anchor (see integration_goal.py)."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "NGC2175",
@@ -545,7 +749,14 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 19.09 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-16",
+          "frames": 64,
+          "minutes": 10.6667
+        }
+      ]
     },
     {
       "target_id": "NGC1579",
@@ -565,7 +776,14 @@
         "bortle_multiplier": null,
         "reason": "no_magnitude",
         "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
-      }
+      },
+      "nights": [
+        {
+          "night": "2023-12-22",
+          "frames": 61,
+          "minutes": 10.1667
+        }
+      ]
     },
     {
       "target_id": "M92",
@@ -585,7 +803,8 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
-      }
+      },
+      "nights": []
     },
     {
       "target_id": "M106",
@@ -605,7 +824,14 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 24.08 mag/arcsec\u00b2 \u2192 suggested 6.7 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-03-12",
+          "frames": 26,
+          "minutes": 4.3333
+        }
+      ]
     },
     {
       "target_id": "NGC1501",
@@ -625,7 +851,14 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 19.90 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 coarse: planetary-nebula sizes in this catalogue run ~35% smaller than the convention this curve was checked against, and the curve itself has no planetary-nebula anchor (see integration_goal.py)."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-02",
+          "frames": 8,
+          "minutes": 1.3333
+        }
+      ]
     },
     {
       "target_id": "M74",
@@ -645,7 +878,14 @@
         "bortle_multiplier": 1.0,
         "reason": null,
         "note": "SB 22.91 mag/arcsec\u00b2 \u2192 suggested 2.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
-      }
+      },
+      "nights": [
+        {
+          "night": "2024-01-02",
+          "frames": 5,
+          "minutes": 0.8333
+        }
+      ]
     }
   ],
   "count": 33,

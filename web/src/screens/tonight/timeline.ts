@@ -44,6 +44,45 @@ export function spanToPercent(
 }
 
 /** Local wall-clock HH:MM. The handoff labels these "local"; the browser's zone
- *  is used, which matches the site only when the user is at the site. */
+ *  is used, which matches the site only when the user is at the site. See
+ *  `zoneLabel` below for what this app does about that gap. */
 export const localHhMm = (ms: number): string =>
   new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+
+/**
+ * Formats a UTC-offset in minutes (positive = ahead of UTC) as `"UTC"` or
+ * `"UTC±H[:MM]"` — e.g. `0` → `"UTC"`, `-420` → `"UTC-7"`, `330` → `"UTC+5:30"`
+ * for the fractional-hour zones (India, Nepal, ...). Split out from
+ * `zoneLabel` so it can be tested with hand-picked offsets, independent of
+ * the test runner's own system zone.
+ */
+export const formatUtcOffset = (offsetMin: number): string => {
+  if (offsetMin === 0) return 'UTC'
+  const sign = offsetMin > 0 ? '+' : '-'
+  const abs = Math.abs(offsetMin)
+  const hours = Math.floor(abs / 60)
+  const minutes = abs % 60
+  return `UTC${sign}${hours}${minutes ? `:${String(minutes).padStart(2, '0')}` : ''}`
+}
+
+/**
+ * Names the zone `localHhMm` is actually rendering in, at a given instant
+ * (DST-aware — two instants six months apart can disagree).
+ *
+ * This is the BROWSER's zone, not the observing site's, and that distinction
+ * is deliberate rather than an oversight: `get_site_profile` returns
+ * `lat_deg`/`lon_deg` but no IANA zone name (verified against both
+ * `SiteProfileSchema` here and the server's own `SiteProfile` dataclass), and
+ * the sidecar's own `local_tz` (`archive.py`) is not derived from the site's
+ * coordinates either — it is "whatever timezone the machine running the
+ * sidecar happens to be in", used only to parse archive filenames, and no
+ * route exposes it to this client regardless. So the site's own zone is
+ * genuinely not knowable from anything this app can currently reach — see
+ * handback-to-seestar-ai.md item 16. Naming the browser's zone explicitly,
+ * instead of the ambiguous "local" the handoff uses, is what's left to do
+ * honestly: a reader can now tell this is THEIR clock, and knows to check
+ * whether it matches the telescope's when the two might differ (e.g.
+ * checking tonight's plan from somewhere other than the site).
+ */
+export const zoneLabel = (ms: number): string =>
+  formatUtcOffset(-new Date(ms).getTimezoneOffset())

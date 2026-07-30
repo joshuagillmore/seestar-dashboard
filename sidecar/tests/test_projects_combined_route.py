@@ -5,6 +5,7 @@ neither of which touches the real archive or a live MCP server here.
 import json
 from datetime import timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -117,6 +118,180 @@ def test_unions_store_and_archive(client):
         "source": "survey",
         "credit": SURVEY_CREDIT,
     }
+
+
+def test_nights_are_exposed_end_to_end_for_both_overlapping_and_archive_only_targets(client):
+    """projects_union.py's own tests supply ArchiveTarget/ArchiveNight objects
+    directly — this proves the `nights` field actually survives the whole
+    route (store fixture, real archive scan, goal/image enrichment, JSON
+    serialisation) rather than only the function that computes it, per the
+    "field never wired" trap: a route that dropped the key on the way out
+    would still pass every projects_union.py test and only fail here.
+    """
+    body = client.get("/api/projects_combined").json()
+    by_id = {p["target_id"]: p for p in body["projects"]}
+
+    # M31: 3 subs on 2024-01-04 (see synthetic_archive), which the real store
+    # fixture's own M31 sessions (July 2026) never touch — nothing to
+    # de-duplicate away here, so all of it survives.
+    m31 = by_id["M31"]
+    assert m31["nights"] == [{"night": "2024-01-04", "frames": 3, "minutes": 0.5}]
+    assert sum(n["minutes"] for n in m31["nights"]) == m31["archive_minutes"]
+
+    # IC405: archive-only, one sub on 2024-01-02.
+    ic405 = by_id["IC405"]
+    assert ic405["nights"] == [
+        {"night": "2024-01-02", "frames": 1, "minutes": pytest.approx(1 / 6, abs=1e-4)}
+    ]
+
+    # Every store-only target (there is no such target in this fixture set —
+    # M31/IC405 both have archive contributions) still must not be missing
+    # the key entirely; check it against a target with zero archive minutes.
+    store_only = [p for p in body["projects"] if p["target_id"] not in {"M31", "IC405"}]
+    assert store_only, "fixture must include at least one store-only target for this to test anything"
+    assert all(p["nights"] == [] for p in store_only)
+
+
+def test_nights_de_duplication_survives_the_full_route(monkeypatch, tmp_path):
+    """The same de-duplication guarantee test_projects_union.py proves at the
+    function level (test_nights_excludes_a_night_the_store_already_has_and_
+    keeps_the_rest) proven again end-to-end: a real store fixture, a real
+    archive scan and JSON serialisation all in the loop, not combine_projects()
+    called directly with hand-built ArchiveTarget/ArchiveNight objects.
+    """
+    from seestar_sidecar import routes
+
+    def fake_store(tool):
+        return {
+            "ok": True,
+            "projects": [
+                {
+                    "target_id": "DEDUPE",
+                    "target_name": "Dedupe Target",
+                    "collected_minutes": 30.0,
+                    "sessions": [
+                        {
+                            "date_utc": "2024-01-04T20:00:00+00:00",
+                            "integration_minutes": 30.0,
+                            "subs_total": 3,
+                            "subs_kept": 3,
+                            "median_fwhm": None,
+                            "notes": "",
+                        }
+                    ],
+                }
+            ],
+            "count": 1,
+        }
+
+    monkeypatch.setenv("SEESTAR_REPLAY", "1")
+    monkeypatch.setattr(routes, "load_fixture", fake_store)
+
+    archive = tmp_path / "archive"
+    subs = archive / "DEDUPE-sub"
+    subs.mkdir(parents=True)
+    for i in range(3):
+        _write_light_fit(subs, "DEDUPE", "20240104", f"10000{i}")  # same night as the store session
+    for i in range(2):
+        _write_light_fit(subs, "DEDUPE", "20240105", f"10000{i}")  # a different night
+
+    client = TestClient(create_app(archive_dir=archive, local_tz=EDT))
+    body = client.get("/api/projects_combined").json()
+
+    entry = next(p for p in body["projects"] if p["target_id"] == "DEDUPE")
+    assert [n["night"] for n in entry["nights"]] == ["2024-01-05"]
+    assert entry["archive_minutes"] == pytest.approx(2 * 10 / 60, abs=1e-4)
+    assert sum(n["minutes"] for n in entry["nights"]) == entry["archive_minutes"]
+
+
+def test_archive_status_reports_configured_and_present(client, synthetic_archive):
+    body = client.get("/api/projects_combined").json()
+    assert body["archive_status"] == {
+        "configured": True,
+        "path": str(synthetic_archive),
+        "exists": True,
+        "target_count": 2,  # M31, IC405 — see synthetic_archive
+    }
+
+
+def test_archive_status_distinguishes_configured_but_missing_from_unconfigured(
+    monkeypatch, tmp_path
+):
+    """The distinction the portability work exists to surface: a path was
+    given but isn't there (a typo, an unmounted drive) reads differently from
+    "nobody configured an archive at all" — see
+    test_archive_status_reports_unconfigured_when_nothing_is_set below.
+    """
+    monkeypatch.setenv("SEESTAR_REPLAY", "1")
+    missing = tmp_path / "never-synced"
+    client = TestClient(create_app(archive_dir=missing, local_tz=EDT))
+
+    body = client.get("/api/projects_combined").json()
+
+    assert body["ok"] is True  # missing/unconfigured must still boot and serve the store's data
+    assert body["archive_status"] == {
+        "configured": True,
+        "path": str(missing),
+        "exists": False,
+        "target_count": 0,
+    }
+
+
+def test_archive_status_reports_unconfigured_when_nothing_is_set(monkeypatch):
+    """create_app(archive_dir=...) always exercises an explicit path in every
+    other test in this file — this is the one test for the actual default
+    path (no override at all), so it must not depend on whatever
+    SEESTAR_ARCHIVE_DIR happens to be set to on the machine running the
+    suite: main.DEFAULT_ARCHIVE_DIR is monkeypatched directly, the same
+    discipline test_replay.py's SEESTAR_AI_DIR lifespan tests now hold
+    themselves to.
+    """
+    from seestar_sidecar import main
+
+    monkeypatch.setenv("SEESTAR_REPLAY", "1")
+    monkeypatch.setattr(main, "DEFAULT_ARCHIVE_DIR", None)
+    client = TestClient(create_app())
+
+    body = client.get("/api/projects_combined").json()
+
+    assert body["ok"] is True  # unconfigured must still boot and serve the store's data alone
+    assert body["archive_status"] == {
+        "configured": False,
+        "path": None,
+        "exists": False,
+        "target_count": 0,
+    }
+    assert all(p["archive_minutes"] == 0.0 for p in body["projects"])
+    assert all(p["nights"] == [] for p in body["projects"])
+    assert all(p["image"] is None or p["image"]["source"] == "survey" for p in body["projects"])
+
+
+def test_a_none_archive_dir_on_app_state_is_not_silently_replaced_by_the_module_default(monkeypatch):
+    """Regression test for a bug this same hardening pass introduced and
+    then caught by actually running the sidecar with a real, configured
+    .env present, not by reasoning about the diff (see
+    .superpowers/harden-sidecar-report.md): `_archive_dir_and_tz` used to
+    read `getattr(request.app.state, "archive_dir", None) or
+    DEFAULT_ARCHIVE_DIR`, which cannot tell "the attribute was never set"
+    apart from "it was set, deliberately, to None" — both are falsy — so a
+    real, non-None module-level DEFAULT_ARCHIVE_DIR silently overrode an
+    app instance's genuinely-unconfigured archive_dir. `_ARCHIVE_DIR_UNSET`
+    (routes.py) is the fix; this proves it holds deterministically,
+    regardless of whether this machine happens to have a real
+    SEESTAR_ARCHIVE_DIR/.env — routes.DEFAULT_ARCHIVE_DIR is monkeypatched
+    to an unambiguously real, non-None path directly, rather than relying
+    on whatever the real environment happens to produce.
+    """
+    from seestar_sidecar import routes
+
+    monkeypatch.setattr(routes, "DEFAULT_ARCHIVE_DIR", Path("C:/some/real/configured/archive"))
+    fake_request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(archive_dir=None, local_tz=None))
+    )
+
+    archive_dir, _ = routes._archive_dir_and_tz(fake_request)
+
+    assert archive_dir is None
 
 
 def test_reports_totals_split_by_source(client):

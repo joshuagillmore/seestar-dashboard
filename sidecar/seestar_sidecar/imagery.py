@@ -46,6 +46,7 @@ from pathlib import Path
 
 import httpx
 
+from seestar_sidecar import env as _env  # noqa: F401 — loads .env before the os.environ.get() below; see env.py
 from seestar_sidecar.catalog import resolve as resolve_catalog_entry
 
 logger = logging.getLogger(__name__)

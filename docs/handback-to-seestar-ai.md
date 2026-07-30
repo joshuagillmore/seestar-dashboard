@@ -22,6 +22,71 @@ Line references are to `OrangeAgente/SeeStar-AI` @ `main` as of 2026-07-30.
 
 ---
 
+## Start here — what to do first, and why
+
+Added 2026-07-30, when this list reached sixteen items and became too long to hand over cold.
+Four tiers, ordered by what they unblock rather than by effort.
+
+### Tier 1 — blocks a whole screen from being started
+
+**Item 1: `qa_tier2` strips the per-sub metric arrays.**
+
+This is the long pole. The Review & QA screen is *made of* per-sub charts — eccentricity, FWHM,
+SNR and star count across every frame — and `_compact_report` removes exactly those arrays before
+the payload leaves. There is nothing partial to build in the meantime, so the screen cannot start
+until this lands. Everything else on this list degrades a screen; this one prevents one existing.
+
+### Tier 2 — blocks a feature within a screen that is otherwise buildable
+
+**Item 10: provenance cannot tell one client from another.**
+
+Gates the Live session screen's operator panel. The rest of that screen — live preview, stacking
+telemetry, guardrails — can be built against `get_view_state` today, so slice 3 should not wait for
+this. But a panel that says "Claude just slewed to M31" cannot exist while the dashboard's own
+polling is indistinguishable from the agent's calls in the same log. The hook already exists and is
+simply unused: `ProvenanceLog.log_call()` accepts the fields, and the `@mcp.tool()` wrappers pass
+none of them.
+
+### Tier 3 — small, and each closes a gap that is visible on screen today
+
+Items **3** (precipitation), **13** (verdict summary) and **14** (narrowband/broadband class).
+
+All three are quantities the server already computes and then flattens into English on the way
+out. Item 14 probably also closes item **5** (the LP filter chip), since it is the same
+classification. Each is roughly a dataclass field and a line in a return dict. Together they close
+the PRECIP tile, the verdict banner's headline, the ranked-card subtitle and the filter chip — four
+visible holes for what is likely a day's work.
+
+**Item 16** (an IANA zone on the site profile) belongs here too, and is the one item on the list a
+user rather than a developer supplies.
+
+### Tier 4 — worth doing, nothing is waiting on it
+
+Items **2**, **4**, **6**, **7**, **9**, **11**, **12**, **15**. The dashboard renders an honest
+absent state for each and nothing is blocked. Two are worth a second look regardless, because they
+may indicate real defects rather than missing fields:
+
+- **Item 7** — `median_fwhm` is `null` on *every* session record. That looks like a write-path bug,
+  not an omission.
+- **Item 15** — `recommend_projects` sorts on a field that is zero for every real project, so its
+  ranking is a no-op and its output is `list_projects` truncated. It is not returning a wrong
+  answer; it is returning an unranked one while appearing ranked.
+
+**Item 11** carries a warning rather than a request: the extended catalogue attached to it must
+**not** be merged on its own. Adopting 12,517 objects without first vectorising the observability
+computation makes `plan_targets` take about sixteen minutes per call, and without a
+brightness/feasibility term the ranker will confidently recommend faint galaxies an f/5 50 mm
+cannot resolve. Both are spelled out in that item.
+
+### What is already done on the dashboard side
+
+Nothing here is waiting on the dashboard. Every item has an honest absent state shipped — the
+screens say what is missing rather than rendering a plausible placeholder, and none of them parses
+prose to fill a gap. When a field arrives, the corresponding surface should light up without
+further UI work in most cases.
+
+---
+
 ## 1. Per-sub metrics are stripped from the `qa_tier2` payload
 
 **Blocks:** the entire Review & QA screen — the per-sub eccentricity chart, the star-count chart,
@@ -513,6 +578,42 @@ is never populated.
 
 ---
 
+## 16. The observing site has no IANA timezone, only coordinates
+
+**Affects:** every clock on the Tonight screen (the ranked cards' `BEST WINDOW` stat, and the
+sweet-band timeline's dark/dawn labels, per-target windows and hour axis) — none of them can say
+whether they match the telescope's own zone.
+
+**Found 2026-07-30** while labeling those clocks so they at least name *some* zone rather than the
+ambiguous "local" the design uses.
+
+`get_site_profile` (`server.py:629`) returns `dataclasses.asdict(profile)` — `name`, `lat_deg`,
+`lon_deg`, `elevation_m`, `bortle`, `sqm`, `horizon_mask`, `min_altitude_deg`,
+`field_rotation_ceiling_deg`. No timezone field, named or otherwise.
+
+The one `local_tz` in this codebase (`sidecar/seestar_sidecar/archive.py`) is not a fit either, for
+two independent reasons: it is not derived from the site's coordinates at all — its own docstring
+says production leaves it `None` and reads "the system's own timezone" of whatever machine runs the
+sidecar — and it has no HTTP route exposing it regardless, since it exists only to parse archive
+filenames.
+
+So a browser checking Tonight's plan from anywhere other than the site (a hotel, a phone away from
+the mount) has no way to know whether the times it renders match the telescope's — the dashboard can
+name **its own** clock's zone (an honest UTC-offset label, shipped in this same change) but not the
+site's, and cannot even detect whether the two agree.
+
+**Asked for:** an IANA zone name on the site profile — e.g. `tz_name: str | None` alongside
+`lat_deg`/`lon_deg` on `SiteProfile`, set by `set_site_profile` (a user-supplied value, the same way
+`bortle`/`sqm` already are, since coordinates alone don't determine a zone unambiguously near a
+border and reverse-geocoding is a real dependency for a small gain). With it, the dashboard could
+show both clocks explicitly when they differ, instead of only being able to name one of them.
+
+**Note for anyone standing up a fresh installation:** until this exists, don't assume the machine
+running the sidecar is in the same zone as the browser viewing the dashboard, or as the telescope
+itself — today it happens to be true for this one installation, and nothing checks it.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
@@ -532,9 +633,12 @@ is never populated.
 | 13 | No one-line verdict summary, only `reasons[]` | Headline sentence of the Tonight banner | Partly — the server already composes the reason prose |
 | 14 | `plan_targets` does not return the narrowband/broadband class | Ranked-card subtitle descriptor; likely also item 5's filter chip | Yes — `LP_MODEL` already classifies it and the ranker scores on it |
 | 15 | `recommend_projects` ties every project on the same sentinel and returns list order | The Projects header recommendation, and the design's "N h short of goal" clause | No — it ranks on `goal_minutes`, which is 0 for every real project |
+| 16 | `SiteProfile` has coordinates but no IANA timezone | Every clock on Tonight can name the browser's own zone but not the site's, or detect whether the two agree | No — nothing computes or stores one today |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
 explicit absent state for each rather than a plausible-looking placeholder, so nothing on screen is
 a lie. Item 1 **blocks** the Review screen outright. Item 7 may indicate a real server-side defect.
 Item 10 blocks slice 5. Item 11 is the only one that degrades a tool the *agent* uses rather than
-just the dashboard — the ranker's blind spot is the user's most-imaged object.
+just the dashboard — the ranker's blind spot is the user's most-imaged object. Item 16 likewise
+degrades rather than blocks: the dashboard now states the zone it *can* name honestly instead of the
+ambiguous "local", it just cannot yet name the site's.

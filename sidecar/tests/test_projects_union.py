@@ -54,6 +54,7 @@ def test_store_only_target_appears_with_zero_archive_minutes():
             "store_minutes": 22.0,
             "archive_minutes": 0.0,
             "sources": ["store"],
+            "nights": [],
             "total_minutes": 22.0,
         }
     ]
@@ -78,6 +79,7 @@ def test_archive_only_target_appears_with_zero_store_minutes():
             "store_minutes": 0.0,
             "archive_minutes": 217.2,
             "sources": ["archive"],
+            "nights": [{"night": "2024-01-01", "frames": 1303, "minutes": 217.2}],
             "total_minutes": 217.2,
         }
     ]
@@ -160,6 +162,93 @@ def test_mutation_double_counting_would_be_caught():
     result = combine_projects(store, archive)
 
     assert result[0]["total_minutes"] != 30.0 + archive_minutes_if_undeduped
+
+
+# --- nights (per-night archive records — see docs/slice-2-backlog.md's
+# "Fix in the sidecar: expose per-night archive records") ------------------
+
+
+def test_nights_excludes_a_night_the_store_already_has_and_keeps_the_rest():
+    """Same fixture as test_overlapping_night_is_not_double_counted, but
+    asserting the `nights` field itself rather than only the aggregate
+    `archive_minutes` it must stay consistent with — the M31 stopgap this
+    field replaces (SessionHistory.tsx) needs the itemised list, not just
+    the total.
+    """
+    store = [_store_project("TEST", "Test Target", 30.0, ["2024-01-04"])]
+    archive = {
+        "TEST": ArchiveTarget(
+            target_id="TEST",
+            display_name="TEST",
+            minutes=100.0,
+            nights=[
+                ArchiveNight(night="2024-01-04", subs=600, minutes=100.0),  # excluded
+                ArchiveNight(night="2024-01-05", subs=60, minutes=10.0),  # kept
+            ],
+        )
+    }
+
+    result = combine_projects(store, archive)
+
+    entry = result[0]
+    assert entry["nights"] == [{"night": "2024-01-05", "frames": 60, "minutes": 10.0}]
+    # The invariant that must hold by construction: nights and archive_minutes
+    # are computed from the same filtered list, never independently.
+    assert sum(n["minutes"] for n in entry["nights"]) == entry["archive_minutes"]
+
+
+def test_mutation_nights_reappearing_for_a_known_night_would_be_caught():
+    """Proves the previous test is not vacuous: a `nights` field built from
+    the archive's raw, unfiltered night list (i.e. skipping the same
+    de-duplication archive_minutes applies) would include the 2024-01-04
+    night the store already covers.
+    """
+    store = [_store_project("TEST", "Test Target", 30.0, ["2024-01-04"])]
+    archive = {
+        "TEST": ArchiveTarget(
+            target_id="TEST",
+            display_name="TEST",
+            minutes=110.0,
+            nights=[
+                ArchiveNight(night="2024-01-04", subs=600, minutes=100.0),
+                ArchiveNight(night="2024-01-05", subs=60, minutes=10.0),
+            ],
+        )
+    }
+
+    result = combine_projects(store, archive)
+
+    nights_seen = {n["night"] for n in result[0]["nights"]}
+    assert "2024-01-04" not in nights_seen
+
+
+def test_nights_is_empty_for_a_store_only_target():
+    store = [_store_project("M101", "Pinwheel Galaxy", 22.0, ["2026-07-12"])]
+
+    result = combine_projects(store, {})
+
+    assert result[0]["nights"] == []
+
+
+def test_nights_carries_every_archive_night_for_an_archive_only_target():
+    archive = {
+        "IC405": ArchiveTarget(
+            target_id="IC405",
+            display_name="IC 405",
+            minutes=227.0,
+            nights=[
+                ArchiveNight(night="2024-01-01", subs=1303, minutes=217.2),
+                ArchiveNight(night="2024-01-19", subs=59, minutes=9.8),
+            ],
+        )
+    }
+
+    result = combine_projects([], archive)
+
+    assert result[0]["nights"] == [
+        {"night": "2024-01-01", "frames": 1303, "minutes": 217.2},
+        {"night": "2024-01-19", "frames": 59, "minutes": 9.8},
+    ]
 
 
 def test_results_are_sorted_by_total_minutes_descending():

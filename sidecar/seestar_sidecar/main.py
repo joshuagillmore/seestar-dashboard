@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from seestar_sidecar import env as _env  # noqa: F401 — loads .env before SEESTAR_AI_DIR is read below; see env.py
 from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR
 from seestar_sidecar.catalog import DEFAULT_ALIASES_PATH, DEFAULT_CATALOG_PATH
 from seestar_sidecar.frontend import DEFAULT_WEB_DIST, mount_frontend
@@ -15,7 +16,22 @@ from seestar_sidecar.mcp_proxy import McpConnection
 from seestar_sidecar.routes import replay_enabled, router
 
 VITE_DEV_ORIGIN = "http://localhost:5173"
-SEESTAR_AI_DIR = os.environ.get("SEESTAR_AI_DIR", "C:/Users/<user>/SeeStar-AI")
+#: No personal-path fallback: unlike DEFAULT_ARCHIVE_DIR (see archive.py),
+#: there is no default at all here, guessed or otherwise — a checkout of
+#: this repo has no way to know where a sibling seestar-mcp checkout lives
+#: on someone else's machine. `None` means "not configured" and is handled
+#: explicitly below, not passed to subprocess.Popen. See docs/configuration.md.
+SEESTAR_AI_DIR = os.environ.get("SEESTAR_AI_DIR")
+#: The message call_tool (routes.py) raises when app.state.connection is
+#: None specifically because SEESTAR_AI_DIR isn't set — distinct from a bare
+#: TestClient(create_app()) that never ran the lifespan at all, which keeps
+#: the older, more generic message (see create_app()'s own comment below).
+_SEESTAR_AI_DIR_UNSET_MESSAGE = (
+    "SEESTAR_AI_DIR is not set, so the sidecar has nowhere to run the "
+    "seestar-mcp server from. Set it to your seestar-mcp checkout, or run "
+    "with SEESTAR_REPLAY=1 to serve recorded fixtures instead — see "
+    "docs/configuration.md."
+)
 
 
 @asynccontextmanager
@@ -25,13 +41,23 @@ async def lifespan(app: FastAPI):
     # each other. Routes read it via request.app.state.
     app.state.connection = None
     if not replay_enabled():
-        app.state.connection = McpConnection(
-            command="uv",
-            args=["--directory", SEESTAR_AI_DIR, "run", "python", "-m", "seestar_mcp.server"],
-        )
-        # Deliberately not started here: a dead SeeStar-AI checkout should not
-        # stop the sidecar booting. The first request starts it and surfaces
-        # any failure as a 502 the UI can render.
+        if SEESTAR_AI_DIR:
+            app.state.connection = McpConnection(
+                command="uv",
+                args=["--directory", SEESTAR_AI_DIR, "run", "python", "-m", "seestar_mcp.server"],
+            )
+            # Deliberately not started here: a dead SeeStar-AI checkout should
+            # not stop the sidecar booting. The first request starts it and
+            # surfaces any failure as a 502 the UI can render.
+        else:
+            # Leaving connection None here, rather than building a
+            # McpConnection with a None directory, is what stops this from
+            # reaching subprocess.Popen with a literal `None` argv entry on
+            # the first request — a TypeError, not the readable 502 every
+            # other missing-config path in this app produces. call_tool's
+            # existing "connection is None" branch already renders this as a
+            # 502; only the message differs (see below).
+            app.state.connection_unavailable_reason = _SEESTAR_AI_DIR_UNSET_MESSAGE
     yield
     if app.state.connection is not None:
         await app.state.connection.aclose()
@@ -46,10 +72,11 @@ def create_app(
     aliases_path: Path | str | None = None,
     image_cache_dir: Path | str | None = None,
 ) -> FastAPI:
-    """`web_dist` defaults to web/dist and `archive_dir` to
-    SEESTAR_ARCHIVE_DIR / its own default — both only need overriding in
-    tests, since the `uv run seestar-dashboard` / `--factory` entry points
-    call this with no arguments.
+    """`web_dist` defaults to web/dist; `archive_dir` defaults to
+    SEESTAR_ARCHIVE_DIR, or `None` — "not configured" — when that isn't set
+    (see archive.DEFAULT_ARCHIVE_DIR and docs/configuration.md). Both only
+    need overriding in tests, since the `uv run seestar-dashboard` /
+    `--factory` entry points call this with no arguments.
 
     `local_tz` is likewise test-only: it threads through to
     `archive.scan_archive()`, whose own default (`None`) reads the system's
@@ -72,6 +99,7 @@ def create_app(
     # TestClient(create_app()) does exactly that. Routes then report
     # "MCP connection not started" as a 502 rather than an AttributeError 500.
     app.state.connection = None
+    app.state.connection_unavailable_reason = None
     app.state.archive_dir = Path(archive_dir) if archive_dir is not None else DEFAULT_ARCHIVE_DIR
     app.state.local_tz = local_tz
     app.state.catalog_path = Path(catalog_path) if catalog_path is not None else DEFAULT_CATALOG_PATH

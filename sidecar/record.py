@@ -8,12 +8,20 @@ only read-only tools — nothing here touches the telescope.
 """
 import asyncio
 import json
+import os
+import sys
 from pathlib import Path
 
+from seestar_sidecar import env as _env  # noqa: F401 — loads .env before the os.environ.get() below; see env.py
 from seestar_sidecar.allowlist import ALLOWED_TOOLS
 from seestar_sidecar.mcp_proxy import McpConnection
 
-SEESTAR_AI_DIR = "C:/Users/<user>/SeeStar-AI"
+#: No personal-path default — see seestar_sidecar/main.py's SEESTAR_AI_DIR,
+#: which this duplicates rather than imports (this script runs standalone,
+#: outside the FastAPI app). Checked in main(), not at import time, so
+#: `import record` (test_record.py's own pre-flight assertion test) stays
+#: safe in CI regardless of whether this machine has it set.
+SEESTAR_AI_DIR = os.environ.get("SEESTAR_AI_DIR")
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
 ARGUMENTS: dict[str, dict] = {
@@ -46,6 +54,14 @@ _assert_arguments_complete(ARGUMENTS, ALLOWED_TOOLS)
 
 
 async def main() -> None:
+    if not SEESTAR_AI_DIR:
+        print(
+            "SEESTAR_AI_DIR is not set — this script needs it to find the "
+            "seestar-mcp checkout to record fixtures from. See "
+            "docs/configuration.md.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     connection = McpConnection(
         command="uv",
         args=["--directory", SEESTAR_AI_DIR, "run", "python", "-m", "seestar_mcp.server"],

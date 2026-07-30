@@ -58,6 +58,22 @@ def combine_projects(
     (`store_minutes`, `archive_minutes`, `sources`), so the UI can show
     provenance instead of a single unexplained number. A target present in
     only one source still appears, with the other source's minutes at 0.
+
+    `nights` carries the archive's own per-night detail (see
+    `archive.ArchiveNight`) as `{night, frames, minutes}` dicts — the
+    Projects session table's itemisation the M31 stopgap note
+    (SessionHistory.tsx) says doesn't exist yet: today it can only show the
+    store's own sessions, so a target present in both sources reads lower
+    on the table than its card total. Filtered through the exact same
+    `known_nights` exclusion used for `archive_minutes` above, not
+    recomputed independently, so the two can never disagree about which
+    nights survived the union — `sum(n["minutes"] for n in nights) ==
+    archive_minutes` always holds by construction, and a night the store
+    already logged never reappears here just because the UI now has
+    somewhere to put it. Store-only targets get `nights: []`: their detail
+    is already fully available as `sessions` on the matching `list_projects`
+    entry (joined client-side — see web/src/screens/projects/projects.ts),
+    so there is nothing archive-side to add.
     """
     combined: dict[str, dict] = {}
     store_nights_by_target: dict[str, set[str]] = {}
@@ -71,17 +87,20 @@ def combine_projects(
             "store_minutes": project.get("collected_minutes", 0.0),
             "archive_minutes": 0.0,
             "sources": ["store"],
+            "nights": [],
         }
 
     for target_id, archive_target in archive_targets.items():
         known_nights = store_nights_by_target.get(target_id, set())
-        archive_minutes = round(
-            sum(n.minutes for n in archive_target.nights if n.night not in known_nights),
-            4,
-        )
+        included_nights = [n for n in archive_target.nights if n.night not in known_nights]
+        archive_minutes = round(sum(n.minutes for n in included_nights), 4)
+        nights_payload = [
+            {"night": n.night, "frames": n.subs, "minutes": n.minutes} for n in included_nights
+        ]
         if target_id in combined:
             combined[target_id]["archive_minutes"] = archive_minutes
             combined[target_id]["sources"].append("archive")
+            combined[target_id]["nights"] = nights_payload
         else:
             combined[target_id] = {
                 "target_id": target_id,
@@ -89,6 +108,7 @@ def combine_projects(
                 "store_minutes": 0.0,
                 "archive_minutes": archive_minutes,
                 "sources": ["archive"],
+                "nights": nights_payload,
             }
 
     projects = list(combined.values())
