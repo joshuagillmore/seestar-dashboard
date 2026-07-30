@@ -175,6 +175,34 @@ describe('TonightScreen', () => {
     expect(screen.getAllByText(warning)).toHaveLength(1)
   })
 
+  it('threads location.matched to the sidebar, not just the warning string', async () => {
+    // Regression test for a dead wire. Sidebar grew a `gpsMatched` prop to
+    // tell apart the server's three location states — matched / unverified /
+    // mismatch, the last of which means the horizon mask is NOT applied — but
+    // TonightScreen was never updated to pass it, so the prop sat on its
+    // `null` default and the row read "GPS unverified" whatever the server
+    // said. The whole suite stayed green: Sidebar's own tests supplied the
+    // prop directly, and every recorded fixture happens to carry
+    // `matched: null`, which is also the default the broken wire fell back to.
+    //
+    // So this test has to use a fixture where matched is NOT null — otherwise
+    // it passes with the wire cut, which is exactly how the gap survived.
+    const matched = ConditionsSchema.parse({
+      ...recorded,
+      location: { ...recorded.location, matched: true, warning: null },
+    })
+    stubApi({ '/api/assess_conditions': matched })
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    // Match the sidebar's combined row specifically — the banner legitimately
+    // says "GPS matched" too in this state, so a bare /GPS matched/ would pass
+    // on the banner alone and prove nothing about the sidebar's wiring.
+    expect(screen.getByText(/GPS matched · mask/)).toBeInTheDocument()
+    expect(screen.queryByText(/GPS unverified · mask/)).not.toBeInTheDocument()
+  })
+
   it('shows a time-captured progress row on ranked cards that match a real projects_combined target', async () => {
     stubApi({ '/api/projects_combined': recordedProjectsCombined() })
     render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)

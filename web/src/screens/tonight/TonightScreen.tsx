@@ -77,6 +77,7 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
           site={site}
           verdict={verdict}
           gpsWarning={data?.conditions.location.warning ?? null}
+          gpsMatched={data?.conditions.location.matched ?? null}
           view={view}
           onNavigate={onNavigate}
           // Tonight now fetches projects_combined too (for the ranked cards'
