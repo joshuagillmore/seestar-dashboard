@@ -46,3 +46,12 @@ export const livePreviewStacked = () => loadFixture('synthetic/live_preview_stac
 export const livePreviewSub = () => loadFixture('synthetic/live_preview_sub')
 export const livePreviewStale = () => loadFixture('synthetic/live_preview_stale')
 export const livePreviewNone = () => loadFixture('synthetic/live_preview_none')
+
+/** `/api/session_activity` also has no recorded fixture — hand-built to
+ * mirror the three `origin` states `session_activity.py`'s own tests use as
+ * worked examples: a tool with no dashboard route at all (`agent`), the
+ * shared native tag both this dashboard and the agent can produce
+ * (`ambiguous`), and a line that failed to parse (`unknown`, every field
+ * null). See schemas.ts's own doc comment on the honesty constraint this
+ * exists under. */
+export const sessionActivity = () => loadFixture('synthetic/session_activity')

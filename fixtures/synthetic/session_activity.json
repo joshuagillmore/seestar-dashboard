@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "records": [
+    {
+      "ts": "2026-07-30T03:52:00+00:00",
+      "tool": "goto_target",
+      "args": { "target": "M31" },
+      "origin": "agent"
+    },
+    {
+      "ts": "2026-07-30T03:51:00+00:00",
+      "tool": "alpaca.put.action",
+      "args": {},
+      "origin": "ambiguous"
+    },
+    {
+      "ts": null,
+      "tool": null,
+      "args": null,
+      "origin": "unknown"
+    }
+  ],
+  "truncated": true,
+  "source_configured": true
+}

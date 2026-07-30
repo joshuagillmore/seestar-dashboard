@@ -409,6 +409,45 @@ export const LivePreviewSchema = z.object({
   reason: z.string().nullable().optional(),
 })
 
+/**
+ * `/api/session_activity` — verified against `sidecar/seestar_sidecar/
+ * session_activity.py` and `routes.py`'s handler directly (no recorded
+ * fixture; the sidecar's own tests use hand-written provenance lines). A
+ * plain activity feed off `provenance.jsonl` — `{ts, tool, args}` and
+ * nothing else. There is no prose field anywhere in that file, so the
+ * design's chat bubbles (Claude's own sentences) are simply not obtainable
+ * from this source — see SessionActivityCard's own doc comment for why this
+ * client renders an activity feed, never a synthesised transcript.
+ *
+ * `ts`/`tool`/`args` are all nullable: a line that failed to parse becomes
+ * an `origin: "unknown"` record with every field `null` rather than being
+ * dropped silently (`test_a_malformed_line_becomes_an_unknown_record_not_a_
+ * 500`). `origin` is the honesty-critical field — hand-back item 10 means
+ * the log has no client identifier, so the dashboard's OWN calls sit in
+ * here too, indistinguishable from the agent's, unless a tag is provably
+ * something only the agent could have produced (`"agent"`) or the record
+ * didn't parse (`"unknown"`) — everything else able to come from either
+ * source is `"ambiguous"`, never guessed further.
+ */
+export const SessionActivityRecordSchema = z.object({
+  ts: z.string().nullable(),
+  tool: z.string().nullable(),
+  args: z.record(z.string(), z.unknown()).nullable(),
+  origin: z.enum(['agent', 'ambiguous', 'unknown']),
+})
+
+export const SessionActivitySchema = z.object({
+  ok: z.boolean(),
+  records: z.array(SessionActivityRecordSchema),
+  truncated: z.boolean(),
+  /** `false` only when no provenance path is configured at all on this
+   * installation — a real, first-class state (routes.py's `session_activity`
+   * handler), not merely "empty right now". `records` is `[]` in both that
+   * case and the "configured but nothing logged yet" case; only
+   * `source_configured` tells them apart. */
+  source_configured: z.boolean(),
+})
+
 export type Conditions = z.infer<typeof ConditionsSchema>
 export type PlanTargets = z.infer<typeof PlanTargetsSchema>
 export type PlanTarget = z.infer<typeof PlanTargetSchema>
@@ -437,3 +476,5 @@ export type ObservabilityTarget = z.infer<typeof ObservabilityTargetSchema>
 export type ObservabilityDetail = z.infer<typeof ObservabilityDetailSchema>
 export type TargetObservability = z.infer<typeof TargetObservabilitySchema>
 export type LivePreview = z.infer<typeof LivePreviewSchema>
+export type SessionActivityRecord = z.infer<typeof SessionActivityRecordSchema>
+export type SessionActivity = z.infer<typeof SessionActivitySchema>

@@ -7,6 +7,7 @@ import type { DotTone } from '../../ui/Dot'
 import { Dot } from '../../ui/Dot'
 import { GuardrailsCard } from './GuardrailsCard'
 import { PreviewCard } from './PreviewCard'
+import { SessionActivityCard } from './SessionActivityCard'
 import { SweetBandGauge } from './SweetBandGauge'
 import { TargetHeader } from './TargetHeader'
 import { TelemetryGrid } from './TelemetryGrid'
@@ -36,14 +37,25 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
 }
 
 /**
- * Slice 3. Two columns, not the design's three (README.md Screen 2) — the
- * operator panel is deferred to its own slice and the whole button row
- * (`Refocus`/`Stop stack`/`Wind down & park`) is dropped outright, per the
- * decisions in docs/superpowers/specs/2026-07-30-slice-3-live-session.md §0:
- * the user does not want telescope control from this screen, only the
- * camera view and read-only status. Status indicators (the six-cell grid,
- * guardrails, sweet-band gauge, telemetry log) all stay — the distinction is
- * actionable-vs-informational, not which card something sits in.
+ * Slice 3. Three columns, matching the design (README.md Screen 2): preview
+ * `286px` / centre `flex: 1` / session activity `336px`. The whole button
+ * row (`Refocus`/`Stop stack`/`Wind down & park`) and the approval gate are
+ * still dropped outright, per docs/superpowers/specs/2026-07-30-slice-3-
+ * live-session.md §0: the user does not want telescope control from this
+ * screen, only the camera view and read-only status. Status indicators
+ * (the six-cell grid, guardrails, sweet-band gauge, telemetry log) all
+ * stay — the distinction is actionable-vs-informational, not which card
+ * something sits in.
+ *
+ * The third column was briefly built as two columns with the operator panel
+ * deferred entirely, then reinstated at the user's request ("keep a
+ * placeholder column… if we can have the claude output in that column with
+ * no interactivity, that's an option") — collapsing it would have baked in
+ * a decision that was only ever deferred. It is `SessionActivityCard`, not
+ * the design's chat transcript: `/api/session_activity` is a plain
+ * `{ts, tool, args, origin}` feed off `provenance.jsonl`, with no prose to
+ * build message bubbles from — see that component's own doc comment for why
+ * it is headed "Session activity", never "Claude".
  *
  * The idle state is the common case, not an edge case: a Seestar S50 spends
  * most of the day and a good chunk of the night not observing, and the
@@ -145,6 +157,8 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
 
                 <TelemetryLogCard log={state.log} />
               </div>
+
+              <SessionActivityCard activity={state.sessionActivity} />
             </div>
           )
         })()}

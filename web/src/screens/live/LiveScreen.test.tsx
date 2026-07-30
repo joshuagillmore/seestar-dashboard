@@ -15,6 +15,7 @@ import {
   recordedStatus,
   recordedTier1,
   recordedViewState,
+  sessionActivity,
 } from '../../test/fixtures'
 
 const site = SiteProfileSchema.parse(recordedSite())
@@ -38,6 +39,7 @@ function stubApi(overrides: Record<string, Body | (() => Body)> = {}) {
     '/api/get_focuser_position': recordedFocuserPosition(),
     '/api/get_target_observability': recordedObservability(),
     '/api/live_preview': livePreviewStacked(),
+    '/api/session_activity': sessionActivity(),
     ...overrides,
   }
   vi.stubGlobal(
@@ -244,6 +246,52 @@ describe('LiveScreen', () => {
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByText('check_night_guardrails')).toBeInTheDocument())
     expect(screen.getByText('continue')).toBeInTheDocument()
+  })
+
+  it('renders the third column as session activity, not a "Claude" chat transcript', async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
+    expect(screen.getByText('Session activity')).toBeInTheDocument()
+    expect(screen.queryByText(/claude/i)).not.toBeInTheDocument()
+    const records = screen.getAllByTestId('session-activity-record')
+    expect(records.length).toBeGreaterThan(0)
+    // Origin is visible per record, never flattened into one column-wide tone.
+    const origins = screen.getAllByTestId('session-activity-origin').map((el) => el.getAttribute('data-origin'))
+    expect(new Set(origins).size).toBeGreaterThan(1)
+  })
+
+  it('renders an honest "not available yet" placeholder in the reserved third column when /api/session_activity is not deployed — not a blank hole', async () => {
+    // stubApi's override map can't express "no stub at all" for one key
+    // (an override still adds the key), so this builds the fetch stub
+    // directly, omitting /api/session_activity entirely — exactly the
+    // "route not deployed yet" case (a real 404, not a slow/failed call).
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const path = url.split('?')[0]
+        if (path === '/api/session_activity') {
+          return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+        }
+        const bodies: Record<string, unknown> = {
+          '/api/get_status': recordedStatus(),
+          '/api/get_view_state': recordedViewState(),
+          '/api/check_night_guardrails': recordedGuardrails(),
+          '/api/qa_tier1': recordedTier1(),
+          '/api/get_focuser_position': recordedFocuserPosition(),
+          '/api/get_target_observability': recordedObservability(),
+          '/api/live_preview': livePreviewStacked(),
+        }
+        if (!(path in bodies)) {
+          return { ok: false, status: 404, json: async () => ({ ok: false, error: `no stub for ${url}` }) }
+        }
+        return { ok: true, status: 200, json: async () => bodies[path] }
+      }),
+    )
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
+    expect(screen.getByTestId('session-activity-unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Session activity')).toBeInTheDocument()
   })
 
   it('the telemetry grid uses minmax(0,1fr), not a bare 1fr, so a label cannot overflow the container', () => {

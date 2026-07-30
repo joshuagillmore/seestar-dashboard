@@ -6,6 +6,7 @@ import {
   fetchGuardrails,
   fetchLivePreview,
   fetchPlan,
+  fetchSessionActivity,
   fetchStatus,
   fetchTargetObservability,
   fetchTier1,
@@ -21,6 +22,7 @@ import {
   recordedStatus,
   recordedTier1,
   recordedViewState,
+  sessionActivity,
 } from '../test/fixtures'
 
 const mockFetch = (body: unknown, status = 200) =>
@@ -143,6 +145,20 @@ describe('api client', () => {
     it('parses live_preview', async () => {
       mockFetch(livePreviewStacked())
       expect((await fetchLivePreview()).source).toBe('stacked')
+    })
+
+    it('puts the limit in the session_activity query string', async () => {
+      const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => sessionActivity() })
+      vi.stubGlobal('fetch', spy)
+      await fetchSessionActivity(30)
+      expect(spy).toHaveBeenCalledWith('/api/session_activity?limit=30')
+    })
+
+    it('parses session_activity, including a fully-null unknown record', async () => {
+      mockFetch(sessionActivity())
+      const activity = await fetchSessionActivity(30)
+      expect(activity.records.map((r) => r.origin)).toEqual(['agent', 'ambiguous', 'unknown'])
+      expect(activity.records[2].tool).toBeNull()
     })
 
     it('raises ApiError (not a hang) when get_view_state times out on an idle scope — the sidecar 502s, it does not leave the request open', async () => {

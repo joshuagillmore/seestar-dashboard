@@ -9,6 +9,7 @@ import {
   PlanTargetsSchema,
   ProjectsCombinedSchema,
   RecommendProjectsSchema,
+  SessionActivitySchema,
   SiteProfileSchema,
   StatusSchema,
   TargetObservabilitySchema,
@@ -23,6 +24,7 @@ import {
   type PlanTargets,
   type ProjectsCombined,
   type RecommendProjects,
+  type SessionActivity,
   type SiteProfile,
   type Status,
   type TargetObservability,
@@ -167,3 +169,11 @@ export const fetchTargetObservability = (target: string): Promise<TargetObservab
  * an `<img>` at (see PreviewCard). Never fetches the image bytes itself. */
 export const fetchLivePreview = (): Promise<LivePreview> =>
   get('/api/live_preview', LivePreviewSchema)
+
+/** Newest-first tail of provenance.jsonl (routes.py's `session_activity`
+ * handler) — an activity feed, not a tool call itself, and not gated behind
+ * an active session the way the telescope-state fetchers above are (it's a
+ * local file read, unrelated to whether the scope is observing). See
+ * SessionActivityCard for how `origin` must be rendered without flattening. */
+export const fetchSessionActivity = (limit?: number): Promise<SessionActivity> =>
+  get(`/api/session_activity${limit !== undefined ? `?limit=${limit}` : ''}`, SessionActivitySchema)

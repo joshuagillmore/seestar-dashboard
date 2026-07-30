@@ -3,6 +3,7 @@ import {
   fetchFocuserPosition,
   fetchGuardrails,
   fetchLivePreview,
+  fetchSessionActivity,
   fetchStatus,
   fetchTargetObservability,
   fetchTier1,
@@ -12,6 +13,7 @@ import type {
   FocuserPosition,
   Guardrails,
   LivePreview,
+  SessionActivity,
   Status,
   TargetObservability,
   Tier1,
@@ -26,6 +28,11 @@ import { appendTelemetryEntry, type TelemetryEntry } from './telemetryLog'
  * yet, so "configurable" today means "change this one constant."
  */
 export const POLL_INTERVAL_MS = 60_000
+
+/** The activity column shows a compact recent tail, not the whole log —
+ * matching the design's own scrolling operator panel rather than an
+ * unbounded list. */
+export const SESSION_ACTIVITY_LIMIT = 30
 
 export type LiveSessionState =
   | { phase: 'loading' }
@@ -43,6 +50,12 @@ export type LiveSessionState =
       focuser: FocuserPosition | null
       observability: TargetObservability | null
       preview: LivePreview | null
+      /** Not gated on `viewState` the way the rest of this active state is —
+       * `session_activity` reads a local file unrelated to whether the
+       * scope is observing, so its own absent state (route not deployed
+       * yet, or a fetch hiccup) is independent of everything else here. See
+       * SessionActivityCard. */
+      sessionActivity: SessionActivity | null
       log: TelemetryEntry[]
       /** Every distinct `stage` value observed this mount, in order,
        * de-duplicating only consecutive repeats — "3PPA → AutoGoto → Stack"
@@ -128,11 +141,12 @@ export function useLiveSession(): LiveSessionState {
         sessionStartedAtRef.current = new Date().toISOString()
       }
 
-      const [guardrails, tier1, focuser, preview] = await Promise.all([
+      const [guardrails, tier1, focuser, preview, sessionActivity] = await Promise.all([
         fetchGuardrails(sessionStartedAtRef.current).catch(() => null),
         fetchTier1().catch(() => null),
         fetchFocuserPosition().catch(() => null),
         fetchLivePreview().catch(() => null),
+        fetchSessionActivity(SESSION_ACTIVITY_LIMIT).catch(() => null),
       ])
 
       // Observability needs a target id, which only live_preview's own
@@ -160,6 +174,7 @@ export function useLiveSession(): LiveSessionState {
         focuser,
         observability,
         preview,
+        sessionActivity,
         log: logRef.current,
         stageHistory: stageHistoryRef.current,
         currentTarget: currentTargetRef.current,

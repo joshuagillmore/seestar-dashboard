@@ -5,9 +5,11 @@
 
 .skeleton { height: 320px; border-radius: var(--radius-card); background: var(--bg-card-sunken); border: 1px solid var(--border-quiet); }
 
-/* Two columns, not the design's three — see LiveScreen.tsx's own doc
-   comment. The freed operator-panel width goes to the centre column via
-   flex:1 rather than sitting empty. */
+/* Three columns — preview (own 286px), centre (flex:1), session activity
+   (own 336px) — each column's width lives in its own card's module CSS
+   (PreviewCard.module.css/.card, SessionActivityCard.module.css/.card), not
+   here; see LiveScreen.tsx's own doc comment for why the third column
+   exists at all. */
 .columns { display: flex; align-items: flex-start; gap: 16px; }
 .center { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .row { display: flex; gap: 14px; align-items: stretch; }

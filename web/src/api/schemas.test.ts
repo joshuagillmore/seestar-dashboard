@@ -7,6 +7,7 @@ import {
   LivePreviewSchema,
   PlanTargetsSchema,
   ProjectsCombinedSchema,
+  SessionActivitySchema,
   SiteProfileSchema,
   StatusSchema,
   TargetObservabilitySchema,
@@ -30,6 +31,7 @@ import {
   recordedStatus,
   recordedTier1,
   recordedViewState,
+  sessionActivity,
   unknownConditions,
 } from '../test/fixtures'
 
@@ -194,5 +196,28 @@ describe('live-session schemas', () => {
     const none = LivePreviewSchema.parse(livePreviewNone())
     expect(none.source).toBeNull()
     expect(none.reason).toBeTruthy()
+  })
+
+  it('parses session_activity\'s three origin states, including a fully-null unknown record', () => {
+    const parsed = SessionActivitySchema.parse(sessionActivity())
+    const origins = parsed.records.map((r) => r.origin)
+    expect(origins).toEqual(['agent', 'ambiguous', 'unknown'])
+    const unknown = parsed.records[2]
+    expect(unknown.ts).toBeNull()
+    expect(unknown.tool).toBeNull()
+    expect(unknown.args).toBeNull()
+    expect(parsed.truncated).toBe(true)
+    expect(parsed.source_configured).toBe(true)
+  })
+
+  it('parses the not-configured session_activity state — records empty, source_configured false', () => {
+    const parsed = SessionActivitySchema.parse({
+      ok: true,
+      records: [],
+      truncated: false,
+      source_configured: false,
+    })
+    expect(parsed.records).toEqual([])
+    expect(parsed.source_configured).toBe(false)
   })
 })
