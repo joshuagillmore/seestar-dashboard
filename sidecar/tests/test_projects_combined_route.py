@@ -79,13 +79,18 @@ def test_unions_store_and_archive(client):
     assert ic405["store_minutes"] == 0.0
     assert ic405["target_name"] == "IC 405"
 
-    # Both targets are in the real committed catalogue (M31 as a galaxy, IC405
-    # under its "other" type bucket — see integration_goal.py) with usable
-    # photometry, so both should carry a computed suggested-hours goal, using
-    # the fixture site profile's Bortle 8 (the model's own calibration point).
+    # M31 is a galaxy with real, trusted photometry — computes to a genuine
+    # suggested-hours goal at the fixture site profile's Bortle 8 (the
+    # model's own calibration point).
     assert m31["goal"]["track"] == "photometric"
     assert m31["goal"]["suggested_hours"] is not None
-    assert ic405["goal"]["track"] == "photometric"
+    # IC405's catalogued B-Mag 10.0 for a 50'x30' nebula computes to an
+    # implausible SB — see integration_goal.py's "Beyond reach vs. unreliable
+    # photometry" (this is the user's single largest archive investment, 217
+    # real minutes, so a bare "beyond practical reach" reading would be
+    # empirically wrong, not just improbable). Falls back to no goal at all,
+    # end to end through the real route.
+    assert ic405["goal"] is None
 
 
 def test_reports_totals_split_by_source(client):

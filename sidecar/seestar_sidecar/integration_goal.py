@@ -36,6 +36,27 @@ isophote or aperture the published figures used, not a units error — a units
 error would be off by orders of magnitude, not tenths. (M45's number is not
 used for anything below regardless — see "Track: cluster".)
 
+**Deliberately uses only `size_arcmin` (the major axis) — modelling every
+object as a circle, not an ellipse — even though several nebulae here are
+strongly elongated** (IC 405 50'x30', NGC 7000 120'x30'). This was checked,
+not overlooked: correcting to an ellipse makes IC 405's numbers *worse*, not
+better, because M31 (177.8'x63'), which defines `SB_REF`, is itself more
+elongated than IC 405 — correcting both moves the reference down further
+than the target and widens the gap it was meant to close:
+
+  |                          | circle (current) | ellipse |
+  |--------------------------|-------------------|---------|
+  | M31 (defines `SB_REF`)   | 23.28             | 22.15   |
+  | IC 405                  | 27.12             | 26.57   |
+  | IC 405 minus `SB_REF`    | 3.84              | 4.42    |
+
+The circle-only formula is also the one `T_REF`/`SB_REF`/`K` were calibrated
+consistently against, and published mean-SB figures already vary by more than
+a magnitude depending on the isophote/aperture used regardless of which shape
+model is chosen — the ellipse's apparent precision is illusory. Left alone on
+purpose; do not "fix" this without re-deriving the anchor table's SB values
+the same way, or every number in this module silently shifts.
+
 ## Track 1 — photometric
 
 Galaxies, planetary nebulae, emission/reflection nebulae and supernova
@@ -173,15 +194,22 @@ behave very differently:
   confidence, and should not be trusted beyond "materially flatter than
   broadband".
 
-This catalogue's `type` field has an "other" bucket (583 entries) that
-includes several real emission/reflection nebulae the OpenNGC import
-couldn't classify unambiguously (M42, IC405, NGC1499, NGC2237, NGC1579 all
-land here — see `data/build_catalogue.py`'s TYPE_MAP). Lacking a reliable
-per-object imaging-mode signal, "other" defaults to the **broadband** curve.
-This is a known simplification, not a finding — flag it if the model ever
-generalises to a non-Bortle-8 site, where it would start to matter. It has
-zero effect today: the multiplier is 1.0 at Bortle 8 regardless of which
-curve it resolves to.
+This catalogue's `type` field has an "other" bucket for objects the OpenNGC
+import couldn't classify unambiguously (originally 583 entries — genuinely
+ambiguous OpenNGC codes `Neb`/`Cl+N`/`DrkN`/`Other`; see `data/build_catalogue.
+py`'s `TYPE_MAP`). Lacking a reliable per-object imaging-mode signal, "other"
+defaults to the **broadband** curve. This is a known simplification, not a
+finding — flag it if the model ever generalises to a non-Bortle-8 site, where
+it would start to matter. It has zero effect today: the multiplier is 1.0 at
+Bortle 8 regardless of which curve it resolves to.
+
+**This bucket is shrinking under you, live.** A SIMBAD `otype`-based
+reclassification (`data/simbad_types.json`) is moving objects out of "other"
+into a real type as this is written — do not name specific ids here or in
+tests as permanently "other"; several already moved during this task (M42,
+NGC1499 -> `emission_nebula`; NGC1579, NGC7380, IC5146 -> `open_cluster`). Key
+everything off the type *set*, never an id, and expect the exact membership
+of "other" to keep changing without this module needing to.
 
 ## Bounds
 
@@ -194,7 +222,42 @@ curve it resolves to.
   a useless progress-bar denominator. Past this bound, no hours figure is
   returned at all (`beyond_reach: True`, `suggested_hours: None`) — flagging
   it as beyond what this instrument and site can reasonably reach is more
-  informative than a number nobody will complete.
+  informative than a number nobody will complete. **Except** for the diffuse-
+  nebula family — see immediately below.
+
+## Beyond reach vs. unreliable photometry
+
+IC 405 (the user's single largest archive investment, 217 real minutes
+captured) computes to SB 27.1 / ~158 h and would trip `beyond_reach` like the
+faint-galaxy example above. That reading is wrong, and not for a reason `K`
+or a bound can fix: OpenNGC gives IC 405 (50'x30') a B-Mag of 10.0, while
+NGC 7000 (120'x30', a comparably bright, comparably sized diffuse nebula)
+gets B-Mag 4.0. A six-magnitude gap between two similar objects is not
+credible physics — integrated magnitude is poorly defined and inconsistently
+measured for diffuse nebulae in the first place (the research file already
+says this; it was previously applied only to objects with *missing*
+magnitude, not to objects whose magnitude is present but not credible).
+
+So for the **diffuse-nebula family only** — `_UNRELIABLE_PHOTOMETRY_TYPES`:
+`emission_nebula`, `reflection_nebula`, and this catalogue's untyped `other`
+bucket (IC 405's current type; see "Bortle adjustment" above for why several
+real nebulae still land in `other`) — a computed result past
+`BEYOND_REACH_HOURS` is treated as evidence the *input* is bad, not evidence
+the *target* is unreachable, and falls back to Track 3 (no goal, hours only,
+no bar) instead of `beyond_reach`. This is scoped to that type set
+deliberately: keyed off `type`, not off IC 405's id, so it applies correctly
+whether IC 405 stays `other` or the in-flight SIMBAD reclassification moves
+it to `emission_nebula` — either way it must still fall back, and both are
+tested. Galaxies, planetary nebulae and supernova remnants are not in scope:
+their beyond_reach answers are trusted and stay exactly as before — the
+distinction is about the reliability of *this class of input*, not about
+raising the bound generally.
+
+The fallback is logged (not returned — the external "no goal" contract stays
+a bare `None`, same as every other Track 3 case) with a distinct reason tag,
+`photometry_unreliable`, specifically so this is never confused in the logs
+with the ordinary "no magnitude at all" Track 3 case (which logs nothing —
+there is nothing anomalous about a target simply lacking photometry).
 
 ## f-ratio
 
@@ -204,7 +267,10 @@ but the Seestar S50 is a fixed f/5 — there is no live f-ratio term here, it is
 baked into `T_REF`. Would need to become a real parameter if this model ever
 generalises across Seestar/Dwarf/Vaonis bodies with different f-ratios.
 """
+import logging
 import math
+
+logger = logging.getLogger(__name__)
 
 #: M31 — the SB the whole curve is anchored to (see module docstring).
 SB_REF = 23.3
@@ -250,6 +316,13 @@ _NARROWBAND_TYPES = frozenset({"emission_nebula", "planetary_nebula", "supernova
 #: convention is established as the "right" one for imaging difficulty, and
 #: none of K's own anchors is a planetary nebula either.
 _COARSE_PHOTOMETRIC_TYPES = frozenset({"planetary_nebula"})
+#: See "Beyond reach vs. unreliable photometry" in the module docstring.
+#: Scoped to the diffuse-nebula family — a `beyond_reach` result here is
+#: better evidence of unreliable integrated-magnitude photometry (IC 405's
+#: real case) than of a genuinely unreachable target. Galaxies, planetary
+#: nebulae and supernova remnants are deliberately excluded and keep the
+#: honest beyond_reach answer.
+_UNRELIABLE_PHOTOMETRY_TYPES = frozenset({"emission_nebula", "reflection_nebula", "other"})
 
 _BORTLE_RATIO = {
     "broadband": BROADBAND_BORTLE_RATIO,
@@ -347,6 +420,25 @@ def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> d
     raw_hours = T_REF * (10 ** (K * (sb - SB_REF))) * multiplier
 
     if raw_hours > BEYOND_REACH_HOURS:
+        if entry.get("type") in _UNRELIABLE_PHOTOMETRY_TYPES:
+            # See "Beyond reach vs. unreliable photometry" in the module
+            # docstring — IC 405's real case. Logged, not returned: the
+            # external "no goal" contract stays a bare None like every other
+            # Track 3 case; the reason tag is what a log search distinguishes
+            # this from the ordinary no-magnitude case (which logs nothing).
+            logger.info(
+                "integration_goal: %s (type=%s) computes to ~%.0f h at SB "
+                "%.2f mag/arcsec², past BEYOND_REACH_HOURS=%.0f h — "
+                "reason=photometry_unreliable, not beyond_reach (diffuse-"
+                "nebula integrated magnitude is not trusted this far out); "
+                "falling back to Track 3 (no goal).",
+                entry.get("id", "<unknown>"),
+                entry.get("type"),
+                raw_hours,
+                sb,
+                BEYOND_REACH_HOURS,
+            )
+            return None
         return {
             "track": "photometric",
             "suggested_hours": None,

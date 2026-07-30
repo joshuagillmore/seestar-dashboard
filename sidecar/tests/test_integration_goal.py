@@ -49,6 +49,10 @@ class TestSurfaceBrightnessAnchors:
     through 0.6.
     """
 
+    # magnitude/size below are the real catalogue rows for these four objects
+    # (data/dso_catalog_extended.json), not synthetic numbers chosen to hit
+    # `published` — that coupling is the point of this test (it's what would
+    # catch a units bug) and must survive any future "simplification".
     @pytest.mark.parametrize(
         "magnitude,size_arcmin,published",
         [
@@ -154,6 +158,61 @@ class TestBounds:
         sb_at_cap = SB_REF + math.log10(BEYOND_REACH_HOURS / T_REF) / K
         result = suggest_integration_goal(_entry_at_sb(sb_at_cap + 0.05), bortle=SITE_BORTLE_REF)
         assert result["beyond_reach"] is True
+
+
+class TestUnreliableDiffuseNebulaPhotometry:
+    """IC 405's real case (see integration_goal.py's "Beyond reach vs.
+    unreliable photometry"): a diffuse nebula computing past
+    BEYOND_REACH_HOURS is treated as unreliable integrated-magnitude
+    photometry, not a genuinely unreachable target, and falls back to no
+    goal at all (same external contract as any other Track 3 case) rather
+    than `beyond_reach: True`. Scoped to a type *set*
+    (`_UNRELIABLE_PHOTOMETRY_TYPES`), not to IC405's id, because the
+    in-flight SIMBAD reclassification may retype it from "other" to
+    "emission_nebula" — both must behave identically.
+    """
+
+    @pytest.mark.parametrize("type_", ["other", "emission_nebula", "reflection_nebula"])
+    def test_diffuse_nebula_family_falls_back_to_no_goal(self, type_):
+        result = suggest_integration_goal(_entry_at_sb(27.0, type_=type_), bortle=SITE_BORTLE_REF)
+        assert result is None
+
+    @pytest.mark.parametrize("type_", ["galaxy", "planetary_nebula", "supernova_remnant"])
+    def test_types_outside_the_diffuse_family_keep_the_honest_beyond_reach_answer(self, type_):
+        """The contrast case team-lead asked to keep tested: types NOT in
+        the diffuse-nebula set still get a trusted beyond_reach answer at
+        the exact same SB that falls back to nothing for the nebula family.
+        """
+        result = suggest_integration_goal(_entry_at_sb(27.0, type_=type_), bortle=SITE_BORTLE_REF)
+        assert result is not None
+        assert result["beyond_reach"] is True
+        assert result["suggested_hours"] is None
+
+    def test_real_ic405_catalog_entry_falls_back_to_no_goal(self, real_catalog_and_aliases):
+        catalog, aliases = real_catalog_and_aliases
+        entry = resolve("IC405", catalog, aliases)
+        assert entry is not None
+        assert entry["magnitude"] is not None  # has photometry, just untrustworthy
+        assert suggest_integration_goal(entry, bortle=8) is None
+
+    def test_fallback_is_logged_with_a_distinct_reason(self, caplog):
+        import logging as _logging
+
+        with caplog.at_level(_logging.INFO, logger="seestar_sidecar.integration_goal"):
+            suggest_integration_goal(_entry_at_sb(27.0, type_="other"), bortle=SITE_BORTLE_REF)
+        assert "photometry_unreliable" in caplog.text
+
+    def test_ordinary_no_magnitude_case_logs_nothing(self, caplog):
+        """Contrast: the routine "no photometry at all" Track 3 path is not
+        anomalous and must not emit the same (or any) log line — otherwise
+        "photometry_unreliable" would stop being a distinct signal.
+        """
+        import logging as _logging
+
+        entry = {"type": "emission_nebula", "magnitude": None, "size_arcmin": 30.0}
+        with caplog.at_level(_logging.INFO, logger="seestar_sidecar.integration_goal"):
+            assert suggest_integration_goal(entry, bortle=SITE_BORTLE_REF) is None
+        assert caplog.text == ""
 
 
 class TestTrackSelection:
