@@ -342,6 +342,42 @@ Two smaller things would make the panel materially better and cost little:
 `response_code` (so a failed call is visible as failed) and the elapsed time of
 each call.
 
+> **Strengthened 2026-07-30**, after building a read-only activity feed against the real log.
+> The problem is worse than "no client id" — measured against all 691 records plus a trace of
+> `alpaca_client.py`'s call graph.
+>
+> **Most read tools never appear in the log under their own names at all.** Of the six read-only
+> tools the Live screen uses:
+>
+> | Tool | Appears as itself? |
+> |---|---|
+> | `get_view_state` | **never** |
+> | `get_status` | **never** |
+> | `get_focuser_position` | **never** |
+> | `qa_tier1` | **never** |
+> | `check_night_guardrails` | yes |
+> | `get_target_observability` | yes |
+>
+> What appears instead is the native layer: **278 records of `alpaca.put.action`**, plus
+> `alpaca.get.<property>` tags. `invoke_action()` hardcodes the string `"alpaca.put.action"`
+> whichever native method actually ran — so the log cannot say *what happened*, not merely
+> *who did it*.
+>
+> This defeats the obvious workaround. A client can reason "a tool I have no route for cannot be
+> mine" — but because its own calls fan out and log under different names, that rule classifies the
+> dashboard's own traffic as the agent's. **The inference fails in exactly the direction that
+> matters**, confidently attributing our own polling to Claude.
+>
+> The dashboard ships a supplementary tag set to compensate, and it is the one piece of that
+> codebase which cannot be kept correct mechanically: it hardcodes a mirror of *this* repo's
+> internal call graph, in another repo, maintained by another session. Add a native call anywhere
+> and the dashboard silently starts misattributing again, with nothing to catch it.
+>
+> **So the ask is now two things:** a stable client identifier per record, and a tool tag naming the
+> method actually invoked rather than a fixed `alpaca.put.action`. The first removes the guessing;
+> the second makes the log honest about its own contents. With both, the compensating tag set can be
+> deleted outright.
+
 ---
 
 ## 11. The planner's catalogue is 120 objects, so the ranker cannot suggest half the user's own targets
