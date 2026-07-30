@@ -56,6 +56,7 @@ const combinedEntry = (overrides: Partial<ProjectsCombinedEntry> = {}): Projects
   store_minutes: 0,
   archive_minutes: 0,
   sources: ['store'],
+  nights: [],
   total_minutes: 0,
   goal: null,
   ...overrides,
@@ -71,6 +72,7 @@ const merged = (overrides: Partial<MergedProject> = {}): MergedProject => ({
   store: project(),
   goal: null,
   image: null,
+  nights: [],
   ...overrides,
 })
 
@@ -109,6 +111,13 @@ describe('mergeProjects', () => {
     expect(result.image).toBeNull()
   })
 
+  it('carries the nights field through from the combined entry, verbatim', () => {
+    const nights = [{ night: '2024-01-04', frames: 230, minutes: 38.3333 }]
+    const combined = [combinedEntry({ target_id: 'M31', nights })]
+    const [result] = mergeProjects(combined, [])
+    expect(result.nights).toEqual(nights)
+  })
+
   it('preserves the input order from `combined` rather than re-sorting', () => {
     // Deliberately NOT in target_id or total_minutes order — proves this
     // function doesn't quietly impose its own ordering on top of the
@@ -128,6 +137,25 @@ describe('mergeProjects', () => {
     expect(result).toHaveLength(33)
     expect(result.filter((p) => p.store !== null)).toHaveLength(15)
     expect(result.filter((p) => p.store === null)).toHaveLength(18)
+  })
+
+  it('holds sum(nights.minutes) === archiveMinutes for every one of the 33 real merged projects', () => {
+    // The server-side invariant projects_union.py's combine_projects()
+    // documents (nights is filtered through the exact same de-duplication
+    // archive_minutes already uses) — checked here against the real fixture
+    // rather than trusting the claim, and checked for every project, not
+    // just the one (M31) this whole change was motivated by. A client bug
+    // that dropped or duplicated a night while threading `nights` through
+    // mergeProjects would show up here as a mismatch.
+    const combined = ProjectsCombinedSchema.parse(recordedProjectsCombined()).projects
+    const listed = ListProjectsSchema.parse(recordedListProjects()).projects
+    const all = mergeProjects(combined, listed)
+    expect(all).toHaveLength(33)
+    expect(all.some((p) => p.nights.length > 0)).toBe(true) // exercises the real branch, not a fixture where it's vacuously true
+    for (const p of all) {
+      const summed = p.nights.reduce((total, n) => total + n.minutes, 0)
+      expect(summed).toBeCloseTo(p.archiveMinutes, 3)
+    }
   })
 
   it('gives M31 both store and archive minutes matching the recorded split', () => {

@@ -322,3 +322,17 @@ the Review screen (slice 4), which will want per-session detail anyway.
 > `combine_projects()` called directly with hand-built objects. The web side
 > (rendering this in the session table, replacing the stopgap note) is a
 > separate, not-yet-done change.
+>
+> **Web side done, same day.** `ProjectsCombinedEntrySchema`/`MergedProject`
+> carry `nights` through unchanged, and `SessionHistory.tsx` renders each one
+> as its own row alongside the store's sessions — visually marked `archive`,
+> with FILTER/KEPT/TOTAL/MED FWHM honestly absent (no QA ever ran on a raw
+> archive frame) rather than padded, and NIGHT/INTEGRATION carrying the two
+> real numbers a night has. M31's table now reconciles to 122.5 min instead
+> of the 84.2 min the store alone knew about, and the stopgap note above the
+> table is gone, replaced by the rows it was standing in for.
+> `fixtures/projects_combined.json` was regenerated for `nights` only —
+> diffed field-by-field against the previously-committed fixture to confirm
+> nothing else changed, since a full end-to-end regeneration would also have
+> pulled in real `image`/`archive_status` data from an unrelated,
+> separately-tracked change and widened this past its scope.

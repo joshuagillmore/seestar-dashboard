@@ -1,5 +1,5 @@
 import { describeGoal, goalProgressPct } from '../../api/integrationGoal'
-import type { IntegrationGoal, Project, ProjectsCombinedEntry, TargetImage } from '../../api/schemas'
+import type { ArchiveNight, IntegrationGoal, Project, ProjectsCombinedEntry, TargetImage } from '../../api/schemas'
 
 /**
  * One row for the Projects screen: projects_combined's totals/provenance for
@@ -32,6 +32,15 @@ export interface MergedProject {
    * absent case to handle, not two. See TargetImageSchema and TargetThumb,
    * which actually renders it. */
   image: TargetImage | null
+  /** The archive's own per-night detail (see `ArchiveNightSchema`), already
+   * filtered server-side against the store's own sessions — see
+   * `ProjectsCombinedEntrySchema`'s doc comment for the invariant this
+   * carries (`sum(nights.minutes) === archiveMinutes`). Always an array,
+   * mirroring the schema: `[]` for a store-only target, since its detail is
+   * already fully available as `store.sessions`. SessionHistory.tsx renders
+   * these alongside `store.sessions` so the table's total can finally match
+   * `totalMinutes` for a target recorded in both sources. */
+  nights: ArchiveNight[]
 }
 
 /**
@@ -54,6 +63,7 @@ export function mergeProjects(
     sources: entry.sources,
     goal: entry.goal,
     image: entry.image ?? null,
+    nights: entry.nights,
     store: byId.get(entry.target_id) ?? null,
   }))
 }
@@ -143,11 +153,19 @@ export interface SessionsSummary {
 }
 
 /**
- * Null means the target has no store record at all — an archive-only
- * target's per-night detail genuinely does not exist (the archive scan
- * reports aggregate minutes only, not individual nights), so the caller
- * renders a distinct honest empty state rather than "0 sessions", which
- * would falsely imply a tracked project that simply hasn't logged anything.
+ * Null means the target has no store record at all, so the caller renders a
+ * distinct honest empty state rather than "0 sessions", which would falsely
+ * imply a tracked project that simply hasn't logged anything.
+ *
+ * This is the card's one-line meta summary, not the full per-night history —
+ * that's SessionHistory.tsx, which now itemises `project.nights` alongside
+ * `store.sessions` (the archive scan does carry individual nights, via
+ * `ArchiveNight` — an earlier version of this comment said otherwise, before
+ * `/api/projects_combined` exposed them). Deliberately not folded in here
+ * too: this summary is keyed on `last.median_fwhm`, a store-only concept
+ * archive nights have no equivalent of, and a one-line meta summary is the
+ * wrong place to start distinguishing session-shaped and night-shaped data —
+ * that distinction is SessionHistory's whole job now.
  */
 export function summarizeSessions(project: MergedProject): SessionsSummary | null {
   if (!project.store) return null

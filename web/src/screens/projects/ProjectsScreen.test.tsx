@@ -69,33 +69,48 @@ describe('ProjectsScreen', () => {
     ).toBeInTheDocument()
   })
 
-  it('defaults the session history to the highest-hours project (IC405, archive-only)', async () => {
+  it('defaults the session history to the highest-hours project (IC405, archive-only), now itemised by night rather than an aggregate-only empty state', async () => {
     stubApi()
     await renderLoaded()
     // combined.projects is sorted total_minutes-descending server-side —
     // its first entry is the honest default selection.
     const top = combined.projects[0]
     expect(top.target_id).toBe('IC405')
+    expect(top.nights.length).toBeGreaterThan(0) // exercising the real itemised case, not the empty one
     expect(screen.getByText(`${top.target_id} · SESSION HISTORY — log_session_result`)).toBeInTheDocument()
-    expect(screen.getByText(/appears only in the archive scan/)).toBeInTheDocument()
+    // The old aggregate-only message is gone now that nights are available —
+    // 1 header row + one row per real archive night.
+    expect(screen.queryByText(/appears only in the archive scan/)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('row')).toHaveLength(1 + top.nights.length)
+    expect(screen.getAllByText('archive').length).toBe(top.nights.length)
   })
 
-  it('re-scopes the session history when a different card is clicked', async () => {
+  it('re-scopes the session history when a different card is clicked, itemising both the store sessions and the archive nights', async () => {
     stubApi()
     await renderLoaded()
 
     const m31Sessions = listed.projects.find((p) => p.target_id === 'M31')?.sessions ?? []
+    const m31Nights = combined.projects.find((p) => p.target_id === 'M31')?.nights ?? []
     expect(m31Sessions.length).toBeGreaterThan(0)
+    // M31 is one of the targets recorded in both sources — this is the exact
+    // case the M31-table-doesn't-close gap was about, so the fixture must
+    // actually exercise it rather than only the single-source cases above.
+    expect(m31Nights.length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getByRole('button', { name: /M31/ }))
 
     expect(screen.getByText('M31 · SESSION HISTORY — log_session_result')).toBeInTheDocument()
     expect(screen.queryByText(/appears only in the archive scan/)).not.toBeInTheDocument()
-    // The real M31 record has 3 sessions in the store — 1 header row + 3 data rows.
-    expect(screen.getAllByRole('row')).toHaveLength(1 + m31Sessions.length)
-    // M31 is one of the four overlapping targets — its table only ever shows
-    // the store's 3 sessions, so the un-itemised-archive note must appear.
-    expect(screen.getByText(/plus 38\.3 min from the archive, not itemised per night here/)).toBeInTheDocument()
+    // 1 header + 3 store-session rows + 1 archive-night row — the table's own
+    // rows now account for every one of M31's 122.5 min, not just the 84.2
+    // min the store alone knows about.
+    const rows = screen.getAllByRole('row')
+    expect(rows).toHaveLength(1 + m31Sessions.length + m31Nights.length)
+    // The un-itemised-archive stopgap note is gone; the real night is a row.
+    expect(screen.queryByText(/not itemised per night here/)).not.toBeInTheDocument()
+    const archiveRow = rows[rows.length - 1]
+    expect(within(archiveRow).getByText(m31Nights[0].night, { exact: false })).toBeInTheDocument()
+    expect(within(archiveRow).getByText('archive')).toBeInTheDocument()
   })
 
   it('shows the provenance split on an overlapping target rather than only its merged total', async () => {

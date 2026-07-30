@@ -1,9 +1,48 @@
+import type { ArchiveNight } from '../../api/schemas'
 import { formatMinutes, type MergedProject } from './projects'
 import styles from './SessionHistory.module.css'
 
 const FWHM_ABSENT_TITLE =
   'median_fwhm is null on every recorded session — see docs/handback-to-seestar-ai.md item 7'
 const FILTER_ABSENT_TITLE = 'list_projects does not return a per-session filter field'
+
+/** Why an archive-night row's FILTER/KEPT/TOTAL/MED FWHM cells are absent —
+ * a different reason from a store session's absences above, so this is a
+ * distinct title rather than reusing FILTER_ABSENT_TITLE/FWHM_ABSENT_TITLE
+ * (which cite a store/schema gap that isn't what's happening here). Archive
+ * frames were never scored by qa_tier2 at all: there is no kept/rejected
+ * split, no filter captured per night (the scan's own filename regex
+ * matches but does not capture that segment — see archive.py's
+ * _LIGHT_FILENAME), and no FWHM measurement — only a night, a frame count
+ * and a total, which land in the NIGHT and INTEGRATION cells instead. */
+const ARCHIVE_ROW_ABSENT_TITLE =
+  'this row is a raw archive night, not a QA session — it was never scored by qa_tier2, ' +
+  'so there is no kept/rejected split, filter, or FWHM to show, only a frame count and a total'
+
+function ArchiveNightRow({ night }: { night: ArchiveNight }) {
+  return (
+    <div className={`${styles.row} ${styles.archiveRow}`} role="row">
+      <div className={styles.cell}>
+        {night.night} <span className={styles.archiveTag}>archive</span>
+      </div>
+      <div className={`${styles.cell} ${styles.absent}`} title={ARCHIVE_ROW_ABSENT_TITLE}>
+        —
+      </div>
+      <div className={`${styles.cell} ${styles.absent}`} title={ARCHIVE_ROW_ABSENT_TITLE}>
+        —
+      </div>
+      <div className={`${styles.cell} ${styles.absent}`} title={ARCHIVE_ROW_ABSENT_TITLE}>
+        —
+      </div>
+      <div className={`${styles.cell} ${styles.absent}`} title={ARCHIVE_ROW_ABSENT_TITLE}>
+        —
+      </div>
+      <div className={styles.cell}>
+        {night.frames} frames · {formatMinutes(night.minutes)}
+      </div>
+    </div>
+  )
+}
 
 /**
  * Scoped to whichever card is selected (see ProjectsScreen). The design's six
@@ -31,48 +70,38 @@ const FILTER_ABSENT_TITLE = 'list_projects does not return a per-session filter 
  * would be exactly the re-derivation the hand-back rule forbids. So this is
  * the UTC calendar date, not necessarily the observing night — see the
  * slice-2-backlog's "Timezone marker" note for the same accepted gap
- * elsewhere in the app.
+ * elsewhere in the app. `ArchiveNight.night`, by contrast, already IS the
+ * observing night — it comes from the sidecar's own `observing_night()` (see
+ * archive.py) — so the two row types render two different notions of "night"
+ * under one column, both honestly labeled by what produced them.
  *
- * For the four targets recorded in both sources (M31, M27, NGC281, M57), the
- * table above only ever shows the store's own sessions — the archive side of
- * the union isn't broken out per night anywhere this screen can reach, so
- * the table's own total reads lower than the card's `total_minutes`. A note
- * below the table says so whenever `archiveMinutes > 0`, rather than leaving
- * the gap unexplained. This is a display limitation, not a permanent one:
- * `scan_archive()` already computes a per-night `ArchiveNight` record
- * internally (see archive.py) — `/api/projects_combined` just doesn't expose
- * it yet. See docs/slice-2-backlog.md.
+ * For a target recorded in both sources (M31, M27, NGC281, M57 today), the
+ * table used to show only the store's own sessions — the archive side of the
+ * union wasn't broken out per night anywhere this screen could reach, so the
+ * table's own total read lower than the card's `total_minutes`, with a note
+ * below explaining the gap. `/api/projects_combined` now exposes that detail
+ * as `nights` (see `ProjectsCombinedEntrySchema`), already de-duplicated
+ * against the store's own sessions server-side, so `ArchiveNightRow`s render
+ * alongside the store's session rows below and the table closes: no
+ * re-filtering or reconciliation happens here, only rendering what the
+ * response already carries. See docs/slice-2-backlog.md for the prior state
+ * of this gap.
  */
 export function SessionHistory({ project }: { project: MergedProject }) {
   const label = `${project.targetId} · SESSION HISTORY — log_session_result`
+  const sessions = project.store?.sessions ?? []
+  const nights = project.nights
+  const hasRows = sessions.length > 0 || nights.length > 0
 
-  if (!project.store) {
+  if (!hasRows) {
     return (
       <section className={styles.card}>
         <div className={styles.label}>{label}</div>
         <div className={styles.empty}>
-          {project.targetName} appears only in the archive scan, which reports aggregate
-          minutes per target, not individual session records — there is no per-night
-          history to show.
+          {project.store
+            ? `No sessions logged for ${project.targetName} yet.`
+            : `${project.targetName} has no per-night archive record and no store sessions — there is nothing to show yet.`}
         </div>
-      </section>
-    )
-  }
-
-  const sessions = project.store.sessions
-  const archiveNote = project.archiveMinutes > 0 && (
-    <div className={styles.archiveNote}>
-      plus {formatMinutes(project.archiveMinutes)} from the archive, not itemised per night
-      here.
-    </div>
-  )
-
-  if (sessions.length === 0) {
-    return (
-      <section className={styles.card}>
-        <div className={styles.label}>{label}</div>
-        <div className={styles.empty}>No sessions logged for {project.targetName} yet.</div>
-        {archiveNote}
       </section>
     )
   }
@@ -105,7 +134,9 @@ export function SessionHistory({ project }: { project: MergedProject }) {
           <div className={styles.cell}>{session.integration_minutes.toFixed(1)} min</div>
         </div>
       ))}
-      {archiveNote}
+      {nights.map((night) => (
+        <ArchiveNightRow key={night.night} night={night} />
+      ))}
     </section>
   )
 }
