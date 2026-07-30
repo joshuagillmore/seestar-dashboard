@@ -22,6 +22,71 @@ Line references are to `OrangeAgente/SeeStar-AI` @ `main` as of 2026-07-30.
 
 ---
 
+## Start here — what to do first, and why
+
+Added 2026-07-30, when this list reached sixteen items and became too long to hand over cold.
+Four tiers, ordered by what they unblock rather than by effort.
+
+### Tier 1 — blocks a whole screen from being started
+
+**Item 1: `qa_tier2` strips the per-sub metric arrays.**
+
+This is the long pole. The Review & QA screen is *made of* per-sub charts — eccentricity, FWHM,
+SNR and star count across every frame — and `_compact_report` removes exactly those arrays before
+the payload leaves. There is nothing partial to build in the meantime, so the screen cannot start
+until this lands. Everything else on this list degrades a screen; this one prevents one existing.
+
+### Tier 2 — blocks a feature within a screen that is otherwise buildable
+
+**Item 10: provenance cannot tell one client from another.**
+
+Gates the Live session screen's operator panel. The rest of that screen — live preview, stacking
+telemetry, guardrails — can be built against `get_view_state` today, so slice 3 should not wait for
+this. But a panel that says "Claude just slewed to M31" cannot exist while the dashboard's own
+polling is indistinguishable from the agent's calls in the same log. The hook already exists and is
+simply unused: `ProvenanceLog.log_call()` accepts the fields, and the `@mcp.tool()` wrappers pass
+none of them.
+
+### Tier 3 — small, and each closes a gap that is visible on screen today
+
+Items **3** (precipitation), **13** (verdict summary) and **14** (narrowband/broadband class).
+
+All three are quantities the server already computes and then flattens into English on the way
+out. Item 14 probably also closes item **5** (the LP filter chip), since it is the same
+classification. Each is roughly a dataclass field and a line in a return dict. Together they close
+the PRECIP tile, the verdict banner's headline, the ranked-card subtitle and the filter chip — four
+visible holes for what is likely a day's work.
+
+**Item 16** (an IANA zone on the site profile) belongs here too, and is the one item on the list a
+user rather than a developer supplies.
+
+### Tier 4 — worth doing, nothing is waiting on it
+
+Items **2**, **4**, **6**, **7**, **9**, **11**, **12**, **15**. The dashboard renders an honest
+absent state for each and nothing is blocked. Two are worth a second look regardless, because they
+may indicate real defects rather than missing fields:
+
+- **Item 7** — `median_fwhm` is `null` on *every* session record. That looks like a write-path bug,
+  not an omission.
+- **Item 15** — `recommend_projects` sorts on a field that is zero for every real project, so its
+  ranking is a no-op and its output is `list_projects` truncated. It is not returning a wrong
+  answer; it is returning an unranked one while appearing ranked.
+
+**Item 11** carries a warning rather than a request: the extended catalogue attached to it must
+**not** be merged on its own. Adopting 12,517 objects without first vectorising the observability
+computation makes `plan_targets` take about sixteen minutes per call, and without a
+brightness/feasibility term the ranker will confidently recommend faint galaxies an f/5 50 mm
+cannot resolve. Both are spelled out in that item.
+
+### What is already done on the dashboard side
+
+Nothing here is waiting on the dashboard. Every item has an honest absent state shipped — the
+screens say what is missing rather than rendering a plausible placeholder, and none of them parses
+prose to fill a gap. When a field arrives, the corresponding surface should light up without
+further UI work in most cases.
+
+---
+
 ## 1. Per-sub metrics are stripped from the `qa_tier2` payload
 
 **Blocks:** the entire Review & QA screen — the per-sub eccentricity chart, the star-count chart,
