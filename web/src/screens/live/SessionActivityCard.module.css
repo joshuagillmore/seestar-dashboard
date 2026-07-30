@@ -1,0 +1,69 @@
+.card {
+  width: 336px;
+  flex: 0 0 auto;
+  max-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+  padding: 13px 15px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+/* Defined after .card in the same file, so it reliably wins the cascade
+   regardless of module load order — see the `wide` prop's own doc comment
+   in SessionActivityCard.tsx for why this isn't an externally-merged class
+   instead. Used when this card is the main content of the screen (idle/
+   bridge-down), not a fixed-width sidebar beside the preview/telemetry. */
+.wide { width: auto; flex: 1; min-width: 0; }
+
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 11px; border-bottom: 1px solid var(--border-subtle); }
+.eyebrow { font-family: var(--font-sans); font-weight: 500; font-size: 12.5px; color: var(--text-primary); }
+.source { font-family: var(--font-mono); font-weight: 400; font-size: 9.5px; color: var(--text-faint); }
+
+/* The one thing this card must never let a viewer assume on their own —
+   see SessionActivityCard.tsx's `sessionRunning` doc comment. Deliberately
+   plain text, not a Dot: this is a framing statement, not a status. */
+.notRunning {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--bg-inset);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dimmer);
+}
+
+.list { list-style: none; margin: 0; padding: 12px 0 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; flex: 1; min-height: 0; }
+
+.record { padding-bottom: 10px; border-bottom: 1px solid var(--border-faint); }
+.record:last-child { border-bottom: none; padding-bottom: 0; }
+
+.recordHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ts { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-fainter); }
+
+.origin {
+  padding: 2px 6px;
+  border-radius: var(--radius-chip);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* Neutral, not a health tone — "agent" is the honesty-checked case (this
+   dashboard has no route for the tag at all), not a status to celebrate. */
+.origin_agent { background: var(--neutral-tag-bg); color: var(--text-dimmer); }
+/* Marginal — genuinely could be either source; worth the reader noticing. */
+.origin_ambiguous { background: var(--marginal-bg); color: var(--marginal); }
+/* Reject-toned — a line that did not parse, worth flagging distinctly. */
+.origin_unknown { background: var(--reject-bg); color: var(--reject); }
+
+.tool { margin-top: 4px; font-family: var(--font-mono); font-weight: 500; font-size: 12px; color: var(--text-secondary); }
+.args { margin-top: 3px; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.5; color: var(--text-dimmer); word-break: break-word; }
+
+.truncated { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-faint); font-family: var(--font-sans); font-size: 10.5px; color: var(--text-faint); }
+
+.empty { margin-top: 12px; font-family: var(--font-sans); font-size: 12px; color: var(--text-dimmer); }

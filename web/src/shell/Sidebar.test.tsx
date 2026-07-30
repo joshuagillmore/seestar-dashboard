@@ -50,15 +50,16 @@ describe('Sidebar', () => {
     expect(screen.getByText(/Bortle 8/)).toBeInTheDocument()
   })
 
-  it('marks Live and Review as unavailable, and Tonight and Projects as available', () => {
+  it('marks Review as unavailable, and Tonight, Live and Projects as available', () => {
+    // Live session shipped in slice 3 — only Review (slice 4) stays disabled now.
     render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     expect(screen.getByRole('button', { name: /Tonight/ })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /Live session/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Live session/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /Review & QA/ })).toBeDisabled()
     expect(screen.getByRole('button', { name: /Projects/ })).toBeEnabled()
-    // The disabled rows keep their slice-N labels verbatim.
-    expect(screen.getByText('slice 3')).toBeInTheDocument()
+    // The still-disabled row keeps its slice-N label verbatim.
     expect(screen.getByText('slice 4')).toBeInTheDocument()
+    expect(screen.queryByText('slice 3')).not.toBeInTheDocument()
   })
 
   it('renders without a profile', () => {
@@ -211,8 +212,57 @@ describe('Sidebar', () => {
   it('never calls onNavigate for a disabled nav button', () => {
     const onNavigate = vi.fn()
     render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={onNavigate} />)
-    fireEvent.click(screen.getByRole('button', { name: /Live session/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Review & QA/ }))
     expect(onNavigate).not.toHaveBeenCalled()
+  })
+
+  it('calls onNavigate for Live session, now that it is enabled', () => {
+    const onNavigate = vi.fn()
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={onNavigate} />)
+    fireEvent.click(screen.getByRole('button', { name: /Live session/ }))
+    expect(onNavigate).toHaveBeenCalledWith('live')
+  })
+
+  it('gives the Live nav dot the supplied tone, defaulting to idle when none is passed', () => {
+    const { rerender } = render(
+      <Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />,
+    )
+    // dots[1] is Live (Tonight, Live, Review, Projects, in that order).
+    expect(screen.getAllByTestId('dot')[1]).toHaveAttribute('data-dot', 'idle')
+
+    rerender(
+      <Sidebar
+        site={site}
+        verdict="NO-GO"
+        gpsWarning={null}
+        view="tonight"
+        onNavigate={vi.fn()}
+        liveTone="pass"
+        liveMeta="live"
+      />,
+    )
+    const dots = screen.getAllByTestId('dot')
+    expect(dots[1]).toHaveAttribute('data-dot', 'pass')
+    expect(screen.getByRole('button', { name: /Live session/ })).toHaveTextContent('live')
+
+    rerender(
+      <Sidebar
+        site={site}
+        verdict="NO-GO"
+        gpsWarning={null}
+        view="tonight"
+        onNavigate={vi.fn()}
+        liveTone="reject"
+        liveMeta="bridge down"
+      />,
+    )
+    expect(screen.getAllByTestId('dot')[1]).toHaveAttribute('data-dot', 'reject')
+    expect(screen.getByRole('button', { name: /Live session/ })).toHaveTextContent('bridge down')
+  })
+
+  it('shows a dash for the Live meta when none is supplied', () => {
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /Live session/ })).toHaveTextContent('—')
   })
 
   it('shows a dash for the Projects meta when no headline is supplied', () => {

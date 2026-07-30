@@ -1,0 +1,34 @@
+.screen { display: flex; flex-direction: column; gap: 14px; }
+.header { display: flex; align-items: baseline; justify-content: space-between; }
+.eyebrow { font-family: var(--font-mono); font-weight: 500; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-fainter); }
+.heading { margin: 4px 0 0; font-family: var(--font-sans); font-weight: 600; font-size: 19px; line-height: 1.2; letter-spacing: -0.01em; color: var(--text-primary); }
+
+.skeleton { height: 320px; border-radius: var(--radius-card); background: var(--bg-card-sunken); border: 1px solid var(--border-quiet); }
+
+/* Three columns — preview (own 286px), centre (flex:1), session activity
+   (own 336px) — each column's width lives in its own card's module CSS
+   (PreviewCard.module.css/.card, SessionActivityCard.module.css/.card), not
+   here; see LiveScreen.tsx's own doc comment for why the third column
+   exists at all. */
+.columns { display: flex; align-items: flex-start; gap: 16px; }
+.center { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; gap: 14px; align-items: stretch; }
+
+/* Idle/bridge-down: the state card is a narrow companion, not the main
+   content — the activity feed (SessionActivityCard, `wide`) takes the rest
+   of the width instead, since it's the more useful thing to look at when
+   there's no live camera. See LiveScreen.tsx's own doc comment. */
+.idleColumns { display: flex; align-items: flex-start; gap: 16px; }
+
+.stateCard {
+  width: 380px;
+  flex: 0 0 auto;
+  display: flex;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--bg-card-sunken);
+  border: 1px solid var(--border-quiet);
+  border-radius: var(--radius-card);
+}
+.stateTitle { font-family: var(--font-sans); font-weight: 600; font-size: 14px; color: var(--text-primary); }
+.stateBody { margin: 6px 0 0; font-family: var(--font-sans); font-size: 12.5px; line-height: 1.6; color: var(--text-dimmer); }

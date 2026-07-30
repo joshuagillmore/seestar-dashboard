@@ -6,3 +6,7 @@
 .reject { background: var(--reject); }
 .accent { background: var(--accent); }
 .idle { background: var(--text-ghost); }
+
+/* tokens.css defines the keyframe and the reduced-motion guard; this just
+   opts a dot into it. */
+.pulse { animation: livePulse 1.6s ease-in-out infinite; }

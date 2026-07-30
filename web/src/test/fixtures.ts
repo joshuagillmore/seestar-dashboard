@@ -19,3 +19,39 @@ export const recordedRecommendProjects = () => loadFixture('recommend_projects')
  * recorded list_projects.json and the real archive directory. See the sidecar
  * report for how; the numbers here are real (33 targets, ~30.6h total). */
 export const recordedProjectsCombined = () => loadFixture('projects_combined')
+
+/**
+ * Slice 3 (Live session) — six of these are recorded fixtures, hand-authored
+ * by the sidecar side against `SeeStar-AI/src/seestar_mcp/server.py`'s
+ * controller methods (no live hardware session was available to record.py
+ * this task, but the shapes are traced through source, not guessed — see
+ * `.superpowers/live-sidecar-report.md`). Named `recordedXxx` for
+ * consistency with every other fixture above, even though `record.py`
+ * itself hasn't run against live hardware yet.
+ *
+ * `/api/live_preview` has no recorded fixture (it's a sidecar-computed
+ * route, not a tool call — see allowlist.SIDECAR_ROUTES) — those four stay
+ * hand-built synthetic fixtures, mirroring the real route's own shape
+ * (`{ok, source, captured_at, stack_count, target, stale, reason, url}`,
+ * verified directly against `routes.py`'s `_live_preview_frame`/
+ * `_live_preview_absent`).
+ */
+export const recordedViewState = () => loadFixture('get_view_state')
+export const recordedStatus = () => loadFixture('get_status')
+export const recordedGuardrails = () => loadFixture('check_night_guardrails')
+export const recordedTier1 = () => loadFixture('qa_tier1')
+export const recordedFocuserPosition = () => loadFixture('get_focuser_position')
+export const recordedObservability = () => loadFixture('get_target_observability')
+export const livePreviewStacked = () => loadFixture('synthetic/live_preview_stacked')
+export const livePreviewSub = () => loadFixture('synthetic/live_preview_sub')
+export const livePreviewStale = () => loadFixture('synthetic/live_preview_stale')
+export const livePreviewNone = () => loadFixture('synthetic/live_preview_none')
+
+/** `/api/session_activity` also has no recorded fixture — hand-built to
+ * mirror the three `origin` states `session_activity.py`'s own tests use as
+ * worked examples: a tool with no dashboard route at all (`agent`), the
+ * shared native tag both this dashboard and the agent can produce
+ * (`ambiguous`), and a line that failed to parse (`unknown`, every field
+ * null). See schemas.ts's own doc comment on the honesty constraint this
+ * exists under. */
+export const sessionActivity = () => loadFixture('synthetic/session_activity')

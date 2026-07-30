@@ -1,0 +1,28 @@
+/* The design's own warning (README.md:424): use minmax(0,1fr), NOT 1fr. The
+   1fr default minimum is min-content, which overflows this container the
+   moment a label can't shrink below its own width — it bit the prototype
+   twice. gap:1px on a border/subtle background is what reads as hairlines
+   between cells, not a grid gap. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.cell { padding: 13px 14px; background: var(--bg-cell); min-width: 0; }
+.label { font-family: var(--font-mono); font-weight: 500; font-size: 9.5px; letter-spacing: 0.1em; color: var(--text-fainter); }
+.value {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 18px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.value.pass { color: var(--pass); }
+.sub { margin-top: 4px; font-family: var(--font-mono); font-size: 10px; color: var(--text-dimmer); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

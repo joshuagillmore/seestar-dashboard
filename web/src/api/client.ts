@@ -1,19 +1,35 @@
 import type { ZodType } from 'zod'
 import {
   ConditionsSchema,
+  FocuserPositionSchema,
+  GuardrailsSchema,
   HealthSchema,
   ListProjectsSchema,
+  LivePreviewSchema,
   PlanTargetsSchema,
   ProjectsCombinedSchema,
   RecommendProjectsSchema,
+  SessionActivitySchema,
   SiteProfileSchema,
+  StatusSchema,
+  TargetObservabilitySchema,
+  Tier1Schema,
+  ViewStateSchema,
   type Conditions,
+  type FocuserPosition,
+  type Guardrails,
   type Health,
   type ListProjects,
+  type LivePreview,
   type PlanTargets,
   type ProjectsCombined,
   type RecommendProjects,
+  type SessionActivity,
   type SiteProfile,
+  type Status,
+  type TargetObservability,
+  type Tier1,
+  type ViewState,
 } from './schemas'
 
 export class ApiError extends Error {}
@@ -104,3 +120,60 @@ export const fetchRecommendProjects = (limit?: number): Promise<RecommendProject
     `/api/recommend_projects${limit !== undefined ? `?limit=${limit}` : ''}`,
     RecommendProjectsSchema,
   )
+
+/**
+ * Live-session fetchers (slice 3). Every one of these is expected to fail
+ * or time out while the scope is idle — that is the documented normal case
+ * (CLAUDE.md, "Known gap" / slice-3 spec §4), not a bug to retry around. Each
+ * throws `ApiError` exactly like every fetcher above; screens/live/
+ * useLiveSession.ts is what turns those failures into the idle/bridge-down
+ * distinction, by seeing which calls fail together — see its own doc comment
+ * for why that's a more honest signal than pattern-matching error text.
+ */
+export const fetchViewState = (): Promise<ViewState> => get('/api/get_view_state', ViewStateSchema)
+
+export const fetchStatus = (): Promise<Status> => get('/api/get_status', StatusSchema)
+
+/**
+ * `session_start_utc` is a required query param the sidecar route has no
+ * default for (routes.py's `check_night_guardrails` handler) — it needs to
+ * know when the session started to compute dawn margin and max-duration
+ * remaining. Nothing in the confirmed tool surface returns a real session
+ * start time, so `useLiveSession` passes the moment THIS client first
+ * observed the session as active, not the scope's actual start — see its
+ * own doc comment. That means the max-duration/dawn-margin figures this
+ * returns understate elapsed time whenever the dashboard connects mid-
+ * session; flagged there and in the handback list, not silently assumed
+ * accurate. */
+export const fetchGuardrails = (sessionStartUtc: string): Promise<Guardrails> =>
+  get(
+    `/api/check_night_guardrails?session_start_utc=${encodeURIComponent(sessionStartUtc)}`,
+    GuardrailsSchema,
+  )
+
+export const fetchTier1 = (): Promise<Tier1> => get('/api/qa_tier1', Tier1Schema)
+
+export const fetchFocuserPosition = (): Promise<FocuserPosition> =>
+  get('/api/get_focuser_position', FocuserPositionSchema)
+
+/** `target` is a required query param (the catalogue id, e.g. "M27") — the
+ * route has no default. `useLiveSession` sources it from `/api/live_preview`'s
+ * own `target` field (a normalized id parsed from the live share's directory
+ * name), the only confirmed source for "what is currently framed" — see
+ * live_preview.py's `LiveFrame.target` and schemas.ts's own note that
+ * `get_view_state` carries no target name at all. */
+export const fetchTargetObservability = (target: string): Promise<TargetObservability> =>
+  get(`/api/get_target_observability?target=${encodeURIComponent(target)}`, TargetObservabilitySchema)
+
+/** Metadata only — `stale`, `source`, `captured_at`, and the `url` to point
+ * an `<img>` at (see PreviewCard). Never fetches the image bytes itself. */
+export const fetchLivePreview = (): Promise<LivePreview> =>
+  get('/api/live_preview', LivePreviewSchema)
+
+/** Newest-first tail of provenance.jsonl (routes.py's `session_activity`
+ * handler) — an activity feed, not a tool call itself, and not gated behind
+ * an active session the way the telescope-state fetchers above are (it's a
+ * local file read, unrelated to whether the scope is observing). See
+ * SessionActivityCard for how `origin` must be rendered without flattening. */
+export const fetchSessionActivity = (limit?: number): Promise<SessionActivity> =>
+  get(`/api/session_activity${limit !== undefined ? `?limit=${limit}` : ''}`, SessionActivitySchema)

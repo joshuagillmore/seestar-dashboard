@@ -221,6 +221,233 @@ export const ProjectsCombinedSchema = z.object({
   }),
 })
 
+/**
+ * Live-session shapes (slice 3). Transcribed from `fixtures/*.json`, hand-
+ * authored by the sidecar's own build against `SeeStar-AI/src/seestar_mcp/
+ * server.py`'s controller methods (no live hardware session was available to
+ * record.py) — see `.superpowers/live-sidecar-report.md`. An earlier version
+ * of this file guessed these shapes from the design handoff's sample values
+ * before that landed, and several guesses were wrong in ways worth naming so
+ * the mistake isn't repeated: `get_view_state` nests one level deeper than
+ * guessed (`ok.view_state.result.View`, not `ok.result.View` — the exact
+ * "silently produced empty telemetry" failure mode the slice-3 spec warned
+ * about, this time caught by a second pair of eyes rather than a fixture);
+ * `check_night_guardrails` returns a flat `{proceed,action,reasons[],
+ * hard_stops[]}`, not five named/toned checks — there is no server-side
+ * per-check identity or tone to render as five dotted rows, so GuardrailsCard
+ * renders the real shape instead of inventing one; `qa_tier1` already
+ * computes deltas (`trends`) and a ready-made log line (`status_line`), so
+ * this client no longer diffs polls itself — see telemetryLog.ts; and
+ * `get_target_observability` is the *nightly* aggregate (peak altitude,
+ * best sweet-band window) `plan_targets` already returns per target, not an
+ * instantaneous current-alt/az reading — no such reading exists anywhere in
+ * the confirmed tool surface, so SweetBandGauge no longer plots a live
+ * position marker.
+ */
+export const AnnotateSchema = z.object({
+  /** A string in the one recorded fixture (`"complete"`), not a boolean —
+   * other values (a pending or failed solve) are not yet observed, so this
+   * only maps `"complete"` to the pass tone and renders anything else
+   * verbatim rather than guessing a second value. */
+  state: z.string().nullable(),
+  pixelx: z.number().nullable(),
+  pixely: z.number().nullable(),
+  radius: z.number().nullable(),
+})
+
+export const StackStateSchema = z.object({
+  stacked_frame: z.number(),
+  dropped_frame: z.number(),
+  Annotate: AnnotateSchema.nullable().optional(),
+})
+
+/** No `target_name` anywhere in this shape, confirmed against the recorded
+ * fixture — the target header sources its name from `get_target_observability`
+ * / the live-preview frame's own `target` id instead (see useLiveSession.ts). */
+const ViewSchema = z.object({
+  stage: z.string().nullable().optional(),
+  /** Absent/null during a pre-stack stage (3PPA, AutoGoto) — a session can
+   * be "ok" without stacking having started yet. Not observed directly (the
+   * one recorded fixture is mid-stack) but kept nullable on the same
+   * reasoning as before. */
+  Stack: StackStateSchema.nullable().optional(),
+})
+
+export const ViewStateSchema = z.object({
+  ok: z.boolean(),
+  // The extra nesting the earlier guess missed entirely.
+  view_state: z
+    .object({
+      result: z.object({ View: ViewSchema.nullable() }).nullable(),
+    })
+    .nullable(),
+})
+
+export const StatusSchema = z.object({
+  ok: z.boolean(),
+  connected: z.boolean().nullable().optional(),
+  rightascension: z.number().nullable().optional(),
+  declination: z.number().nullable().optional(),
+  tracking: z.boolean().nullable().optional(),
+  slewing: z.boolean().nullable().optional(),
+})
+
+/** `check_night_guardrails`'s real, flat shape — `action`/`proceed` are the
+ * server's own verdict (rendered verbatim, never re-derived from `reasons`),
+ * and `hard_stops` are the subset of `reasons` that are actually blocking
+ * (shown with more weight, not a separate judgement this client makes).
+ * `session_start_utc` is a *required* query param the route has no default
+ * for — see client.ts's `fetchGuardrails` for where that comes from and its
+ * honesty caveat. */
+export const GuardrailsSchema = z.object({
+  ok: z.boolean(),
+  proceed: z.boolean(),
+  action: z.string(),
+  reasons: z.array(z.string()),
+  hard_stops: z.array(z.string()),
+})
+
+/** One `qa_tier1` poll. The server already computes both a ready-made log
+ * line (`status_line`) and structured deltas (`trends`) — this client
+ * renders `status_line` verbatim for the telemetry log rather than
+ * recomposing one from `snapshot`, and reads `trends` rather than diffing
+ * polls itself (an earlier version of this screen did that client-side
+ * arithmetic before this shape was confirmed; the server already does it).
+ * Tier-1 is cheap health polling; it never carries a per-sub quality verdict
+ * (that's Tier-2, at wind-down only) — `flags` is where a health warning
+ * would appear, and this client renders it verbatim if ever non-empty rather
+ * than inventing one. */
+export const Tier1SnapshotSchema = z.object({
+  ts: z.string(),
+  stacked: z.number().nullable().optional(),
+  rejected: z.number().nullable().optional(),
+  solve_ok: z.boolean().nullable().optional(),
+  solve_rms: z.number().nullable().optional(),
+  focus_pos: z.number().nullable().optional(),
+  hfd: z.number().nullable().optional(),
+  tracking: z.boolean().nullable().optional(),
+})
+
+export const Tier1TrendsSchema = z.object({
+  stacked_delta: z.number().nullable().optional(),
+  rejected_delta: z.number().nullable().optional(),
+  focus_delta: z.number().nullable().optional(),
+  hfd_delta: z.number().nullable().optional(),
+})
+
+export const Tier1Schema = z.object({
+  ok: z.boolean(),
+  snapshot: Tier1SnapshotSchema,
+  flags: z.array(z.string()),
+  status_line: z.string(),
+  trends: Tier1TrendsSchema.nullable().optional(),
+})
+
+/** `focus_pos` is the flat convenience field also present on `qa_tier1`'s
+ * snapshot (same name, same value) — used in preference to the nested
+ * `focuser.result`, which exists but is redundant. */
+export const FocuserPositionSchema = z.object({
+  ok: z.boolean(),
+  focus_pos: z.number().nullable(),
+})
+
+/** `get_target_observability`'s real shape: the *nightly* aggregate for one
+ * target — peak altitude, transit/rise/set, the sweet-band window — the same
+ * kind of figures `plan_targets` already returns per target on Tonight, not
+ * an instantaneous current-alt/az reading. No such live reading exists
+ * anywhere in the confirmed tool surface, so SweetBandGauge renders this
+ * target's sweet-band *context* for tonight rather than a moving position
+ * marker — see bandGeometry.ts and SweetBandGauge.tsx. Requires a `target`
+ * id as a query param (client.ts sources it from the live-preview frame's
+ * own `target`, the only confirmed source for "what is currently framed"). */
+export const ObservabilityTargetSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable().optional(),
+  ra_deg: z.number().nullable().optional(),
+  dec_deg: z.number().nullable().optional(),
+  type: z.string().nullable().optional(),
+  size_arcmin: z.number().nullable().optional(),
+  magnitude: z.number().nullable().optional(),
+})
+
+export const ObservabilityDetailSchema = z.object({
+  target_id: z.string(),
+  max_alt_deg: z.number(),
+  transit_utc: z.string().nullable().optional(),
+  rise_utc: z.string().nullable().optional(),
+  set_utc: z.string().nullable().optional(),
+  dark_minutes_above_floor: z.number().nullable().optional(),
+  dark_minutes_in_sweet_band: z.number().nullable().optional(),
+  field_rotation_deg_per_hr_at_transit: z.number().nullable().optional(),
+  usable_sub_minutes: z.number().nullable().optional(),
+  transits_above_ceiling: z.boolean().nullable().optional(),
+  moon_sep_deg: z.number().nullable().optional(),
+  moon_alt_deg: z.number().nullable().optional(),
+  moon_illum_frac: z.number().nullable().optional(),
+  best_window_utc: z.tuple([z.string(), z.string()]).nullable().optional(),
+})
+
+export const TargetObservabilitySchema = z.object({
+  ok: z.boolean(),
+  target: ObservabilityTargetSchema.nullable().optional(),
+  observability: ObservabilityDetailSchema.nullable().optional(),
+})
+
+/** `/api/live_preview` — given verbatim, see this section's module comment.
+ * `source: null` always carries a `reason` (e.g. no session, nothing written
+ * yet); `stacked`/`sub` distinguishes the accumulating stack from a single
+ * noisy 10 s sub, which the preview card must say out loud rather than let a
+ * grainy frame read as a poor result. */
+export const LivePreviewSchema = z.object({
+  ok: z.boolean(),
+  source: z.enum(['stacked', 'sub']).nullable(),
+  captured_at: z.string().nullable(),
+  stack_count: z.number().nullable().optional(),
+  target: z.string().nullable().optional(),
+  stale: z.boolean(),
+  url: z.string().nullable(),
+  reason: z.string().nullable().optional(),
+})
+
+/**
+ * `/api/session_activity` — verified against `sidecar/seestar_sidecar/
+ * session_activity.py` and `routes.py`'s handler directly (no recorded
+ * fixture; the sidecar's own tests use hand-written provenance lines). A
+ * plain activity feed off `provenance.jsonl` — `{ts, tool, args}` and
+ * nothing else. There is no prose field anywhere in that file, so the
+ * design's chat bubbles (Claude's own sentences) are simply not obtainable
+ * from this source — see SessionActivityCard's own doc comment for why this
+ * client renders an activity feed, never a synthesised transcript.
+ *
+ * `ts`/`tool`/`args` are all nullable: a line that failed to parse becomes
+ * an `origin: "unknown"` record with every field `null` rather than being
+ * dropped silently (`test_a_malformed_line_becomes_an_unknown_record_not_a_
+ * 500`). `origin` is the honesty-critical field — hand-back item 10 means
+ * the log has no client identifier, so the dashboard's OWN calls sit in
+ * here too, indistinguishable from the agent's, unless a tag is provably
+ * something only the agent could have produced (`"agent"`) or the record
+ * didn't parse (`"unknown"`) — everything else able to come from either
+ * source is `"ambiguous"`, never guessed further.
+ */
+export const SessionActivityRecordSchema = z.object({
+  ts: z.string().nullable(),
+  tool: z.string().nullable(),
+  args: z.record(z.string(), z.unknown()).nullable(),
+  origin: z.enum(['agent', 'ambiguous', 'unknown']),
+})
+
+export const SessionActivitySchema = z.object({
+  ok: z.boolean(),
+  records: z.array(SessionActivityRecordSchema),
+  truncated: z.boolean(),
+  /** `false` only when no provenance path is configured at all on this
+   * installation — a real, first-class state (routes.py's `session_activity`
+   * handler), not merely "empty right now". `records` is `[]` in both that
+   * case and the "configured but nothing logged yet" case; only
+   * `source_configured` tells them apart. */
+  source_configured: z.boolean(),
+})
+
 export type Conditions = z.infer<typeof ConditionsSchema>
 export type PlanTargets = z.infer<typeof PlanTargetsSchema>
 export type PlanTarget = z.infer<typeof PlanTargetSchema>
@@ -235,3 +462,19 @@ export type IntegrationGoal = z.infer<typeof IntegrationGoalSchema>
 export type ArchiveNight = z.infer<typeof ArchiveNightSchema>
 export type ProjectsCombinedEntry = z.infer<typeof ProjectsCombinedEntrySchema>
 export type ProjectsCombined = z.infer<typeof ProjectsCombinedSchema>
+
+export type Annotate = z.infer<typeof AnnotateSchema>
+export type StackState = z.infer<typeof StackStateSchema>
+export type ViewState = z.infer<typeof ViewStateSchema>
+export type Status = z.infer<typeof StatusSchema>
+export type Guardrails = z.infer<typeof GuardrailsSchema>
+export type Tier1Snapshot = z.infer<typeof Tier1SnapshotSchema>
+export type Tier1Trends = z.infer<typeof Tier1TrendsSchema>
+export type Tier1 = z.infer<typeof Tier1Schema>
+export type FocuserPosition = z.infer<typeof FocuserPositionSchema>
+export type ObservabilityTarget = z.infer<typeof ObservabilityTargetSchema>
+export type ObservabilityDetail = z.infer<typeof ObservabilityDetailSchema>
+export type TargetObservability = z.infer<typeof TargetObservabilitySchema>
+export type LivePreview = z.infer<typeof LivePreviewSchema>
+export type SessionActivityRecord = z.infer<typeof SessionActivityRecordSchema>
+export type SessionActivity = z.infer<typeof SessionActivitySchema>

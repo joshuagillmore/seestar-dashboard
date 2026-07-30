@@ -1,6 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, fetchConditions, fetchPlan } from './client'
-import { recordedConditions, recordedPlan } from '../test/fixtures'
+import {
+  ApiError,
+  fetchConditions,
+  fetchFocuserPosition,
+  fetchGuardrails,
+  fetchLivePreview,
+  fetchPlan,
+  fetchSessionActivity,
+  fetchStatus,
+  fetchTargetObservability,
+  fetchTier1,
+  fetchViewState,
+} from './client'
+import {
+  livePreviewStacked,
+  recordedConditions,
+  recordedFocuserPosition,
+  recordedGuardrails,
+  recordedObservability,
+  recordedPlan,
+  recordedStatus,
+  recordedTier1,
+  recordedViewState,
+  sessionActivity,
+} from '../test/fixtures'
 
 const mockFetch = (body: unknown, status = 200) =>
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -69,5 +92,84 @@ describe('api client', () => {
     mockFetch({ ok: false, error: 'no site profile has been set' })
     await expect(fetchConditions()).rejects.toThrow(/no site profile has been set/)
     await expect(fetchConditions()).rejects.not.toThrow(/unexpected payload/)
+  })
+
+  describe('live-session fetchers (slice 3)', () => {
+    it('parses a good get_view_state response, including the real view_state.result.View.Stack nesting', async () => {
+      mockFetch(recordedViewState())
+      const viewState = await fetchViewState()
+      expect(viewState.view_state?.result?.View?.Stack?.stacked_frame).toBe(211)
+    })
+
+    it('parses get_status', async () => {
+      mockFetch(recordedStatus())
+      expect((await fetchStatus()).connected).toBe(true)
+    })
+
+    it('puts session_start_utc in the check_night_guardrails query string', async () => {
+      const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => recordedGuardrails() })
+      vi.stubGlobal('fetch', spy)
+      await fetchGuardrails('2026-07-30T03:00:00.000Z')
+      expect(spy).toHaveBeenCalledWith(
+        '/api/check_night_guardrails?session_start_utc=2026-07-30T03%3A00%3A00.000Z',
+      )
+    })
+
+    it('parses check_night_guardrails\' real flat shape', async () => {
+      mockFetch(recordedGuardrails())
+      expect((await fetchGuardrails('2026-07-30T03:00:00.000Z')).action).toBe('continue')
+    })
+
+    it('parses qa_tier1', async () => {
+      mockFetch(recordedTier1())
+      expect((await fetchTier1()).snapshot.stacked).toBe(211)
+    })
+
+    it('parses get_focuser_position', async () => {
+      mockFetch(recordedFocuserPosition())
+      expect((await fetchFocuserPosition()).focus_pos).toBe(1830)
+    })
+
+    it('puts the target id in the get_target_observability query string', async () => {
+      const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => recordedObservability() })
+      vi.stubGlobal('fetch', spy)
+      await fetchTargetObservability('M27')
+      expect(spy).toHaveBeenCalledWith('/api/get_target_observability?target=M27')
+    })
+
+    it('parses get_target_observability', async () => {
+      mockFetch(recordedObservability())
+      expect((await fetchTargetObservability('M27')).observability?.max_alt_deg).toBe(61.4)
+    })
+
+    it('parses live_preview', async () => {
+      mockFetch(livePreviewStacked())
+      expect((await fetchLivePreview()).source).toBe('stacked')
+    })
+
+    it('puts the limit in the session_activity query string', async () => {
+      const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => sessionActivity() })
+      vi.stubGlobal('fetch', spy)
+      await fetchSessionActivity(30)
+      expect(spy).toHaveBeenCalledWith('/api/session_activity?limit=30')
+    })
+
+    it('parses session_activity, including a fully-null unknown record', async () => {
+      mockFetch(sessionActivity())
+      const activity = await fetchSessionActivity(30)
+      expect(activity.records.map((r) => r.origin)).toEqual(['agent', 'ambiguous', 'unknown'])
+      expect(activity.records[2].tool).toBeNull()
+    })
+
+    it('raises ApiError (not a hang) when get_view_state times out on an idle scope — the sidecar 502s, it does not leave the request open', async () => {
+      // The spec is explicit that state methods time out on an idle scope,
+      // but that means the SIDECAR's call to the MCP tool times out — the
+      // HTTP response to the browser still comes back promptly as a 502 (see
+      // routes.py's _serve). This client has no special-cased "wait longer"
+      // path; a slow upstream is just another ApiError to the caller.
+      mockFetch({ ok: false, error: 'get_view_state timed out — scope not observing' }, 502)
+      await expect(fetchViewState()).rejects.toBeInstanceOf(ApiError)
+      await expect(fetchViewState()).rejects.toThrow(/timed out/)
+    })
   })
 })

@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "source": "sub",
+  "captured_at": "2026-07-30T02:00:00Z",
+  "stack_count": null,
+  "target": "M27",
+  "stale": true,
+  "reason": null,
+  "url": "/api/live_preview/image"
+}

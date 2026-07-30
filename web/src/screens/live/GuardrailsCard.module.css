@@ -1,0 +1,14 @@
+.card { flex: 1; min-width: 0; padding: 16px 18px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-card); display: flex; flex-direction: column; }
+.eyebrow { font-family: var(--font-mono); font-weight: 500; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-fainter); }
+
+.verdictRow { margin-top: 10px; display: flex; align-items: center; gap: 9px; }
+.verdictContinue { font-family: var(--font-mono); font-weight: 500; font-size: 13px; color: var(--pass); }
+.verdictPark { font-family: var(--font-mono); font-weight: 500; font-size: 13px; color: var(--reject); }
+
+.hardStops { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hardStop { font-family: var(--font-sans); font-size: 12px; line-height: 1.5; color: var(--reject); }
+
+.reasons { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.reason { font-family: var(--font-sans); font-size: 12px; line-height: 1.5; color: var(--text-dimmer); }
+
+.empty { margin-top: 10px; font-family: var(--font-sans); font-size: 12px; color: var(--text-dimmer); }

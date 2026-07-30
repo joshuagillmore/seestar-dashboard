@@ -1,0 +1,41 @@
+.card { flex: 1; min-width: 0; padding: 16px 18px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-card); display: flex; flex-direction: column; gap: 12px; }
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-weight: 500; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-fainter); }
+.warn { font-family: var(--font-mono); font-size: 11px; color: var(--marginal); }
+
+.body { display: flex; gap: 14px; align-items: stretch; }
+
+.track { position: relative; width: 56px; flex: 0 0 auto; border-radius: 5px; background: var(--bg-track-alt); border: 1px solid var(--border-subtle); }
+
+.band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--accent-bg-alt);
+  border-top: 1px solid var(--accent-border);
+  border-bottom: 1px solid var(--accent-border);
+}
+
+/* The night's peak-altitude marker — not a live position, see
+   SweetBandGauge.tsx's own doc comment. */
+.peak { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); transform: translateY(-1px); }
+.peakLabel {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  color: var(--accent-text-bright);
+  white-space: nowrap;
+}
+
+.legend { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; font-family: var(--font-mono); font-size: 10.5px; }
+.legendDim { color: var(--text-dimmer); }
+.legendAccent { color: var(--accent-text); }
+.legendCurrent { color: var(--text-secondary); }
+
+.stat { font-family: var(--font-mono); font-size: 11px; color: var(--text-dimmer); }
+
+.footer { padding-top: 10px; border-top: 1px solid var(--border-faint); font-family: var(--font-sans); font-size: 11px; color: var(--text-dimmer); }

@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "snapshot": {
+    "ts": "2026-07-30T03:41:12.558000+00:00",
+    "stacked": 211,
+    "rejected": 0,
+    "solve_ok": true,
+    "solve_rms": 1.8,
+    "focus_pos": 1830,
+    "hfd": 2.4,
+    "tracking": true
+  },
+  "flags": [],
+  "status_line": "stacked 211 (+1) | rejected 0 | solve OK | focus Δ=+3 | hfd 2.40",
+  "trends": {
+    "stacked_delta": 1,
+    "rejected_delta": 0,
+    "focus_delta": 3,
+    "hfd_delta": -0.02
+  }
+}

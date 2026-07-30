@@ -15,7 +15,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { view: 'tonight', label: "Tonight's plan" },
-  { view: 'live', label: 'Live session', disabledLabel: 'slice 3' },
+  { view: 'live', label: 'Live session' },
   { view: 'review', label: 'Review & QA', disabledLabel: 'slice 4' },
   { view: 'projects', label: 'Projects' },
 ]
@@ -89,6 +89,20 @@ export interface SidebarProps {
    * fabricated health signal.
    */
   projectsNeedsData?: number | null
+  /**
+   * Slice 3's Live nav row. Unlike `verdict` (Tonight) and
+   * `projectsNeedsData` (Projects), this is a pre-computed tone/meta pair
+   * rather than a raw domain value Sidebar maps itself — LiveScreen's own
+   * phase (`loading`/`bridge-down`/`idle`/`active`) is a live-session
+   * concept Sidebar has no reason to know about, so LiveScreen does that
+   * mapping once (see its `sidebarStatus` helper) and hands over just the
+   * dot tone and the row's meta text. `null` — the default, and what every
+   * screen other than the mounted LiveScreen passes — renders `idle` with a
+   * dash, the same "not this screen's concern right now" default the other
+   * two props already use.
+   */
+  liveTone?: DotTone | null
+  liveMeta?: string | null
 }
 
 export function Sidebar({
@@ -99,6 +113,8 @@ export function Sidebar({
   onNavigate,
   projectsHeadline = null,
   projectsNeedsData = null,
+  liveTone = null,
+  liveMeta = null,
 }: SidebarProps) {
   const profile = site?.profile
   // `undefined` (not yet threaded by a caller) collapses to `null` — see
@@ -118,16 +134,20 @@ export function Sidebar({
             ? verdict
               ? verdictTone(verdict)
               : 'idle'
-            : item.view === 'projects' && projectsNeedsData !== null
-              ? projectsNeedsData > 0
-                ? 'marginal'
-                : 'pass'
-              : 'idle'
+            : item.view === 'live'
+              ? (liveTone ?? 'idle')
+              : item.view === 'projects' && projectsNeedsData !== null
+                ? projectsNeedsData > 0
+                  ? 'marginal'
+                  : 'pass'
+                : 'idle'
         const meta = disabled
           ? item.disabledLabel
           : item.view === 'tonight'
             ? (verdict ?? '—')
-            : (projectsHeadline ?? '—')
+            : item.view === 'live'
+              ? (liveMeta ?? '—')
+              : (projectsHeadline ?? '—')
 
         return (
           <button
