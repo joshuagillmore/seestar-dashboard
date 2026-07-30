@@ -28,3 +28,6 @@ Thumbs.db
 # Claude Code personal layer (per-machine, not shared)
 CLAUDE.local.md
 .claude/settings.local.json
+
+# SDD / agent working artifacts — scratch, never committed
+.superpowers/
