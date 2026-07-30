@@ -180,3 +180,20 @@ while its own test stayed green.
 where a match is meant; a *count* where a source is meant; an attribute or
 test-id that nothing in the codebase sets; and any bound that the code under
 test already enforces by construction.
+
+## Two process notes from phase 1
+
+**Verify the gate on the merged result *before* pushing, and check it actually
+ran.** Phase 1's merge ran `uv run pytest` but `uv` could not rebuild the venv —
+a dev server still held `seestar-dashboard.exe` — so the sidecar suite silently
+did not execute, and the push went out on an unverified gate. It was green when
+re-run, but that was luck. A gate that errors is not a gate that passed: check
+for a test count, not just a zero exit.
+
+**End-to-end runs must clean up their own processes.** Phase 1's report said
+scratch processes were killed; 24 `seestar-dashboard` processes were still alive
+afterwards, on ports 8791–8793, each with a spawned `seestar_mcp.server` child.
+Those hold the console script (blocking `uv sync`) and keep MCP connections open
+against the telescope's data directory. Any task that starts a server should stop
+it in the same breath, and the check is `Get-CimInstance Win32_Process`, not
+"I ran Stop-Process once".
