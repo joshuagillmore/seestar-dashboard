@@ -469,6 +469,50 @@ so the two are likely one change.
 
 ---
 
+## 15. `recommend_projects` degenerates to list order, because no project has a goal
+
+**Affects:** the Projects header recommendation (design README, ~line 649).
+
+**Found 2026-07-30** while restoring that line to the screen.
+
+`recommend_projects` (`planning/projects.py:199`) selects active projects still needing data and
+sorts by remaining minutes descending, with open-ended projects — `goal_minutes == 0` — documented
+as *"treated as a large remaining, so they sort high"*.
+
+**Every real project in the store has `goal_minutes == 0`.** So every candidate ties at that same
+sentinel, the sort is a no-op, and the result is byte-identical to `list_projects`' own order,
+truncated to `limit`. Verified against the live store.
+
+Two consequences:
+
+1. The recommendation carries no ranking information. It is presented as the tool's judgement about
+   what to shoot next, and it is really just the first row of an unrelated ordering.
+2. The design's copy — `recommend_projects: NGC 1499 first — 6.9 h short of goal` — cannot be
+   produced at all. There is no shortfall to state when nothing has a goal.
+
+**What the dashboard did, and deliberately did not do.** The recommendation is shown using the
+tool's real output, with the shortfall clause omitted rather than filled in. The dashboard *does*
+now compute a suggested integration goal per target
+(`sidecar/seestar_sidecar/integration_goal.py`), so it could produce a plausible "N h short"
+figure — but pairing the server's chosen target with a shortfall derived from a completely
+different computation would imply the server ranked on our number. It did not. That would be a
+fabricated agreement between two unrelated things, which is worse than an absent clause.
+
+**Asked for — either would fix it:**
+
+- Rank on something meaningful when goals are unset (last-observed date, total collected, or
+  sweet-band availability), so the recommendation reflects a real judgement; **or**
+- Accept a goal hint so a client that has computed goals can rank against them.
+
+Note the dashboard cannot set goals itself: `set_project_goal` is a write tool and the sidecar
+allowlist excludes it by design, so this cannot be resolved from the client side.
+
+**Related:** this is the mirror image of item 11. There the ranker cannot suggest targets outside a
+120-object catalogue; here it cannot rank the projects it does have, because the field it ranks on
+is never populated.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
@@ -487,6 +531,7 @@ so the two are likely one change.
 | 12 | `SessionRecord` has no `filter` field | FILTER column of the session-history table | Yes — it is in the session notes as prose, and on every one of the 7,753 archive filenames |
 | 13 | No one-line verdict summary, only `reasons[]` | Headline sentence of the Tonight banner | Partly — the server already composes the reason prose |
 | 14 | `plan_targets` does not return the narrowband/broadband class | Ranked-card subtitle descriptor; likely also item 5's filter chip | Yes — `LP_MODEL` already classifies it and the ranker scores on it |
+| 15 | `recommend_projects` ties every project on the same sentinel and returns list order | The Projects header recommendation, and the design's "N h short of goal" clause | No — it ranks on `goal_minutes`, which is 0 for every real project |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
 explicit absent state for each rather than a plausible-looking placeholder, so nothing on screen is
