@@ -614,6 +614,107 @@ itself — today it happens to be true for this one installation, and nothing ch
 
 ---
 
+## 17. `check_night_guardrails` returns a verdict but not the checks behind it
+
+**Affects:** the guardrails card on the Live session screen (design README, Screen 2, ~line 452).
+
+**Found 2026-07-30** building that card.
+
+The tool returns a flat verdict:
+
+```json
+{ "ok": true, "proceed": true, "action": "continue", "reasons": [], "hard_stops": [] }
+```
+
+The design shows five named rows, each with its own dot and value — Dawn `2 h 31 m of margin`,
+Battery `61% · ~3 h 40 m`, Weather `go · 6% cloud, no precip`, Connection `bridge + scope verified`,
+Max duration `3 h 12 m of 6 h`.
+
+**Those five checks demonstrably happen** — the tool evaluates each to reach its verdict — but only
+the verdict and some freeform prose come back. Building the card as designed would mean parsing
+`reasons[]` to reverse-engineer which check produced which string, and then assigning each a
+pass/marginal tone the server never asserted. That is the same thing the QA policy forbids for sub
+quality: *the UI renders verdicts, it never computes or re-derives them.* So the card renders the
+verdict and the reasons as given, and the five-row breakdown is simply absent.
+
+**Asked for:** the per-check results as structured data — a list of `{check, state, detail}` or
+equivalent — alongside the existing verdict. `reasons[]` and `hard_stops[]` can stay exactly as they
+are; this is additive.
+
+**Related:** the same shape as items 3, 13 and 14 — a quantity the server computes, mentions in
+prose, and does not return as a field.
+
+---
+
+## 18. No instantaneous altitude or azimuth for the observing target
+
+**Affects:** the sweet-band gauge on the Live session screen (design README, ~line 437).
+
+**Found 2026-07-30.**
+
+The design's gauge marks where the target *is right now* against the band: a bar at the current
+altitude labelled `current 54.2° · az 168.4°`, between the `60°` rotation ceiling and the `25°`
+floor. That live marker is the entire point of the gauge — it answers "how long have I got?".
+
+`get_target_observability` returns **nightly aggregates** — `max_alt_deg`, `transit_utc`,
+`rise_utc`, `set_utc`, sweet-band minutes. Nothing instantaneous. `get_status` returns RA/Dec
+pointing, not alt/az.
+
+The dashboard could compute it: RA/Dec plus the site's coordinates plus the time is deterministic
+astronomy with no policy in it. **It deliberately does not**, because an error would misplace the
+marker relative to the band, and "is this target still in the sweet band" is exactly the judgement
+the gauge exists to convey. The band edges themselves are already available — `min_altitude_deg`
+and `field_rotation_ceiling_deg` are on the site profile — so only the current position is missing.
+
+**Asked for:** current `alt_deg` / `az_deg` for the active target, on `get_status` or
+`get_view_state`, whichever is the more natural home. The server already does this arithmetic in
+the ranker.
+
+---
+
+## 19. Battery has no read-only route at all
+
+**Affects:** the Battery row of the guardrails card, and the top bar's `batt 61%` session fact.
+
+**Found 2026-07-30.**
+
+`pi_get_info` is **not an MCP tool** — there is no `@mcp.tool()` wrapper for it anywhere.
+`check_night_guardrails` calls it natively and uses the battery level to reach its verdict, but the
+percentage never surfaces. Battery is also confirmed *not* to be in `get_device_state`; reading it
+from there previously caused false "battery unknown" guardrail trips server-side.
+
+So a value the guardrails logic depends on cannot be displayed at all, and the design shows it in
+two places.
+
+**Asked for:** a read-only accessor exposing the battery percentage and charger status — either a
+thin `pi_get_info` wrapper, or the value folded into item 17's per-check results, which would
+answer both at once.
+
+---
+
+## 20. No way to learn when the current session started
+
+**Affects:** elapsed-time on the Live screen's target header, and the Max-duration guardrail.
+
+**Found 2026-07-30.**
+
+`check_night_guardrails` takes a `session_start_utc` argument, and nothing in the tool surface
+returns one. The dashboard therefore has to supply a value it does not know.
+
+The current workaround is to time from **when this client started watching**, which is right only
+if the dashboard was open before the session began. Connect mid-session and the elapsed figure —
+and with it the Max-duration guardrail, which governs a hard stop — **understates the truth**. A
+guardrail that reads "3 h 12 m of 6 h" when the real answer is five hours is worse than one that
+admits it does not know.
+
+The server knows: a session has a start, and `SessionManifest` already carries a `session_id`.
+
+**Asked for:** expose the current session's start time on a read-only tool — `get_view_state` or
+`get_status` would both be reasonable — so a client can report elapsed time correctly however late
+it connects, and pass a truthful `session_start_utc` back into the guardrail check.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
@@ -633,6 +734,11 @@ itself — today it happens to be true for this one installation, and nothing ch
 | 13 | No one-line verdict summary, only `reasons[]` | Headline sentence of the Tonight banner | Partly — the server already composes the reason prose |
 | 14 | `plan_targets` does not return the narrowband/broadband class | Ranked-card subtitle descriptor; likely also item 5's filter chip | Yes — `LP_MODEL` already classifies it and the ranker scores on it |
 | 15 | `recommend_projects` ties every project on the same sentinel and returns list order | The Projects header recommendation, and the design's "N h short of goal" clause | No — it ranks on `goal_minutes`, which is 0 for every real project |
+| 16 | Site profile has coordinates but no IANA timezone | Every clock on Tonight; a browser away from the mount cannot know its times differ from the site's | No — needs a user-supplied field |
+| 17 | `check_night_guardrails` returns the verdict but not the five checks behind it | The guardrails card's per-check rows on Live | Yes — each check is evaluated to reach the verdict |
+| 18 | No instantaneous alt/az for the active target | The sweet-band gauge's current-position marker on Live | Yes — the ranker already does this arithmetic |
+| 19 | Battery has no read-only route (`pi_get_info` is not a tool) | Guardrails Battery row; top-bar `batt` fact | Yes — the guardrail logic reads it natively to decide |
+| 20 | No way to learn when the current session started | Elapsed time on Live; the Max-duration guardrail understates on a mid-session connect | Yes — the session has a start and `SessionManifest` carries an id |
 | 16 | `SiteProfile` has coordinates but no IANA timezone | Every clock on Tonight can name the browser's own zone but not the site's, or detect whether the two agree | No — nothing computes or stores one today |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
