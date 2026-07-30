@@ -15,6 +15,7 @@ from seestar_sidecar.imagery import DEFAULT_IMAGE_CACHE_DIR
 from seestar_sidecar.live_preview import DEFAULT_LIVE_SHARE_DIR
 from seestar_sidecar.mcp_proxy import McpConnection
 from seestar_sidecar.routes import replay_enabled, router
+from seestar_sidecar.session_activity import DEFAULT_PROVENANCE_PATH
 
 VITE_DEV_ORIGIN = "http://localhost:5173"
 #: No personal-path fallback: unlike DEFAULT_ARCHIVE_DIR (see archive.py),
@@ -73,6 +74,7 @@ def create_app(
     aliases_path: Path | str | None = None,
     image_cache_dir: Path | str | None = None,
     live_share_dir: Path | str | None = None,
+    provenance_path: Path | str | None = None,
 ) -> FastAPI:
     """`web_dist` defaults to web/dist; `archive_dir` defaults to
     SEESTAR_ARCHIVE_DIR, or `None` — "not configured" — when that isn't set
@@ -100,6 +102,12 @@ def create_app(
     (`SEESTAR_LIVE_SHARE_DIR`, or `None` if unset — see live_preview.py and
     docs/configuration.md) and only needs overriding so a test can point at a
     synthetic `tmp_path` tree instead of a real SMB share.
+
+    `provenance_path` defaults to `session_activity.DEFAULT_PROVENANCE_PATH`
+    (`SEESTAR_PROVENANCE_PATH`, or `<SEESTAR_AI_DIR>/data/provenance.jsonl`,
+    or `None` if neither is set — see session_activity.py and
+    docs/configuration.md) and only needs overriding so a test can point at
+    a synthetic file instead of the real, live-appended one.
     """
     app = FastAPI(title="seestar-sidecar", version="0.1.0", lifespan=lifespan)
     # Safe default for callers that never run the lifespan — a bare
@@ -116,6 +124,9 @@ def create_app(
     )
     app.state.live_share_dir = (
         Path(live_share_dir) if live_share_dir is not None else DEFAULT_LIVE_SHARE_DIR
+    )
+    app.state.provenance_path = (
+        Path(provenance_path) if provenance_path is not None else DEFAULT_PROVENANCE_PATH
     )
     # Holds the last successfully discovered LiveFrame (see live_preview.py),
     # so a momentary share failure can degrade to "last known frame, marked

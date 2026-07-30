@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
-from seestar_sidecar.allowlist import ALLOWED_TOOLS
+from seestar_sidecar.allowlist import ALLOWED_TOOLS, SIDECAR_ROUTES
 from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR, scan_archive, scan_stacked_images
 from seestar_sidecar.catalog import (
     DEFAULT_ALIASES_PATH,
@@ -44,6 +44,7 @@ from seestar_sidecar.live_preview import (
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar.replay import load_fixture
+from seestar_sidecar.session_activity import DEFAULT_PROVENANCE_PATH, read_recent_activity
 
 router = APIRouter(prefix="/api")
 
@@ -516,3 +517,55 @@ async def live_preview_image(request: Request) -> Response:
             {"ok": False, "error": "no live preview frame available yet"}, status_code=404
         )
     return FileResponse(cache.path, media_type="image/jpeg")
+
+
+# --- session activity (operator panel) --------------------------------------
+#
+# Same "was this ever set on app.state at all" sentinel as _archive_dir_and_tz
+# / _live_share_dir above.
+_PROVENANCE_PATH_UNSET = object()
+
+
+def _provenance_path(request: Request) -> Path | None:
+    path = getattr(request.app.state, "provenance_path", _PROVENANCE_PATH_UNSET)
+    if path is _PROVENANCE_PATH_UNSET:
+        path = DEFAULT_PROVENANCE_PATH
+    return Path(path) if path is not None else None
+
+
+@router.get("/session_activity")
+async def session_activity(
+    request: Request, limit: int = Query(default=100, ge=1, le=500)
+) -> JSONResponse:
+    """Newest-first tail of SeeStar-AI's provenance.jsonl, each record
+    classified agent/ambiguous/unknown — see session_activity.py's module
+    docstring for the honesty constraint this exists under (hand-back item
+    10: there is no client field in the log) and for why the classification
+    is not a bare `ALLOWED_TOOLS` membership check.
+
+    Not a tool call — see allowlist.SIDECAR_ROUTES — and read-only in the
+    strict sense: this only ever reads bytes off a file SeeStar-AI itself
+    owns and is actively appending to, never writes, rotates, truncates or
+    locks it.
+    """
+    path = _provenance_path(request)
+    if path is None:
+        return JSONResponse(
+            {"ok": True, "records": [], "truncated": False, "source_configured": False}
+        )
+    if not path.is_file():
+        # Configured, but nothing logged yet (or a typo'd path) — a normal,
+        # non-error degrade, same discipline as ArchiveStatus's
+        # "configured, but not there" state (see archive.py).
+        return JSONResponse(
+            {"ok": True, "records": [], "truncated": False, "source_configured": True}
+        )
+    records, truncated = read_recent_activity(path, limit, ALLOWED_TOOLS, SIDECAR_ROUTES)
+    return JSONResponse(
+        {
+            "ok": True,
+            "records": [asdict(record) for record in records],
+            "truncated": truncated,
+            "source_configured": True,
+        }
+    )

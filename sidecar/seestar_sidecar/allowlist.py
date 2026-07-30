@@ -78,8 +78,23 @@ ALLOWED_TOOLS = frozenset(
 #: route accepts a path from the client at all — see live_preview.py's module
 #: docstring for why that makes this simpler than target_image's id-validation
 #: case, not just similar to it.
+#:
+#: "session_activity" (operator panel) tails SeeStar-AI's provenance.jsonl
+#: directly off disk — read-only in the strict sense (never writes, rotates,
+#: truncates or locks a file the server itself is actively appending to; see
+#: session_activity.py). No MCP tool by this name exists either. Each
+#: returned record is classified agent/ambiguous/unknown (hand-back item 10:
+#: there is no client field in provenance.jsonl) — see session_activity.py's
+#: module docstring for why that classification is deliberately NOT a
+#: mechanical function of ALLOWED_TOOLS's tool-name strings alone.
 SIDECAR_ROUTES = frozenset(
-    {"projects_combined", "target_image/{target_id}", "live_preview", "live_preview/image"}
+    {
+        "projects_combined",
+        "target_image/{target_id}",
+        "live_preview",
+        "live_preview/image",
+        "session_activity",
+    }
 )
 
 #: Tools that must NEVER be routable over HTTP. qa_session_report in particular

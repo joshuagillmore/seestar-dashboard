@@ -172,6 +172,39 @@ Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstatio
 | Windows (PowerShell) | `$env:SEESTAR_LIVE_SHARE_DIR = "\\Seestar\EMMC Images"` |
 | macOS / Linux | Mount the share first (`mount_smbfs`/`mount -t cifs`), then point this at the local mount point, e.g. `/Volumes/EMMC Images` or `/mnt/seestar` — `AllowInsecureGuestAuth` is a Windows-specific setting; other OSes have their own guest-SMB posture and are untested here. |
 
+## SEESTAR_PROVENANCE_PATH
+
+The path to SeeStar-AI's provenance log (`data/provenance.jsonl` in a
+`seestar-mcp` checkout) — the operator panel's read-only activity feed
+(`GET /api/session_activity`) tails this file. Read by
+`sidecar/seestar_sidecar/session_activity.py`.
+
+**Read-only in the strict sense:** the server owns this file and is
+appending to it live while the sidecar reads it. This route never writes,
+rotates, truncates or locks it, and a partially-written final line (the
+server mid-write) is treated as normal, not corruption.
+
+**Unset:** defaults to `<SEESTAR_AI_DIR>/data/provenance.jsonl` (the real
+layout of a `seestar-mcp` checkout) when `SEESTAR_AI_DIR` is set, or `None`
+— "not configured" — when neither is set. `/api/session_activity` reports
+`{"source_configured": false, "records": [], ...}` rather than guessing at
+a path.
+
+**Set, but the file doesn't exist yet** (a fresh checkout with no tool calls
+logged, or a typo): the same graceful degrade, `records: []`, but
+`source_configured: true` — distinguishable from "never configured", the
+same discipline `SEESTAR_ARCHIVE_DIR`'s `archive_status` already holds
+itself to.
+
+Only set this explicitly if your SeeStar-AI checkout's `data/` directory
+isn't where `SEESTAR_AI_DIR` would suggest — otherwise the default already
+finds it.
+
+| OS | Example |
+|---|---|
+| Windows (PowerShell) | `$env:SEESTAR_PROVENANCE_PATH = "C:\Users\you\seestar-mcp\data\provenance.jsonl"` |
+| macOS / Linux | `export SEESTAR_PROVENANCE_PATH=/home/you/seestar-mcp/data/provenance.jsonl` |
+
 ## SEESTAR_IMAGE_CACHE_DIR
 
 Where fetched sky-survey cutouts (DSS2, via CDS's hips2fits — see
