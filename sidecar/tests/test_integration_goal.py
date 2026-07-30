@@ -206,6 +206,43 @@ class TestTrackSelection:
         assert suggest_integration_goal(None, bortle=SITE_BORTLE_REF) is None
 
 
+class TestPlanetaryNebulaCoarseFlag:
+    """Planetary-nebula sizes in this catalogue run ~35% smaller than the
+    convention the curve was checked against (see
+    .superpowers/catalogue-extension-report.md and integration_goal.py's
+    "Planetary nebulae — coarse, not corrected"). Not numerically corrected
+    (n=5 is too thin to fabricate a multiplier from), so this pins the
+    decision that WAS made: still computed via the SB curve, but always
+    flagged coarse, unlike every other photometric type.
+    """
+
+    def test_planetary_nebula_is_coarse_on_the_photometric_track(self):
+        entry = {"type": "planetary_nebula", "magnitude": 8.8, "size_arcmin": 20.0}
+        result = suggest_integration_goal(entry, bortle=SITE_BORTLE_REF)
+        assert result["track"] == "photometric"
+        assert result["coarse"] is True
+        assert result["surface_brightness"] is not None  # unlike the cluster track
+
+    def test_galaxy_at_the_same_sb_is_not_coarse(self):
+        """Isolates the type-based flag from the SB value itself: a galaxy
+        and a planetary nebula built to the same surface brightness must
+        differ only in `coarse`, not in `suggested_hours`.
+        """
+        pn_entry = {"type": "planetary_nebula", "magnitude": 8.8, "size_arcmin": 20.0}
+        galaxy_entry = dict(pn_entry, type="galaxy")
+        pn_result = suggest_integration_goal(pn_entry, bortle=SITE_BORTLE_REF)
+        galaxy_result = suggest_integration_goal(galaxy_entry, bortle=SITE_BORTLE_REF)
+        assert pn_result["coarse"] is True
+        assert galaxy_result["coarse"] is False
+        assert pn_result["suggested_hours"] == galaxy_result["suggested_hours"]
+
+    def test_beyond_reach_planetary_nebula_is_still_coarse(self):
+        entry = {"type": "planetary_nebula", "magnitude": 20.0, "size_arcmin": 60.0}
+        result = suggest_integration_goal(entry, bortle=SITE_BORTLE_REF)
+        assert result["beyond_reach"] is True
+        assert result["coarse"] is True
+
+
 @pytest.fixture(scope="module")
 def real_catalog_and_aliases():
     if not DEFAULT_CATALOG_PATH.is_file() or not DEFAULT_ALIASES_PATH.is_file():
@@ -213,18 +250,36 @@ def real_catalog_and_aliases():
     return load_catalog(), load_aliases()
 
 
-class TestRealUserTargetsLandInTrackNone:
-    """The five real targets the spec names explicitly (no magnitude in any
-    band, or a dark nebula) must produce no target at all — this is the
-    behaviour the whole Track 3 design exists for, checked against the real
-    committed catalogue, not a synthetic stand-in.
+class TestRealUserTargetsNeverGetAConfidentNumber:
+    """The five real targets the spec names explicitly (SH2-142, LDN1625,
+    NGC281, NGC2237, NGC1579) all lack a catalogued magnitude. Track
+    selection keys off the `type` field (see integration_goal.py's module
+    docstring and team-lead's note that the catalogue agent is actively
+    reclassifying `other`-typed rows from SIMBAD `otype`), so asserting
+    "these five land in Track 3" would be pinning a fact about today's
+    `type` values, not the property the spec actually cares about — and it
+    already broke once during this task: NGC1579 was reclassified
+    other -> open_cluster mid-session, which correctly moves it from Track 3
+    to Track 2 (cluster), not a regression.
+
+    The real invariant, true regardless of how `type` gets reclassified: a
+    target with no catalogued magnitude must never get a confident,
+    SB-computed number. It gets either no goal at all (Track 3) or a coarse
+    flat-band one (Track 2, if retyped as a cluster) — never `coarse: False`.
     """
 
     @pytest.mark.parametrize(
         "target_id", ["SH2-142", "LDN1625", "NGC281", "NGC2237", "NGC1579"]
     )
-    def test_target_has_no_suggested_goal(self, target_id, real_catalog_and_aliases):
+    def test_target_never_gets_an_uncoarse_photometric_number(
+        self, target_id, real_catalog_and_aliases
+    ):
         catalog, aliases = real_catalog_and_aliases
         entry = resolve(target_id, catalog, aliases)
         assert entry is not None, f"{target_id} should still resolve to a catalogue row"
-        assert suggest_integration_goal(entry, bortle=8) is None
+        assert entry.get("magnitude") is None, (
+            f"{target_id} now has a catalogued magnitude — this test's premise no "
+            "longer holds and it should be revisited, not left green by accident"
+        )
+        result = suggest_integration_goal(entry, bortle=8)
+        assert result is None or result["coarse"] is True

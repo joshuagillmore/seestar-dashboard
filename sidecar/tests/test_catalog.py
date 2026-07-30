@@ -98,6 +98,23 @@ def test_resolve_alias_pointing_at_a_missing_catalogue_id_is_unresolved(tmp_path
     assert resolve("DANGLING", catalog, aliases) is None
 
 
+@pytest.mark.parametrize(
+    "variant",
+    ["C 033", "c33", "C033", " C33 ", "c 033"],
+)
+def test_resolve_folds_designation_variants_onto_the_same_alias_key(variant, synthetic_catalog_path):
+    """dso_aliases.json's own keys are produced by normalise_alias() — a
+    lookup that skipped the same fold would only match the two real cases
+    (NGC2244, C33) by coincidence, because both already happen to be typed
+    in their normalised form. This proves the fold is actually applied, not
+    just working by luck, using variants nothing in this repo's real data
+    happens to be typed as.
+    """
+    catalog = load_catalog(synthetic_catalog_path)
+    aliases = {"C33": "M31"}  # stands in for the real C33 -> NGC6992 case
+    assert resolve(variant, catalog, aliases) == catalog["M31"]
+
+
 @pytest.mark.skipif(
     not (DEFAULT_CATALOG_PATH.is_file() and DEFAULT_ALIASES_PATH.is_file()),
     reason="data/dso_catalog_extended.json / dso_aliases.json not present",

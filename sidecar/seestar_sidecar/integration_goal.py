@@ -83,6 +83,40 @@ remnants that have both a magnitude and a size in the catalogue.
   | NGC 7000    | 24.0 | 6-15 h           | 6.2 h            |
   | faint SH2   | 25.0 | 15-30+ h         | 17.4 h           |
 
+  **None of the five anchors is a planetary nebula** (two galaxies, three
+  nebulae/emission regions) — `K` has never been checked against one. That
+  compounds with the size issue below, which is why planetary nebulae get an
+  explicit, separate caveat rather than being trusted at the same confidence
+  as everything else on this track.
+
+### Planetary nebulae — coarse, not corrected
+
+`.superpowers/catalogue-extension-report.md`'s spot-check of the extended
+catalogue against the previous curated one found **planetary-nebula sizes
+running ~35% smaller** (median ratio 0.65, n=5 — thin on its own, but
+corroborated by the same ~0.65 ratio across 55 open/globular clusters, a much
+larger sample, suggesting one consistent OpenNGC `MajAx` convention rather
+than five unrelated coincidences). At `K = 0.45`, a 35% size understatement
+moves SB brighter by ~0.94 mag, which is ~2.6x in hours — not a rounding
+difference.
+
+**Not corrected numerically.** The report is explicit that neither
+measurement is "wrong": OpenNGC's `MajAx` likely captures the bright core,
+curated catalogues often include the faint halo, and which one actually
+predicts imaging difficulty is not established either way. Inventing a
+1/0.65 multiplier from an n=5 sample to paper over that would trade one
+unverified number for another, and would let the systematic get silently
+absorbed into the model exactly the way it must not be.
+
+**Instead: every planetary nebula is `coarse: True`** on this track — the SB
+curve still runs (there is real magnitude and size data, unlike Track 3's
+inputs) but the result is flagged the same way Track 2's cluster estimates
+are, for the same underlying reason: a known, cited measurement-convention
+uncertainty large enough that the number should not be shown with the same
+confidence as a galaxy's or a well-measured nebula's. Revisit if a per-object
+correction (or better, a size field that specifies which convention it uses)
+ever becomes available.
+
 ## Track 2 — cluster (coarse)
 
 Open and globular clusters **never go through the SB curve at all** — mean
@@ -207,6 +241,15 @@ _CLUSTER_TYPES = frozenset({"open_cluster", "globular_cluster"})
 #: applies. Everything else (including this catalogue's untyped "other"
 #: bucket) defaults to broadband — see module docstring.
 _NARROWBAND_TYPES = frozenset({"emission_nebula", "planetary_nebula", "supernova_remnant"})
+#: Stays on the photometric (SB) track but always flagged `coarse` — see
+#: "Planetary nebulae — coarse, not corrected" in the module docstring.
+#: `.superpowers/catalogue-extension-report.md`: this catalogue's
+#: planetary-nebula sizes run ~35% smaller (median ratio 0.65, n=5) than the
+#: previous curated catalogue's, corroborated by the same ratio across 55
+#: open/globular clusters. Not corrected numerically — neither size
+#: convention is established as the "right" one for imaging difficulty, and
+#: none of K's own anchors is a planetary nebula either.
+_COARSE_PHOTOMETRIC_TYPES = frozenset({"planetary_nebula"})
 
 _BORTLE_RATIO = {
     "broadband": BROADBAND_BORTLE_RATIO,
@@ -266,7 +309,9 @@ def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> d
 
         track:               "photometric" | "cluster"
         suggested_hours:     float, or None when beyond_reach is True
-        coarse:              True only for the cluster track
+        coarse:              True for the cluster track, and for any
+                              planetary nebula on the photometric track (see
+                              "Planetary nebulae — coarse, not corrected")
         beyond_reach:        True when the curve computes past BEYOND_REACH_HOURS
         surface_brightness:  mag/arcsec^2, or None for the cluster track
         bortle_multiplier:   the scale factor actually applied
@@ -297,6 +342,7 @@ def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> d
             ),
         }
 
+    coarse = entry.get("type") in _COARSE_PHOTOMETRIC_TYPES
     sb = surface_brightness(entry["magnitude"], entry["size_arcmin"])
     raw_hours = T_REF * (10 ** (K * (sb - SB_REF))) * multiplier
 
@@ -304,7 +350,7 @@ def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> d
         return {
             "track": "photometric",
             "suggested_hours": None,
-            "coarse": False,
+            "coarse": coarse,
             "beyond_reach": True,
             "surface_brightness": round(sb, 2),
             "bortle_multiplier": round(multiplier, 3),
@@ -315,16 +361,25 @@ def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> d
         }
 
     hours = max(raw_hours, FLOOR_HOURS)
-    return {
-        "track": "photometric",
-        "suggested_hours": round(hours, 1),
-        "coarse": False,
-        "beyond_reach": False,
-        "surface_brightness": round(sb, 2),
-        "bortle_multiplier": round(multiplier, 3),
-        "note": (
+    if coarse:
+        note = (
+            f"SB {sb:.2f} mag/arcsec² → suggested {hours:.1f} h — coarse: "
+            "planetary-nebula sizes in this catalogue run ~35% smaller than "
+            "the convention this curve was checked against, and the curve "
+            "itself has no planetary-nebula anchor (see integration_goal.py)."
+        )
+    else:
+        note = (
             f"SB {sb:.2f} mag/arcsec² → suggested {hours:.1f} h — an "
             "empirical fit to amateur practice at the 'solid/presentable' tier, "
             "not a physical requirement."
-        ),
+        )
+    return {
+        "track": "photometric",
+        "suggested_hours": round(hours, 1),
+        "coarse": coarse,
+        "beyond_reach": False,
+        "surface_brightness": round(sb, 2),
+        "bortle_multiplier": round(multiplier, 3),
+        "note": note,
     }
