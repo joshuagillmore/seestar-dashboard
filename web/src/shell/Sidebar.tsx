@@ -24,20 +24,43 @@ export interface SidebarProps {
   site: SiteProfile | null
   verdict: Verdict | null
   /**
-   * `location.warning` from assess_conditions, or null when the site is
-   * confirmed. The design specifies a GPS row in **both** the sidebar
-   * (README.md:249-250: short form, `GPS matched · mask ON (3 arcs)`) and the
-   * Tonight verdict banner (README.md:273-274: the full sentence, e.g. `GPS
-   * matched site 'Backyard' (0.2 km) — horizon mask applied`) — complementary,
-   * not duplicated, since the two say different things. This prop drives only
-   * the *presence* of a caveat here (`gpsWarning !== null`), not its exact
-   * wording — the sidebar renders a fixed short label ("GPS unverified" /
-   * "GPS matched"), never the warning sentence itself, which is
-   * VerdictBanner's job. That split avoids both re-parsing the warning prose
-   * for a short form (which isn't available split out from it) and printing
-   * the same long sentence in two places.
+   * `location.warning` from assess_conditions. **No longer read by Sidebar**
+   * — see `gpsMatched` below, which replaced it as the row's actual source
+   * of truth. Kept in the type only so callers outside `web/src/shell/`
+   * (TonightScreen passes it; ProjectsScreen passes `null`) don't need an
+   * edit for this. Superseded, not merely unused: the row used to derive its
+   * two states from "is there a warning at all", which conflated two
+   * genuinely different server states (see `gpsMatched`) — carrying only
+   * this string could never have told them apart without parsing its prose,
+   * which is exactly what `gpsMatched` avoids needing.
    */
   gpsWarning: string | null
+  /**
+   * `location.matched` from assess_conditions — `true` (GPS confirmed within
+   * tolerance), `false` (GPS confirmed elsewhere: a real mismatch, and the
+   * server explicitly does **not** apply the horizon mask in this state), or
+   * `null` (GPS unknown/never checked — the server assumes the saved site
+   * and *does* still apply the mask). Verified at the source
+   * (`SeeStar-AI/src/seestar_mcp/server.py`'s `_location_block`): its
+   * `mask_applied` field is `false` if and only if `matched` is `false` — so
+   * this one field is a complete, non-inferred, non-prose-parsed source for
+   * both halves of the row (design README.md:249-250: `GPS matched · mask ON
+   * (3 arcs)`), and the three states render as three distinct labels rather
+   * than collapsing "never checked" and "confirmed elsewhere" into one
+   * generic word:
+   *
+   *   | `matched` | Row |
+   *   |---|---|
+   *   | `true`  | `GPS matched · mask on (N arcs)` / `mask off` |
+   *   | `null`  | `GPS unverified · mask on (N arcs)` / `mask off` |
+   *   | `false` | `GPS mismatch · mask not applied` |
+   *
+   * `undefined` (every caller until TonightScreen.tsx threads the real
+   * value — see this file's own hand-off note) degrades to the same
+   * treatment as `null`: an honest "never checked" default, not a guess,
+   * and exactly today's only observed real state.
+   */
+  gpsMatched?: boolean | null
   /** Which screen is currently mounted — drives the active highlight. Owned
    * by App.tsx; Sidebar stays presentational. */
   view: View
@@ -71,13 +94,17 @@ export interface SidebarProps {
 export function Sidebar({
   site,
   verdict,
-  gpsWarning,
+  gpsMatched = null,
   view,
   onNavigate,
   projectsHeadline = null,
   projectsNeedsData = null,
 }: SidebarProps) {
   const profile = site?.profile
+  // `undefined` (not yet threaded by a caller) collapses to `null` — see
+  // gpsMatched's own doc comment.
+  const matched = gpsMatched ?? null
+  const gpsLabel = matched === true ? 'GPS matched' : matched === false ? 'GPS mismatch' : 'GPS unverified'
 
   return (
     <nav className={styles.rail}>
@@ -135,17 +162,21 @@ export function Sidebar({
             {profile.field_rotation_ceiling_deg}°
           </div>
           {/* Short form, one row: GPS state and mask state together, per
-              README.md:249-250. A fixed short label ("GPS unverified" /
-              "GPS matched"), not the full warning sentence — see
-              SidebarProps.gpsWarning's doc comment for why the sentence
-              itself belongs only to VerdictBanner. */}
-          <div className={gpsWarning ? styles.warnRow : styles.okRow}>
-            <Dot tone={gpsWarning ? 'marginal' : 'pass'} size="sm" />
+              README.md:249-250. Three distinct states, not a binary — see
+              SidebarProps.gpsMatched's doc comment for the mapping and its
+              source verification. Never the full warning sentence, which
+              stays VerdictBanner's job alone. */}
+          <div className={matched === true ? styles.okRow : styles.warnRow}>
+            <Dot tone={matched === true ? 'pass' : 'marginal'} size="sm" />
             <span>
-              {gpsWarning ? 'GPS unverified' : 'GPS matched'} · mask{' '}
-              {profile.horizon_mask.length > 0
-                ? `on (${profile.horizon_mask.length} arcs)`
-                : 'off'}
+              {gpsLabel} ·{' '}
+              {matched === false
+                ? 'mask not applied'
+                : `mask ${
+                    profile.horizon_mask.length > 0
+                      ? `on (${profile.horizon_mask.length} arcs)`
+                      : 'off'
+                  }`}
             </span>
           </div>
         </div>
