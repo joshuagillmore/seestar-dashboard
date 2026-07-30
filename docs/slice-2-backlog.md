@@ -146,3 +146,37 @@ Revisit only if a real misalignment becomes visible, or if the fixed elements ca
 be restructured to share the scroll container's content box directly — which
 would remove the magic number rather than retune it, and is the better fix if
 this area is ever reworked.
+
+## Standing check: assertions that test a proxy instead of the property
+
+Seven times now, this project has shipped an assertion that reads as meaningful
+and **cannot fail**. Reviews caught all seven, but it is predictable enough to
+belong in every plan rather than be rediscovered each slice.
+
+Every instance has the same shape: **the assertion checks something correlated
+with the property instead of the property itself.**
+
+| # | Where | Asserted | Actually needed |
+|---|---|---|---|
+| 1 | TopBar | no element with `[data-dot="pass"]` | nothing in the repo set that attribute — it matched zero elements always |
+| 2 | TopBar | `queryByText(/fw \d/i)` absent | reads only *direct* text nodes; a nested span slips past |
+| 3 | VerdictBanner | `getByText('99%')` | two stats legitimately read 99% — matched twice and threw |
+| 4 | TonightScreen | `getAllByText('M76')` non-empty | the timeline satisfied it; the card grid it meant to check could be deleted |
+| 5 | SweetBandTimeline | no `[data-rail]` element | `data-rail` existed only inside that query |
+| 6 | SweetBandTimeline | `left >= 0 && left + width <= 100` | guaranteed by `spanToPercent`'s own clamping, for any input |
+| 7 | test_static | `path.parent.name == "web"` | `parents[1]` and `parents[2]` both end `.../web/dist` |
+
+**The check to run on every new assertion:** *what single change would make this
+fail?* If the answer is "nothing I can think of", or if it is a change nobody
+would plausibly make, the assertion is decoration.
+
+**Prefer proving it by mutation over reasoning about it.** Break the thing
+deliberately, confirm the test fails, restore, confirm green. That took minutes
+each time and caught what reading did not — including a `parents[2]` → `parents[1]`
+off-by-one that would have made production permanently report "not built yet"
+while its own test stayed green.
+
+**Specific smells:** asserting a *name* where identity is meant; a *substring*
+where a match is meant; a *count* where a source is meant; an attribute or
+test-id that nothing in the codebase sets; and any bound that the code under
+test already enforces by construction.
