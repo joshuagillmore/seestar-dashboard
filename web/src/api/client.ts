@@ -5,12 +5,14 @@ import {
   ListProjectsSchema,
   PlanTargetsSchema,
   ProjectsCombinedSchema,
+  RecommendProjectsSchema,
   SiteProfileSchema,
   type Conditions,
   type Health,
   type ListProjects,
   type PlanTargets,
   type ProjectsCombined,
+  type RecommendProjects,
   type SiteProfile,
 } from './schemas'
 
@@ -92,3 +94,13 @@ export const fetchProjects = (): Promise<ListProjects> =>
  * routes.py's projects_combined. */
 export const fetchProjectsCombined = (): Promise<ProjectsCombined> =>
   get('/api/projects_combined', ProjectsCombinedSchema)
+
+/** Read-only, allowlisted (routes.py:171). Same shape as `fetchProjects` —
+ * see `RecommendProjectsSchema`'s doc comment for why this doesn't get its
+ * own schema. `limit` defaults unset (server default: no limit); the header
+ * only ever needs the first entry, so callers should pass a small one. */
+export const fetchRecommendProjects = (limit?: number): Promise<RecommendProjects> =>
+  get(
+    `/api/recommend_projects${limit !== undefined ? `?limit=${limit}` : ''}`,
+    RecommendProjectsSchema,
+  )

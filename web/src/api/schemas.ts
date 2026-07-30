@@ -137,6 +137,17 @@ export const ListProjectsSchema = z.object({
   count: z.number(),
 })
 
+/** `recommend_projects` returns the exact same shape as `list_projects` — full
+ * `Project` records, reordered — not a distinct ranked-shortfall shape. See
+ * docs/superpowers/specs/2026-07-28-slice-2-runnable-and-projects.md § Phase
+ * 2: "recommend_projects returns the same shape as list_projects — full
+ * Project objects, reordered. One schema, not two." Verified again against
+ * fixtures/recommend_projects.json: with every real project's `goal_minutes`
+ * at 0, its `limit: 12` response is byte-for-byte `list_projects`'s own first
+ * 12 entries in the same order — there is no shortfall figure anywhere in
+ * the payload to rank by yet (see ProjectsScreen.tsx's RECOMMEND_TITLE). */
+export const RecommendProjectsSchema = ListProjectsSchema
+
 /** `suggest_integration_goal()`'s return shape — see
  * sidecar/seestar_sidecar/integration_goal.py's module docstring, "The
  * `reason` field", for what each state means. Never `null` from
@@ -197,6 +208,7 @@ export type Health = z.infer<typeof HealthSchema>
 export type SessionRecord = z.infer<typeof SessionRecordSchema>
 export type Project = z.infer<typeof ProjectSchema>
 export type ListProjects = z.infer<typeof ListProjectsSchema>
+export type RecommendProjects = z.infer<typeof RecommendProjectsSchema>
 export type IntegrationGoal = z.infer<typeof IntegrationGoalSchema>
 export type ProjectsCombinedEntry = z.infer<typeof ProjectsCombinedEntrySchema>
 export type ProjectsCombined = z.infer<typeof ProjectsCombinedSchema>

@@ -13,6 +13,17 @@ const FILTER_ABSENT_TITLE = 'list_projects does not return a per-session filter 
  * (handback item 7). Both render as an honest "—" rather than the design
  * mockup's fabricated "IRCUT · alt-az" / numeric FWHM.
  *
+ * The micro-label names `log_session_result` (README.md:669), matching the
+ * design exactly — not `list_projects`, which is what this screen actually
+ * calls to read the rows. `log_session_result` is the write tool that
+ * produced each session record historically; `list_projects` only reads what
+ * it already wrote. The design's own convention elsewhere (Tonight's
+ * `Observing planner · assess_conditions`) names the tool whose *data* is
+ * shown, not the read path used to fetch it, so this follows that rather
+ * than inventing a different rule for one label. `log_session_result` stays
+ * a write tool with no route (see allowlist.py's FORBIDDEN_TOOLS) — naming
+ * it here is not a call to it.
+ *
  * NIGHT renders the session's raw `date_utc` calendar date. The server has a
  * dedicated, tested `observing_night()` that shifts a UTC instant onto the
  * correct local evening (a session logged past local midnight is still
@@ -33,7 +44,7 @@ const FILTER_ABSENT_TITLE = 'list_projects does not return a per-session filter 
  * it yet. See docs/slice-2-backlog.md.
  */
 export function SessionHistory({ project }: { project: MergedProject }) {
-  const label = `${project.targetId} · SESSION HISTORY — list_projects`
+  const label = `${project.targetId} · SESSION HISTORY — log_session_result`
 
   if (!project.store) {
     return (

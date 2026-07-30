@@ -77,6 +77,38 @@ describe('Sidebar', () => {
     expect(dots.slice(1, 4).every((d) => d.getAttribute('data-dot') === 'idle')).toBe(true)
   })
 
+  it('gives the Projects nav dot a marginal tone when projects need data, and pass when none do', () => {
+    const { rerender } = render(
+      <Sidebar
+        site={site}
+        verdict="NO-GO"
+        gpsWarning={null}
+        view="tonight"
+        onNavigate={vi.fn()}
+        projectsNeedsData={3}
+      />,
+    )
+    // dots[3] is Projects (Tonight, Live, Review, Projects, in that order).
+    expect(screen.getAllByTestId('dot')[3]).toHaveAttribute('data-dot', 'marginal')
+
+    rerender(
+      <Sidebar
+        site={site}
+        verdict="NO-GO"
+        gpsWarning={null}
+        view="tonight"
+        onNavigate={vi.fn()}
+        projectsNeedsData={0}
+      />,
+    )
+    expect(screen.getAllByTestId('dot')[3]).toHaveAttribute('data-dot', 'pass')
+  })
+
+  it('leaves the Projects nav dot idle when no needs-data count has been supplied — every screen but the mounted ProjectsScreen', () => {
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
+    expect(screen.getAllByTestId('dot')[3]).toHaveAttribute('data-dot', 'idle')
+  })
+
   it('carries the GPS warning verbatim instead of claiming a match', () => {
     // The real installation has never GPS-matched. Rendering the design's
     // confident "GPS matched" row would assert something nobody verified.

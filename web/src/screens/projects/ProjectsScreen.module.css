@@ -1,8 +1,15 @@
 .screen { display: flex; flex-direction: column; gap: 14px; }
-.header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .eyebrow { font-family: var(--font-mono); font-weight: 500; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-fainter); }
 .heading { margin: 4px 0 0; font-family: var(--font-sans); font-weight: 600; font-size: 19px; line-height: 1.2; letter-spacing: -0.01em; color: var(--text-primary); }
-.source { font-family: var(--font-sans); font-weight: 400; font-size: 11px; color: var(--text-dimmer); white-space: nowrap; }
+/* Two stacked right-aligned lines: recommend_projects's own pick at the
+   design's original weight/position (README.md:648-649), then the
+   store/archive provenance note underneath at a quieter size/color — moved
+   here to make room for the restored recommendation without losing either
+   (see design-review-2026-07-30.md item B5). */
+.headerRight { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.recommend { font-family: var(--font-sans); font-weight: 400; font-size: 11px; color: var(--text-dimmer); white-space: nowrap; }
+.source { font-family: var(--font-sans); font-weight: 400; font-size: 10px; color: var(--text-faint); white-space: nowrap; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .skeleton { height: 96px; border-radius: var(--radius-card); background: var(--bg-card-sunken); border: 1px solid var(--border-quiet); }
 .error { padding: 14px 16px; border: 1px solid var(--reject-btn-border); border-radius: var(--radius-card); background: var(--reject-btn-bg); color: var(--reject); font-family: var(--font-sans); font-size: 13px; }

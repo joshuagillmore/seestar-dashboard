@@ -39,8 +39,24 @@ export interface SidebarProps {
    * this figure (there is no shared data layer across screens yet), so every
    * other screen's Sidebar instance passes null rather than a stale or
    * fabricated number.
+   *
+   * Kept as hours rather than switched to a "N need data" count (the
+   * design's own sample meta, README.md:241): the header above the grid
+   * already spells out the need-data count in full, so repeating it in the
+   * nav row would show the same number twice while dropping the one figure
+   * (total hours) that's only visible here.
    */
   projectsHeadline?: string | null
+  /**
+   * How many merged projects currently read `needs-data` (see
+   * screens/projects/projects.ts's projectStatus) — drives the Projects nav
+   * row's dot tone, the same way `verdict` drives Tonight's (see the design's
+   * "the dot encodes each screen's health … both must be live",
+   * README.md:243-244). `null` — the default, and what every screen other
+   * than the mounted ProjectsScreen passes — renders `idle` rather than a
+   * fabricated health signal.
+   */
+  projectsNeedsData?: number | null
 }
 
 export function Sidebar({
@@ -50,6 +66,7 @@ export function Sidebar({
   view,
   onNavigate,
   projectsHeadline = null,
+  projectsNeedsData = null,
 }: SidebarProps) {
   const profile = site?.profile
 
@@ -61,7 +78,15 @@ export function Sidebar({
         const disabled = item.disabledLabel !== undefined
         const active = view === item.view
         const tone: DotTone =
-          item.view === 'tonight' ? (verdict ? verdictTone(verdict) : 'idle') : 'idle'
+          item.view === 'tonight'
+            ? verdict
+              ? verdictTone(verdict)
+              : 'idle'
+            : item.view === 'projects' && projectsNeedsData !== null
+              ? projectsNeedsData > 0
+                ? 'marginal'
+                : 'pass'
+              : 'idle'
         const meta = disabled
           ? item.disabledLabel
           : item.view === 'tonight'

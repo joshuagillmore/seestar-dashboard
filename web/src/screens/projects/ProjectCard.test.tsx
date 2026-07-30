@@ -149,9 +149,15 @@ describe('ProjectCard', () => {
           onSelect={vi.fn()}
         />,
       )
-      // Archive-only (no store record) still shows its own tag …
-      expect(screen.getByText('archive only')).toBeInTheDocument()
-      // … but the goal line is no longer omitted just because there's no
+      // Archive-only (no store record) no longer gets its own tag — the goal
+      // math drives the tag exactly like a store-backed target's would …
+      expect(screen.getByText('no goal')).toBeInTheDocument()
+      expect(screen.queryByText('archive only', { exact: true })).not.toBeInTheDocument()
+      // … but archive-only-ness isn't lost: the meta line still names it,
+      // since summarizeSessions() returns null whenever there's no store
+      // record, independent of the tag.
+      expect(screen.getByText(/archive only — no per-session detail/)).toBeInTheDocument()
+      // The goal line itself is no longer omitted just because there's no
       // store record — the goal is computed independently of tracking status,
       // and IC 405 (the user's single largest archive investment) must not
       // render as a bare blank.
@@ -189,6 +195,50 @@ describe('ProjectCard', () => {
     expect(label.textContent).not.toMatch(/needed|required|remaining|short of/i)
   })
 
+  describe('hours/goal row layout (space-between, per README.md:654-655)', () => {
+    it('keeps hours and the goal text as the same two flex-row siblings, in order, so a right-aligned layout separates them without reordering the DOM', () => {
+      render(
+        <ProjectCard
+          project={merged({ totalMinutes: 84.2, goal: goal({ suggested_hours: 6.0 }) })}
+          selected={false}
+          onSelect={vi.fn()}
+        />,
+      )
+      const hours = screen.getByText('1.4 h')
+      const goalEl = screen.getByText('of 6.0 h suggested')
+      expect(hours.parentElement).toBe(goalEl.parentElement)
+      expect(Array.from(hours.parentElement!.children)).toEqual([hours, goalEl])
+    })
+
+    it('holds for the longest absent-state phrase too ("photometry not credible"), not just a short numeric goal', () => {
+      render(
+        <ProjectCard
+          project={merged({ totalMinutes: 217.1667, goal: IC405_GOAL })}
+          selected={false}
+          onSelect={vi.fn()}
+        />,
+      )
+      const hours = screen.getByText('3.6 h')
+      const goalEl = screen.getByText('photometry not credible')
+      expect(hours.parentElement).toBe(goalEl.parentElement)
+      expect(Array.from(hours.parentElement!.children)).toEqual([hours, goalEl])
+    })
+  })
+
+  describe('the doubling toggle sits inside the card and reserves its own space (design-review item A3)', () => {
+    it('reserves room in the title row only when the toggle actually renders, so it never overlaps the status tag', () => {
+      const { rerender } = render(
+        <ProjectCard project={merged({ goal: goal() })} selected={false} onSelect={vi.fn()} />,
+      )
+      const titleRow = screen.getByText('M1').parentElement as HTMLElement
+      expect(titleRow.className).toContain('titleRowReserved')
+
+      rerender(<ProjectCard project={merged({ goal: null })} selected={false} onSelect={vi.fn()} />)
+      const titleRowNoToggle = screen.getByText('M1').parentElement as HTMLElement
+      expect(titleRowNoToggle.className).not.toContain('titleRowReserved')
+    })
+  })
+
   it('renders a progress track at the exact width implied by the ratio, colored by completion', () => {
     const p = merged({ totalMinutes: 30, goal: goal({ suggested_hours: 1.0 }) }) // 30/60 = 50%
     render(<ProjectCard project={p} selected={false} onSelect={vi.fn()} />)
@@ -205,11 +255,17 @@ describe('ProjectCard', () => {
   })
 
   describe('real fixture cases that clear their suggested goal (not contrived 50% cases)', () => {
-    it('M42 (archive-only, 3.3h captured vs 1.2h suggested, ~279%): clamps the fill, not the hours text, and colors it complete despite the "archive only" tag', () => {
+    it('M42 (archive-only, 3.3h captured vs 1.2h suggested, ~279%): clamps the fill, not the hours text, and shows "complete" in the tag, not "archive only"', () => {
       render(<ProjectCard project={findReal('M42')} selected={false} onSelect={vi.fn()} />)
       expect(screen.getByText('3.3 h')).toBeInTheDocument() // the true captured value — never clamped
       expect(screen.getByText('of 1.2 h suggested')).toBeInTheDocument() // not coarse
-      expect(screen.getByText('archive only')).toBeInTheDocument() // a different axis — see projectStatus's doc comment
+      // Completion, not provenance, owns the tag slot now (see projectStatus's
+      // doc comment) — a 279%-complete target must read as complete.
+      expect(screen.getByText('complete')).toBeInTheDocument()
+      expect(screen.queryByText('archive only', { exact: true })).not.toBeInTheDocument()
+      // Archive-only-ness is still identifiable — just from the meta line,
+      // not the tag.
+      expect(screen.getByText(/archive only — no per-session detail/)).toBeInTheDocument()
       const track = screen.getByTestId('progress-track')
       const fill = track.firstElementChild as HTMLElement
       expect(fill.style.width).toBe('100%') // clamped from ~279%

@@ -2,7 +2,8 @@
    ProjectCard.tsx). A sibling, not a nested button: two nested <button>s is
    invalid content and would double-fire clicks (inner click bubbles to the
    outer card-select handler) — the toggle is instead absolutely positioned
-   over this wrapper's top edge, outside the card button's own box. */
+   inside this wrapper, over the card's own top-right corner, so it reads as
+   part of the card rather than a detached control floating above it. */
 .cardWrap {
   position: relative;
   width: 100%;
@@ -45,6 +46,12 @@
 
 .titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 
+/* Reserves room for the doubling toggle (see .doubleToggle) so the status
+   tag's own space-between position never sits under it — applied only when
+   the card actually renders the toggle (a numeric goal to double; see
+   ProjectCard.tsx's canDouble). */
+.titleRowReserved { padding-right: 34px; }
+
 .id {
   font-family: var(--font-sans);
   font-weight: 600;
@@ -65,7 +72,6 @@
 }
 
 .tagNoGoal { background: var(--neutral-tag-bg); color: var(--text-dimmer); }
-.tagArchiveOnly { background: var(--neutral-tag-bg); color: var(--text-faint); }
 .tagNeedsData { background: var(--marginal-bg); color: var(--marginal); }
 .tagComplete { background: var(--pass-bg); color: var(--pass); }
 
@@ -79,7 +85,13 @@
 
 .spacer { flex: 1; min-height: 14px; }
 
-.hoursRow { display: flex; align-items: baseline; gap: 6px; }
+/* space-between, not adjacent-left: the design puts hours collected at the
+   left edge and the goal right-aligned at the far edge (README.md:654-655),
+   including for the honest absent-state phrases ("no catalogued magnitude",
+   "photometry not credible", "not in DSO catalogue", "beyond practical
+   reach") that replace the goal text — the design's own sample table
+   right-aligns "no goal set" the same way. */
+.hoursRow { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 
 .hours { font-family: var(--font-mono); font-weight: 500; font-size: 14px; color: var(--text-primary); }
 .goal { font-family: var(--font-mono); font-weight: 400; font-size: 11px; color: var(--text-dimmer); }
@@ -102,13 +114,15 @@
 .fillProgress { background: var(--accent); }
 .fillComplete { background: var(--pass); }
 
-/* Sits outside the card's own box (see .cardWrap) so it is never nested
-   inside the card-select button — a small corner affordance, not part of
-   the card's own information layout. */
+/* Sits inside the card's own rounded box (see .cardWrap) but is still never
+   nested inside the card-select button — a small corner affordance layered
+   on top of the card's own content, not part of its document flow.
+   .titleRowReserved reserves the matching horizontal space so this never
+   overlaps the status tag, which also lives in this corner. */
 .doubleToggle {
   position: absolute;
-  top: -8px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   padding: 2px 6px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-chip);

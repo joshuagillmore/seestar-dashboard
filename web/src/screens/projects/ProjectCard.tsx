@@ -14,7 +14,6 @@ import {
 import styles from './ProjectCard.module.css'
 
 const TAG_CLASS: Record<ProjectTag, string> = {
-  'archive-only': styles.tagArchiveOnly,
   'no-goal': styles.tagNoGoal,
   // Same neutral treatment as `no-goal`: a trusted result with no numeric bar
   // to show, not a failure — see integration_goal.py's BEYOND_REACH_HOURS
@@ -52,8 +51,11 @@ export interface ProjectCardProps {
  * The doubling toggle (view-only, localStorage-persisted — see doubling.ts)
  * sits as a sibling overlay, not nested inside the card's own selection
  * button: two nested `<button>`s is invalid content and would double-fire
- * clicks, so the toggle is a separate button stacked visually on the card
- * instead, and only rendered when there is a real number to double.
+ * clicks, so the toggle is a separate button absolutely positioned inside
+ * the card's own rounded box (top-right corner), only rendered when there is
+ * a real number to double. `titleRowReserved` reserves the matching
+ * horizontal space in the title row so the toggle never overlaps the status
+ * tag, which also lives in that corner.
  *
  * The 96px cover image (`project.image`, never absent-by-design any more —
  * see projects.ts's MergedProject.image doc comment) renders through the
@@ -79,7 +81,7 @@ export function ProjectCard({ project, selected, onSelect }: ProjectCardProps) {
       >
         <TargetThumb image={project.image} alt={project.targetName} className={styles.cover} />
         <div className={styles.body}>
-          <div className={styles.titleRow}>
+          <div className={`${styles.titleRow} ${canDouble ? styles.titleRowReserved : ''}`}>
             <span className={styles.id}>{project.targetId}</span>
             <span className={`${styles.tag} ${TAG_CLASS[status.tag]}`}>{status.label}</span>
           </div>
@@ -96,12 +98,11 @@ export function ProjectCard({ project, selected, onSelect }: ProjectCardProps) {
             data-testid="progress-track"
           >
             {pct !== null && (
-              // Keyed off `pct` itself, not `status.tag`: an archive-only
-              // target (tag stays 'archive-only' regardless — see
-              // projectStatus's doc comment) can still fully clear its own
-              // suggested goal, e.g. the real M42 at 279% — its fill must read
-              // as met (pass), not as still-in-progress (accent), even though
-              // its badge says "archive only" for an unrelated reason.
+              // `pct` and `status.tag` ('complete' vs 'needs-data') always
+              // agree now that completion is driven purely by the goal math
+              // (see projectStatus) — this keys the fill color off `pct`
+              // directly simply because it's already in scope here, not
+              // because the two can diverge.
               <div
                 className={`${styles.fill} ${pct >= 100 ? styles.fillComplete : styles.fillProgress}`}
                 style={{ width: `${pct}%` }}
