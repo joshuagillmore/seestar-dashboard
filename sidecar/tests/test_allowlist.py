@@ -3,6 +3,10 @@
 A tool with side effects must have no route at all — not a 403, which would
 still confirm the endpoint exists. These tests fail loudly if anyone adds one.
 """
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -88,11 +92,43 @@ async def test_call_tool_refuses_a_non_allowlisted_tool_name():
     test and the route-set invariant, since neither inspects a handler's
     body. This is the guard that would still catch it.
 
-    Passing `request=None` is deliberate: the assert must fire before
+    Passing `request=None` is deliberate: the check must fire before
     call_tool ever touches `request.app.state`, so this needs no app, no
     client, and no connection to prove it.
     """
     from seestar_sidecar import routes
+    from seestar_sidecar.mcp_proxy import ProxyTransportError
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(ProxyTransportError):
         await routes.call_tool(None, "qa_session_report", {})
+
+
+def test_call_tool_guard_survives_python_dash_o():
+    """The guard is a `raise`, not an `assert` (see call_tool's docstring),
+    specifically because `python -O` / PYTHONOPTIMIZE=1 compiles assert
+    statements out of the bytecode entirely — proven for real in this repo:
+    `python -c "assert False"` raises, `python -O -c "assert False"` prints
+    nothing and exits 0.
+
+    -O is a compile-time flag on the whole interpreter process, not
+    something an in-process monkeypatch can simulate, so this runs the real
+    check in a real `-O` subprocess rather than asserting on -O's documented
+    behaviour from the outside.
+    """
+    script = (
+        "import asyncio\n"
+        "from seestar_sidecar import routes\n"
+        "from seestar_sidecar.mcp_proxy import ProxyTransportError\n"
+        "try:\n"
+        "    asyncio.run(routes.call_tool(None, 'qa_session_report', {}))\n"
+        "except ProxyTransportError:\n"
+        "    print('GUARD_HELD')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-O", "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+    assert result.returncode == 0, result.stderr
+    assert "GUARD_HELD" in result.stdout, result.stderr

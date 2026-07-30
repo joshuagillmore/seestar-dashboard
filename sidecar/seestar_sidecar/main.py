@@ -1,6 +1,7 @@
 """FastAPI app factory. CORS is open to the Vite dev origin only."""
 import os
 from contextlib import asynccontextmanager
+from datetime import timezone
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -38,11 +39,18 @@ async def lifespan(app: FastAPI):
 def create_app(
     web_dist: Path | str | None = None,
     archive_dir: Path | str | None = None,
+    local_tz: timezone | None = None,
 ) -> FastAPI:
     """`web_dist` defaults to web/dist and `archive_dir` to
     SEESTAR_ARCHIVE_DIR / its own default — both only need overriding in
     tests, since the `uv run seestar-dashboard` / `--factory` entry points
     call this with no arguments.
+
+    `local_tz` is likewise test-only: it threads through to
+    `archive.scan_archive()`, whose own default (`None`) reads the system's
+    timezone — correct for a production sidecar always running on the
+    machine that wrote the archive, but a machine-timezone dependency no
+    test should inherit. See archive.py's `_local_capture_instant_utc`.
     """
     app = FastAPI(title="seestar-sidecar", version="0.1.0", lifespan=lifespan)
     # Safe default for callers that never run the lifespan — a bare
@@ -50,6 +58,7 @@ def create_app(
     # "MCP connection not started" as a 502 rather than an AttributeError 500.
     app.state.connection = None
     app.state.archive_dir = Path(archive_dir) if archive_dir is not None else DEFAULT_ARCHIVE_DIR
+    app.state.local_tz = local_tz
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[VITE_DEV_ORIGIN],

@@ -94,6 +94,18 @@ def observing_night(instant_utc: datetime) -> date:
     from the evening before both belong to one night but compared as two
     different calendar dates. Keying through this function is what makes
     the comparison meaningful again.
+
+    A second, independent constraint (distinct from `_local_capture_instant_
+    utc`'s same-machine assumption): the 12-hour boundary is anchored to
+    UTC noon, not the observing site's local noon, so it only lands outside
+    real observing hours for sites whose UTC offset keeps it there. At this
+    site (Eastern, UTC-4/-5) the boundary falls at 07:00-08:00 local, well
+    clear of any realistic capture. It would NOT hold for a site far enough
+    east that local observing hours straddle UTC noon — e.g. UTC+9, where
+    the boundary lands at 21:00 local, squarely inside a normal session, and
+    a night would split in two. Fixing that needs the observing site's own
+    UTC offset (from the site profile), which is server-side data this
+    sidecar does not have — a hand-back, not something to patch here.
     """
     return (instant_utc - timedelta(hours=12)).date()
 

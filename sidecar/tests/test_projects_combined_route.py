@@ -3,6 +3,7 @@ combine_projects (test_projects_union.py) and scan_archive (test_archive.py),
 neither of which touches the real archive or a live MCP server here.
 """
 import json
+from datetime import timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,18 @@ from seestar_sidecar.main import create_app
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 REAL_LIST_PROJECTS = json.loads((FIXTURES / "list_projects.json").read_text(encoding="utf-8"))
+
+#: Passed to every create_app() below so this file's result does not depend
+#: on the timezone of whatever machine runs it — this fixture's archive
+#: dates (2024) happen to be far enough from the store's (2026) that no
+#: offset could manufacture a collision, but that was luck, not a design
+#: this file was pinning against, until now. See test_archive.py's EDT.
+EDT = timezone(timedelta(hours=-4))
+#: Used only by the discriminating test below — deliberately NOT this dev
+#: machine's own zone (Eastern), so a create_app(local_tz=...) that silently
+#: fell back to the system default would produce a different, wrong answer
+#: instead of accidentally matching.
+TOKYO = timezone(timedelta(hours=9))
 
 
 def _write_light_fit(dir_path, target_display, night, time_str):
@@ -40,7 +53,7 @@ def synthetic_archive(tmp_path):
 @pytest.fixture
 def client(monkeypatch, synthetic_archive):
     monkeypatch.setenv("SEESTAR_REPLAY", "1")
-    return TestClient(create_app(archive_dir=synthetic_archive))
+    return TestClient(create_app(archive_dir=synthetic_archive, local_tz=EDT))
 
 
 def test_unions_store_and_archive(client):
@@ -85,7 +98,7 @@ def test_count_matches_the_project_list_length(client):
 
 def test_missing_archive_directory_degrades_to_store_only(monkeypatch, tmp_path):
     monkeypatch.setenv("SEESTAR_REPLAY", "1")
-    client = TestClient(create_app(archive_dir=tmp_path / "never-synced"))
+    client = TestClient(create_app(archive_dir=tmp_path / "never-synced", local_tz=EDT))
 
     body = client.get("/api/projects_combined").json()
 
@@ -106,7 +119,7 @@ def test_transport_failure_uses_the_same_error_shape(monkeypatch, synthetic_arch
 
     monkeypatch.delenv("SEESTAR_REPLAY", raising=False)
     monkeypatch.setattr(routes, "call_tool", boom)
-    client = TestClient(create_app(archive_dir=synthetic_archive))
+    client = TestClient(create_app(archive_dir=synthetic_archive, local_tz=EDT))
 
     response = client.get("/api/projects_combined")
 
@@ -128,9 +141,67 @@ def test_store_level_failure_is_forwarded_not_papered_over(monkeypatch, syntheti
 
     monkeypatch.setenv("SEESTAR_REPLAY", "1")
     monkeypatch.setattr(routes, "load_fixture", broken_store)
-    client = TestClient(create_app(archive_dir=synthetic_archive))
+    client = TestClient(create_app(archive_dir=synthetic_archive, local_tz=EDT))
 
     response = client.get("/api/projects_combined")
 
     assert response.status_code == 200
     assert response.json() == {"ok": False, "error": "corrupt store"}
+
+
+def test_local_tz_override_is_genuinely_used_not_just_accepted(monkeypatch, tmp_path):
+    """The other tests in this file can't tell "create_app(local_tz=...)
+    actually reaches scan_archive" apart from "the parameter is accepted and
+    silently ignored, falling back to the system default" — this dev
+    machine's own zone (Eastern) IS what EDT pins to, so a broken wiring
+    would still produce the same numbers here. Proved by mutation: routing
+    scan_archive(Path(archive_dir)) without local_tz in routes.py leaves
+    every other test in this file green.
+
+    This test uses TOKYO (a zone nothing here runs in) and a frame timestamp
+    (Jan 1, 20:00 local) chosen so the two zones disagree about which
+    observing night it falls on: 2025-01-01 under Eastern, 2024-12-31 under
+    UTC+9. A store session is planted on 2024-12-31 — the archive frame is
+    only excluded (correct) if UTC+9 was genuinely used; a silent fallback
+    to this machine's Eastern zone reads 2025-01-01 instead, misses the
+    collision, and double-counts.
+    """
+    from seestar_sidecar import routes
+
+    def fake_store(tool):
+        return {
+            "ok": True,
+            "projects": [
+                {
+                    "target_id": "TESTTZ",
+                    "target_name": "Test Target",
+                    "collected_minutes": 10.0,
+                    "sessions": [
+                        {
+                            "date_utc": "2024-12-31T20:00:00+00:00",
+                            "integration_minutes": 10.0,
+                            "subs_total": 1,
+                            "subs_kept": 1,
+                            "median_fwhm": None,
+                            "notes": "",
+                        }
+                    ],
+                }
+            ],
+            "count": 1,
+        }
+
+    monkeypatch.setenv("SEESTAR_REPLAY", "1")
+    monkeypatch.setattr(routes, "load_fixture", fake_store)
+
+    archive = tmp_path / "archive"
+    subs = archive / "TESTTZ-sub"
+    subs.mkdir(parents=True)
+    _write_light_fit(subs, "TESTTZ", "20250101", "200000")
+
+    client = TestClient(create_app(archive_dir=archive, local_tz=TOKYO))
+    body = client.get("/api/projects_combined").json()
+
+    testtz = next(p for p in body["projects"] if p["target_id"] == "TESTTZ")
+    assert testtz["archive_minutes"] == 0.0
+    assert testtz["total_minutes"] == 10.0

@@ -76,9 +76,16 @@ def test_a_session_past_local_midnight_collides_with_the_evening_before(tmp_path
 
 
 def test_mutation_the_original_naive_keying_would_have_missed_this(tmp_path, monkeypatch):
-    """Proves the previous test is not vacuous: reverting to the original
-    date_utc[:10]-vs-raw-filename-date keying reintroduces the double-count
-    this test suite was written to catch.
+    """Proves the previous test is not vacuous, but only reverts the store
+    side of the original bug: this monkeypatches `_store_nights` back to
+    `date_utc[:10]` (its pre-fix form) while leaving the archive side on its
+    current dashed-ISO output. The mutated comparison therefore fails for
+    two combined reasons — the date itself is genuinely one day off (the
+    real bug), and the string format no longer matches the archive's
+    (incidental, not the thing this test is about) — so this does not
+    isolate which one is doing the work. It still proves the fixed code's
+    dedup depends on `_store_nights` producing the correct value, which is
+    what matters here.
     """
     from seestar_sidecar import projects_union
 
@@ -96,7 +103,8 @@ def test_mutation_the_original_naive_keying_would_have_missed_this(tmp_path, mon
 
     combined = projects_union.combine_projects(store, scan.targets)
 
-    # Broken keying compares "20260716" (store, UTC) against whatever the
-    # unconverted archive night was — never equal — so the archive's 0.5 min
-    # gets added on top instead of excluded.
+    # Broken keying compares "20260716" (store, UTC, dash-stripped) against
+    # the archive's actual dashed-ISO night — never equal, for either
+    # reason above — so the archive's 0.5 min gets added on top instead of
+    # excluded.
     assert combined[0]["archive_minutes"] != 0.0

@@ -28,17 +28,27 @@ async def call_tool(request: Request, tool: str, arguments: dict) -> dict:
     The connection lives on app.state, not a module global: one per app
     instance, so two apps in a process cannot clobber each other.
 
-    The assert is a second, independent check on top of the literal routes
-    below it: those only guarantee an unlisted tool has no *route* to reach
-    this function. SIDECAR_ROUTES is the first route class where a handler's
-    URL name and the tool name it calls internally can differ (projects_
-    combined calls list_projects, not "projects_combined") — a future
-    handler that got that wrong internally (e.g. called qa_session_report)
-    would sail past both the FORBIDDEN_TOOLS route-absence test and the
-    route-set invariant, since neither inspects what a route's handler body
-    calls. This is the one place left that can still say no.
+    The tool check is a second, independent guard on top of the literal
+    routes below it: those only guarantee an unlisted tool has no *route* to
+    reach this function. SIDECAR_ROUTES is the first route class where a
+    handler's URL name and the tool name it calls internally can differ
+    (projects_combined calls list_projects, not "projects_combined") — a
+    future handler that got that wrong internally (e.g. called
+    qa_session_report) would sail past both the FORBIDDEN_TOOLS
+    route-absence test and the route-set invariant, since neither inspects
+    what a route's handler body calls. This is the one place left that can
+    still say no.
+
+    Deliberately a `raise`, not an `assert`: assert statements are compiled
+    out entirely under `python -O` / `PYTHONOPTIMIZE=1`, so a defence-in-
+    depth check written as one would silently disappear in an optimised run
+    — a guard that evaporates under a flag is worse than no guard, since it
+    looks present in the source while doing nothing. ProxyTransportError
+    surfaces through _serve/_fetch's existing 502 handling, which is
+    accurate: the sidecar refused to make the call.
     """
-    assert tool in ALLOWED_TOOLS, f"call_tool invoked for a non-allowlisted tool: {tool!r}"
+    if tool not in ALLOWED_TOOLS:
+        raise ProxyTransportError(f"call_tool invoked for a non-allowlisted tool: {tool!r}")
     connection = getattr(request.app.state, "connection", None)
     if connection is None:
         raise ProxyTransportError("MCP connection not started")
@@ -125,7 +135,8 @@ async def projects_combined(request: Request) -> JSONResponse:
         return JSONResponse(store)
 
     archive_dir = getattr(request.app.state, "archive_dir", None) or DEFAULT_ARCHIVE_DIR
-    scan = scan_archive(Path(archive_dir))
+    local_tz = getattr(request.app.state, "local_tz", None)
+    scan = scan_archive(Path(archive_dir), local_tz=local_tz)
     projects = combine_projects(store["projects"], scan.targets)
     totals = {
         "store_minutes": round(sum(p["store_minutes"] for p in projects), 4),
