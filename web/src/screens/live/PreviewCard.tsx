@@ -40,6 +40,19 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
       ? computeFraming(annotate.pixelx, annotate.pixely)
       : null
 
+  // The sidecar's `/api/live_preview/image` URL is always the same literal
+  // path (routes.py's `_live_preview_frame`/`_live_preview_absent` both
+  // return "/api/live_preview/image", never a per-frame path) — the bytes
+  // behind it change every poll, but the URL string does not. Without a
+  // cache-buster the browser is free to serve the very first frame it ever
+  // fetched for the lifetime of the tab, silently defeating "live". Since
+  // `captured_at` genuinely changes every time a new frame is found, it is
+  // the real signal a query param can ride on — not an invented one.
+  const imageSrc =
+    preview?.url && preview.captured_at
+      ? `${preview.url}?t=${encodeURIComponent(preview.captured_at)}`
+      : preview?.url
+
   const hasImage = Boolean(preview?.url)
 
   return (
@@ -58,7 +71,7 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
         {hasImage && preview ? (
           <>
             <img
-              src={preview.url ?? undefined}
+              src={imageSrc ?? undefined}
               alt={preview.target ? `Live camera view of ${preview.target}` : 'Live camera view'}
               className={styles.image}
             />

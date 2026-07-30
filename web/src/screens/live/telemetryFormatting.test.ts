@@ -1,30 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { droppedPct, focusDelta, formatAnnotateState, formatStageHistory, stackedDiff } from './telemetryFormatting'
-import type { TelemetryEntry } from './telemetryLog'
-import type { Tier1 } from '../../api/schemas'
-
-const entry = (stacked: number | null): TelemetryEntry => ({
-  atMs: 0,
-  tier1: { ok: true, stacked_frame: stacked, dropped_frame: null, solve_ok: null, focus_position: null } as Tier1,
-})
-
-describe('stackedDiff', () => {
-  it('is null with fewer than two entries — nothing to diff against yet', () => {
-    expect(stackedDiff([])).toBeNull()
-    expect(stackedDiff([entry(428)])).toBeNull()
-  })
-
-  it('diffs the two most recent entries, matching the design\'s "+6 last poll"', () => {
-    expect(stackedDiff([entry(422), entry(428)])).toBe(6)
-  })
-
-  it('reports a negative diff honestly rather than clamping to zero', () => {
-    expect(stackedDiff([entry(428), entry(425)])).toBe(-3)
-  })
-})
+import { ANNOTATE_STATE_OK, droppedPct, formatAnnotateState, formatStageHistory } from './telemetryFormatting'
 
 describe('droppedPct', () => {
-  it('matches the design\'s own worked example — 23 of 451 frames', () => {
+  it('matches the recorded fixture\'s own numbers — 0 rejected of 211 kept', () => {
+    expect(droppedPct(211, 0)).toBe(0)
+  })
+
+  it('computes a real percentage when frames actually dropped', () => {
     expect(droppedPct(428, 23)).toBeCloseTo(5.1, 1)
   })
 
@@ -35,16 +17,6 @@ describe('droppedPct', () => {
 
   it('is null rather than dividing by zero when nothing has been captured yet', () => {
     expect(droppedPct(0, 0)).toBeNull()
-  })
-})
-
-describe('focusDelta', () => {
-  it('matches the design\'s own worked example — baseline 1642, current 1645', () => {
-    expect(focusDelta(1645, 1642)).toBe(3)
-  })
-
-  it('is null before a baseline has been established', () => {
-    expect(focusDelta(1645, null)).toBeNull()
   })
 })
 
@@ -68,13 +40,9 @@ describe('formatStageHistory', () => {
 })
 
 describe('formatAnnotateState', () => {
-  it('renders a boolean state as OK/FAILED', () => {
-    expect(formatAnnotateState(true)).toBe('OK')
-    expect(formatAnnotateState(false)).toBe('FAILED')
-  })
-
-  it('renders a string state verbatim, since the real type is not yet confirmed', () => {
-    expect(formatAnnotateState('OK')).toBe('OK')
+  it('renders the recorded fixture\'s real value verbatim', () => {
+    expect(formatAnnotateState('complete')).toBe('complete')
+    expect(formatAnnotateState('complete')).toBe(ANNOTATE_STATE_OK)
   })
 
   it('renders an honest dash when there is no annotation yet', () => {

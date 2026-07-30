@@ -5,16 +5,16 @@ import { join } from 'node:path'
 import { LiveScreen } from './LiveScreen'
 import { SiteProfileSchema, type Health } from '../../api/schemas'
 import {
-  liveFocuserPosition,
-  liveGuardrails,
-  livePreviewSub,
   livePreviewStale,
   livePreviewStacked,
-  liveStatus,
-  liveTargetObservability,
-  liveTier1,
-  liveViewState,
+  livePreviewSub,
+  recordedFocuserPosition,
+  recordedGuardrails,
+  recordedObservability,
   recordedSite,
+  recordedStatus,
+  recordedTier1,
+  recordedViewState,
 } from '../../test/fixtures'
 
 const site = SiteProfileSchema.parse(recordedSite())
@@ -23,27 +23,31 @@ const notReplaying: Health = { ok: true, replay: false }
 type Body = unknown
 
 /** A per-URL fetch stub, defaulting every live-session endpoint to a happy
- * "session active" response — override individual URLs per test. Bodies
- * that are functions are invoked per call, so a test can vary the response
- * across successive polls (see the newest-first / multi-poll tests). */
+ * "session active" response using the REAL recorded fixtures — override
+ * individual URLs per test. `check_night_guardrails` and
+ * `get_target_observability` carry query params useLiveSession builds at
+ * runtime (a generated timestamp, the discovered target id) that this test
+ * cannot predict exactly, so matching is done on the path before `?`, not
+ * the full URL. */
 function stubApi(overrides: Record<string, Body | (() => Body)> = {}) {
   const bodies: Record<string, Body | (() => Body)> = {
-    '/api/get_status': liveStatus(),
-    '/api/get_view_state': liveViewState(),
-    '/api/check_night_guardrails': liveGuardrails(),
-    '/api/qa_tier1': liveTier1(),
-    '/api/get_focuser_position': liveFocuserPosition(),
-    '/api/get_target_observability': liveTargetObservability(),
+    '/api/get_status': recordedStatus(),
+    '/api/get_view_state': recordedViewState(),
+    '/api/check_night_guardrails': recordedGuardrails(),
+    '/api/qa_tier1': recordedTier1(),
+    '/api/get_focuser_position': recordedFocuserPosition(),
+    '/api/get_target_observability': recordedObservability(),
     '/api/live_preview': livePreviewStacked(),
     ...overrides,
   }
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      if (!(url in bodies)) {
+      const path = url.split('?')[0]
+      if (!(path in bodies)) {
         return { ok: false, status: 404, json: async () => ({ ok: false, error: `no stub for ${url}` }) }
       }
-      const entry = bodies[url]
+      const entry = bodies[path]
       const body = typeof entry === 'function' ? (entry as () => Body)() : entry
       return { ok: true, status: 200, json: async () => body }
     }),
@@ -56,8 +60,9 @@ function stubIdle() {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      if (url === '/api/get_status') return { ok: true, status: 200, json: async () => liveStatus() }
-      if (url === '/api/get_view_state') {
+      const path = url.split('?')[0]
+      if (path === '/api/get_status') return { ok: true, status: 200, json: async () => recordedStatus() }
+      if (path === '/api/get_view_state') {
         return {
           ok: false,
           status: 502,
@@ -74,7 +79,8 @@ function stubBridgeDown() {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      if (url === '/api/get_status') {
+      const path = url.split('?')[0]
+      if (path === '/api/get_status') {
         return {
           ok: false,
           status: 502,
@@ -135,26 +141,30 @@ describe('LiveScreen', () => {
   it('renders the active session once get_status and get_view_state both succeed', async () => {
     stubApi()
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
-    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
-    expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument()
-    // The grid reads Stack.stacked_frame/dropped_frame from the nested
-    // get_view_state shape (428/23 in the synthetic fixture) — proof the
-    // nesting was actually parsed, not merely that SOME number rendered.
-    expect(screen.getByText('428')).toBeInTheDocument()
-    expect(screen.getByText('23')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
+    // The grid reads Stack.stacked_frame/dropped_frame from the real,
+    // recorded get_view_state fixture (211/0) — proof the real nesting
+    // (ok.view_state.result.View.Stack) was actually parsed, not merely
+    // that SOME number rendered.
+    expect(screen.getByText('211')).toBeInTheDocument()
+    // The target header sources its name from get_target_observability
+    // once it resolves (the recorded fixture is M27 / Dumbbell Nebula).
+    await waitFor(() => expect(screen.getByText('Dumbbell Nebula')).toBeInTheDocument())
   })
 
-  it('falls back to idle (not a crash, and not fabricated telemetry) when get_view_state answers ok but with View.Stack hoisted to the top level', async () => {
-    // The exact bug the slice-3 spec warns about: a parser reading
-    // stacked_frame/dropped_frame at the top level "silently produced empty
-    // telemetry" once already. ViewStateSchema requires the real nesting, so
-    // this malformed-but-200-OK payload fails schema validation inside
-    // fetchViewState, which useLiveSession reads as "idle" — proving the
-    // nesting is actually load-bearing, not just documented.
-    stubApi({ '/api/get_view_state': { ok: true, stacked_frame: 428, dropped_frame: 23 } })
+  it('falls back to idle (not a crash, and not fabricated telemetry) when get_view_state answers ok but is missing the view_state wrapper', async () => {
+    // The exact bug an earlier version of ViewStateSchema had: reading
+    // ok.result.View directly, one level shallower than the real
+    // ok.view_state.result.View. That malformed-but-200-OK payload fails
+    // schema validation inside fetchViewState, which useLiveSession reads as
+    // "idle" — proving the wrapper is actually load-bearing, not just
+    // documented.
+    stubApi({
+      '/api/get_view_state': { ok: true, result: { View: { stage: 'Stack' } } },
+    })
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
-    expect(screen.queryByText('428')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('telemetry-grid')).not.toBeInTheDocument()
   })
 
   it('marks a "sub" source preview as a single frame, visibly, not just via a data attribute', async () => {
@@ -167,7 +177,7 @@ describe('LiveScreen', () => {
   it('does not show the single-frame badge for a stacked-source preview', async () => {
     stubApi({ '/api/live_preview': livePreviewStacked() })
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
-    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
     expect(screen.queryByTestId('preview-source-sub')).not.toBeInTheDocument()
   })
 
@@ -181,18 +191,19 @@ describe('LiveScreen', () => {
   it('does not show a stale badge for a fresh preview', async () => {
     stubApi({ '/api/live_preview': livePreviewStacked() })
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
-    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
     expect(screen.queryByTestId('preview-stale')).not.toBeInTheDocument()
   })
 
   it('keeps the plate-solve overlay off by default, and toggles it on', async () => {
     stubApi()
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
-    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
     expect(screen.queryByTestId('preview-overlay')).not.toBeInTheDocument()
     // But the framing readout — information, not decoration — is visible
-    // regardless, per the slice-3 spec's own ruling.
-    expect(screen.getByTestId('framing-readout')).toHaveTextContent(/offset 28 px left — in frame/)
+    // regardless, per the slice-3 spec's own ruling. Numbers are the real
+    // recorded fixture's (pixelx 219, pixely 960 against a 540/960 centre).
+    expect(screen.getByTestId('framing-readout')).toHaveTextContent(/offset 321 px left — in frame/)
 
     fireEvent.click(screen.getByRole('button', { name: /show plate-solve overlay/i }))
     expect(screen.getByTestId('preview-overlay')).toBeInTheDocument()
@@ -201,18 +212,19 @@ describe('LiveScreen', () => {
     expect(screen.queryByTestId('preview-overlay')).not.toBeInTheDocument()
   })
 
-  it('renders the telemetry log with at least the current poll\'s entry', async () => {
+  it('renders the telemetry log with the current poll\'s status_line', async () => {
     stubApi()
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByTestId('telemetry-log-body')).toBeInTheDocument())
     await waitFor(() => expect(screen.getAllByTestId('telemetry-log-line').length).toBeGreaterThan(0))
     expect(screen.getByText(/Quality verdict pending/i)).toBeInTheDocument()
+    expect(screen.getByText(/stacked 211/)).toBeInTheDocument()
   })
 
   it('never shows a per-sub PASS/MARGINAL/REJECT verdict during the session', async () => {
     stubApi()
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
-    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
     expect(screen.queryByText(/\bREJECT\b/)).not.toBeInTheDocument()
     expect(screen.queryByText(/\bMARGINAL\b/)).not.toBeInTheDocument()
   })
@@ -220,11 +232,18 @@ describe('LiveScreen', () => {
   it('renders no telescope-control buttons at all — the whole slice-3 §0 point', async () => {
     stubApi()
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
-    await waitFor(() => expect(screen.getByText('SH2-142')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /refocus/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /stop stack/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /wind down/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument()
+  })
+
+  it('renders the guardrails card from the real flat shape — action verbatim, not five invented named checks', async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByText('check_night_guardrails')).toBeInTheDocument())
+    expect(screen.getByText('continue')).toBeInTheDocument()
   })
 
   it('the telemetry grid uses minmax(0,1fr), not a bare 1fr, so a label cannot overflow the container', () => {

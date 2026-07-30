@@ -132,16 +132,36 @@ export const fetchViewState = (): Promise<ViewState> => get('/api/get_view_state
 
 export const fetchStatus = (): Promise<Status> => get('/api/get_status', StatusSchema)
 
-export const fetchGuardrails = (): Promise<Guardrails> =>
-  get('/api/check_night_guardrails', GuardrailsSchema)
+/**
+ * `session_start_utc` is a required query param the sidecar route has no
+ * default for (routes.py's `check_night_guardrails` handler) — it needs to
+ * know when the session started to compute dawn margin and max-duration
+ * remaining. Nothing in the confirmed tool surface returns a real session
+ * start time, so `useLiveSession` passes the moment THIS client first
+ * observed the session as active, not the scope's actual start — see its
+ * own doc comment. That means the max-duration/dawn-margin figures this
+ * returns understate elapsed time whenever the dashboard connects mid-
+ * session; flagged there and in the handback list, not silently assumed
+ * accurate. */
+export const fetchGuardrails = (sessionStartUtc: string): Promise<Guardrails> =>
+  get(
+    `/api/check_night_guardrails?session_start_utc=${encodeURIComponent(sessionStartUtc)}`,
+    GuardrailsSchema,
+  )
 
 export const fetchTier1 = (): Promise<Tier1> => get('/api/qa_tier1', Tier1Schema)
 
 export const fetchFocuserPosition = (): Promise<FocuserPosition> =>
   get('/api/get_focuser_position', FocuserPositionSchema)
 
-export const fetchTargetObservability = (): Promise<TargetObservability> =>
-  get('/api/get_target_observability', TargetObservabilitySchema)
+/** `target` is a required query param (the catalogue id, e.g. "M27") — the
+ * route has no default. `useLiveSession` sources it from `/api/live_preview`'s
+ * own `target` field (a normalized id parsed from the live share's directory
+ * name), the only confirmed source for "what is currently framed" — see
+ * live_preview.py's `LiveFrame.target` and schemas.ts's own note that
+ * `get_view_state` carries no target name at all. */
+export const fetchTargetObservability = (target: string): Promise<TargetObservability> =>
+  get(`/api/get_target_observability?target=${encodeURIComponent(target)}`, TargetObservabilitySchema)
 
 /** Metadata only — `stale`, `source`, `captured_at`, and the `url` to point
  * an `<img>` at (see PreviewCard). Never fetches the image bytes itself. */

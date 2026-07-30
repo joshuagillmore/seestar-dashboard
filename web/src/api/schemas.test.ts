@@ -15,22 +15,21 @@ import {
 } from './schemas'
 import {
   goConditions,
-  liveFocuserPosition,
-  liveGuardrails,
   livePreviewNone,
   livePreviewStacked,
   livePreviewStale,
   livePreviewSub,
-  liveStatus,
-  liveTargetObservability,
-  liveTier1,
-  liveViewState,
-  liveViewStatePreStack,
   recordedConditions,
+  recordedFocuserPosition,
+  recordedGuardrails,
   recordedListProjects,
+  recordedObservability,
   recordedPlan,
   recordedProjectsCombined,
   recordedSite,
+  recordedStatus,
+  recordedTier1,
+  recordedViewState,
   unknownConditions,
 } from '../test/fixtures'
 
@@ -116,57 +115,76 @@ describe('fixture contract', () => {
 })
 
 /**
- * Slice 3 has no recorded fixtures (see test/fixtures.ts) — these parse the
- * hand-built synthetic ones instead, so they are a check on this repo's own
- * schema definitions, not yet an early-warning system against the real
- * server. Replace with `describe('fixture contract')`-style recorded
- * parsing the moment record.py captures a real session.
+ * Slice 3's live-session tools — six recorded fixtures, hand-authored
+ * against SeeStar-AI's controller source (no live hardware session was
+ * available; see test/fixtures.ts's own doc comment and
+ * .superpowers/live-sidecar-report.md). `/api/live_preview` has no recorded
+ * fixture (a sidecar-computed route, not a tool call) and stays synthetic.
  */
-describe('live-session schemas (synthetic — no recorded fixture yet)', () => {
-  it('parses get_view_state\'s nested result.View.Stack.Annotate shape', () => {
-    const parsed = ViewStateSchema.parse(liveViewState())
-    expect(parsed.result?.View?.Stack?.stacked_frame).toBe(428)
-    expect(parsed.result?.View?.Stack?.dropped_frame).toBe(23)
-    expect(parsed.result?.View?.Stack?.Annotate?.pixelx).toBe(512)
-    expect(parsed.result?.View?.Stack?.Annotate?.pixely).toBe(934)
+describe('live-session schemas', () => {
+  it('parses get_view_state\'s real nesting — ok.view_state.result.View.Stack.Annotate', () => {
+    const parsed = ViewStateSchema.parse(recordedViewState())
+    const view = parsed.view_state?.result?.View
+    expect(view?.Stack?.stacked_frame).toBe(211)
+    expect(view?.Stack?.dropped_frame).toBe(0)
+    expect(view?.Stack?.Annotate?.pixelx).toBe(219)
+    expect(view?.Stack?.Annotate?.pixely).toBe(960)
+    expect(view?.Stack?.Annotate?.state).toBe('complete')
   })
 
-  it('rejects a payload with View.Stack hoisted to the top level — the exact bug the nesting note warns about', () => {
-    // A parser (or a schema) that read View.Stack at the top level would
-    // find nothing, silently — the slice-3 spec says this already happened
-    // once server-side. Prove ViewStateSchema actually requires the nesting
-    // by asserting the flattened shape fails validation outright, rather
-    // than silently parsing into an empty/undefined `result`.
-    const flattened = { ok: true, stacked_frame: 428, dropped_frame: 23 }
-    expect(ViewStateSchema.safeParse(flattened).success).toBe(false)
+  it('rejects a payload missing the view_state wrapper — the exact extra-nesting bug an earlier version of this schema had', () => {
+    // A parser (or a schema) reading `ok.result.View` directly — one level
+    // shallower than the real shape — would find nothing, silently. That
+    // was this schema's own first draft, caught only once a real fixture
+    // landed. Prove the wrapper is load-bearing by asserting a payload
+    // missing it fails validation outright.
+    const missingWrapper = { ok: true, result: { View: { stage: 'Stack' } } }
+    expect(ViewStateSchema.safeParse(missingWrapper).success).toBe(false)
   })
 
   it('accepts a pre-stack stage with Stack absent', () => {
-    const parsed = ViewStateSchema.parse(liveViewStatePreStack())
-    expect(parsed.result?.View?.stage).toBe('3PPA')
-    expect(parsed.result?.View?.Stack).toBeNull()
+    // Not observed in the one recorded fixture (which is mid-stack) but a
+    // documented state transition (3PPA/AutoGoto precede Stack) — Stack
+    // stays nullable/optional on that reasoning, checked here directly
+    // rather than assumed.
+    const parsed = ViewStateSchema.parse({
+      ok: true,
+      view_state: { result: { View: { stage: '3PPA', Stack: null } } },
+    })
+    expect(parsed.view_state?.result?.View?.stage).toBe('3PPA')
+    expect(parsed.view_state?.result?.View?.Stack).toBeNull()
   })
 
   it('parses get_status', () => {
-    expect(() => StatusSchema.parse(liveStatus())).not.toThrow()
+    expect(() => StatusSchema.parse(recordedStatus())).not.toThrow()
   })
 
-  it('parses check_night_guardrails, five checks and a verdict', () => {
-    const parsed = GuardrailsSchema.parse(liveGuardrails())
-    expect(parsed.checks).toHaveLength(5)
-    expect(parsed.verdict).toBe('continue')
+  it('parses check_night_guardrails\' real flat shape — proceed/action/reasons/hard_stops, not five named checks', () => {
+    const parsed = GuardrailsSchema.parse(recordedGuardrails())
+    expect(parsed.proceed).toBe(true)
+    expect(parsed.action).toBe('continue')
+    expect(parsed.reasons).toEqual([])
+    expect(parsed.hard_stops).toEqual([])
   })
 
-  it('parses qa_tier1', () => {
-    expect(() => Tier1Schema.parse(liveTier1())).not.toThrow()
+  it('parses qa_tier1\'s real shape — snapshot/flags/status_line/trends', () => {
+    const parsed = Tier1Schema.parse(recordedTier1())
+    expect(parsed.snapshot.stacked).toBe(211)
+    expect(parsed.snapshot.rejected).toBe(0)
+    expect(parsed.status_line).toMatch(/^stacked 211/)
+    expect(parsed.trends?.focus_delta).toBe(3)
   })
 
-  it('parses get_focuser_position', () => {
-    expect(FocuserPositionSchema.parse(liveFocuserPosition()).position).toBe(1645)
+  it('parses get_focuser_position\'s flat focus_pos field', () => {
+    expect(FocuserPositionSchema.parse(recordedFocuserPosition()).focus_pos).toBe(1830)
   })
 
-  it('parses get_target_observability', () => {
-    expect(() => TargetObservabilitySchema.parse(liveTargetObservability())).not.toThrow()
+  it('parses get_target_observability as the nightly aggregate it really is — max_alt_deg, not a current-alt/az reading', () => {
+    const parsed = TargetObservabilitySchema.parse(recordedObservability())
+    expect(parsed.target?.id).toBe('M27')
+    expect(parsed.observability?.max_alt_deg).toBe(61.4)
+    expect(parsed.observability?.transits_above_ceiling).toBe(false)
+    expect(parsed.observability?.best_window_utc).toHaveLength(2)
   })
 
   it('parses every live_preview source state — stacked, sub, stale, and none', () => {

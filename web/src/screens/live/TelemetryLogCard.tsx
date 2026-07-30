@@ -1,4 +1,4 @@
-import { describeEntry, formatElapsed, type TelemetryEntry } from './telemetryLog'
+import { formatElapsed, type TelemetryEntry } from './telemetryLog'
 import styles from './TelemetryLogCard.module.css'
 
 export interface TelemetryLogCardProps {
@@ -6,9 +6,14 @@ export interface TelemetryLogCardProps {
 }
 
 /**
- * design README.md:463-476. Newest first — see telemetryLog.ts for why each
- * line's elapsed bracket and its "+N"/"Δ=" deltas are plain arithmetic over
- * what qa_tier1 already returned, not a derived judgement.
+ * design README.md:463-476. Newest first. Each line is `qa_tier1`'s own
+ * `status_line`, rendered verbatim — the server already composes "stacked
+ * 211 (+1) | rejected 0 | solve OK | focus Δ=+3 | hfd 2.40" from its own
+ * `snapshot`/`trends`, so this client does not recompose or re-derive it
+ * (see telemetryLog.ts's own doc comment for why an earlier version of this
+ * card did that arithmetic itself before the real shape was confirmed).
+ * `flags`, when non-empty, is a real server-reported health flag — rendered
+ * as-is, never invented.
  *
  * "Quality verdict pending — Tier-2 scores the FITS at wind-down" is the one
  * rule from the design that must survive verbatim: Tier-1 is cheap health
@@ -16,9 +21,8 @@ export interface TelemetryLogCardProps {
  * during the session — that's Tier-2, at wind-down only.
  */
 export function TelemetryLogCard({ log }: TelemetryLogCardProps) {
-  const firstAtMs = log[0]?.atMs ?? 0
-  // Newest first for display; each line still diffs against the
-  // chronologically previous entry, not the previous rendered row.
+  const first = log[0] ?? null
+  // Newest first for display.
   const rows = [...log].reverse()
 
   return (
@@ -29,20 +33,17 @@ export function TelemetryLogCard({ log }: TelemetryLogCardProps) {
       </div>
 
       <div className={styles.body} data-testid="telemetry-log-body">
-        {rows.length === 0 ? (
+        {rows.length === 0 || first === null ? (
           <div className={styles.empty}>No health telemetry polled yet this session.</div>
         ) : (
-          rows.map((entry, i) => {
-            // rows[i] is newest-first; the chronologically previous entry to
-            // diff against is the NEXT element in this reversed array.
-            const previous = rows[i + 1] ?? null
-            return (
-              <div key={entry.atMs} className={styles.line} data-testid="telemetry-log-line">
-                <span className={styles.bracket}>[{formatElapsed(entry.atMs, firstAtMs)}]</span>{' '}
-                {describeEntry(entry, previous)}
-              </div>
-            )
-          })
+          rows.map((entry, i) => (
+            <div key={`${entry.tier1.snapshot.ts}-${i}`} className={styles.line} data-testid="telemetry-log-line">
+              <span className={styles.bracket}>[{formatElapsed(entry, first)}]</span> {entry.tier1.status_line}
+              {entry.tier1.flags.length > 0 && (
+                <span className={styles.flags}> · {entry.tier1.flags.join(', ')}</span>
+              )}
+            </div>
+          ))
         )}
       </div>
     </section>

@@ -1,35 +1,25 @@
-import type { TelemetryEntry } from './telemetryLog'
+/**
+ * Formatting helpers for the six-cell telemetry grid. `qa_tier1`'s own
+ * `trends` already computes the per-poll deltas the grid shows (stacked/
+ * rejected/focus) — an earlier version of this module diffed polls itself
+ * before that shape was confirmed (see schemas.ts's live-session doc
+ * comment). This file keeps only what has no server-computed equivalent: a
+ * dropped-frame percentage (plain arithmetic, not a judgement about *why*),
+ * the stage-history breadcrumb (a client-side recording of what the server
+ * already reported), and rendering `Annotate.state`.
+ */
 
-/** Diff between the two most recent log entries' `stacked_frame` — the
- * grid's "+6 last poll" (design README.md:429). `null` with fewer than two
- * entries: there is nothing to diff against yet, not a fabricated `+0`. */
-export function stackedDiff(log: TelemetryEntry[]): number | null {
-  if (log.length < 2) return null
-  const current = log[log.length - 1].tier1.stacked_frame
-  const previous = log[log.length - 2].tier1.stacked_frame
-  if (current == null || previous == null) return null
-  return current - previous
-}
-
-/** What fraction of frames captured this session were dropped, as a
- * percentage — plain arithmetic over two counts the server already
- * returned, not a judgement about *why* (see this module's own doc comment
- * in TelemetryGrid.tsx for why "rotation trailing" is not reproduced here:
- * this client has no field naming a cause, and inventing one would be
- * exactly the kind of derived assessment this project avoids). */
-export function droppedPct(stackedFrame: number | null, droppedFrame: number | null): number | null {
-  if (stackedFrame == null || droppedFrame == null) return null
-  const total = stackedFrame + droppedFrame
+/** What fraction of frames captured this session were dropped/rejected, as
+ * a percentage — plain arithmetic over two counts the server already
+ * returned. Deliberately does not reproduce the design's "rotation
+ * trailing" cause: this client has no field naming *why* frames dropped,
+ * and guessing one would be exactly the kind of derived assessment this
+ * project avoids (VerdictBanner's headline, the QA verdict banner, …). */
+export function droppedPct(kept: number | null, dropped: number | null): number | null {
+  if (kept == null || dropped == null) return null
+  const total = kept + dropped
   if (total <= 0) return null
-  return (droppedFrame / total) * 100
-}
-
-/** Delta from the first focuser reading seen this mount (the "baseline") to
- * the current one — bookkeeping, not a judgement about whether refocusing
- * is warranted. */
-export function focusDelta(current: number | null, baseline: number | null): number | null {
-  if (current == null || baseline == null) return null
-  return current - baseline
+  return (dropped / total) * 100
 }
 
 /** "3PPA → AutoGoto → Stack ✓" — every distinct stage this mount has
@@ -45,12 +35,14 @@ export function formatStageHistory(history: string[]): string {
   return shown.map((stage, i) => (i === shown.length - 1 ? `${stage} ✓` : stage)).join(' → ')
 }
 
-/** `Annotate.state`'s real type is not yet confirmed (see schemas.ts) — this
- * accepts whatever the server actually sends and renders a stable label
- * either way, rather than the UI guessing a boolean/string convention and
- * being wrong for every real payload. */
-export function formatAnnotateState(state: boolean | string | null | undefined): string {
-  if (state === null || state === undefined) return '—'
-  if (typeof state === 'boolean') return state ? 'OK' : 'FAILED'
-  return state
+/** `Annotate.state` is a string in the one confirmed fixture (`"complete"`)
+ * — other values (pending, failed) are not yet observed. Rendered verbatim
+ * rather than mapped to a fixed vocabulary this client hasn't confirmed. */
+export function formatAnnotateState(state: string | null | undefined): string {
+  return state ?? '—'
 }
+
+/** The only value this client currently treats as a confirmed "solved OK"
+ * signal, for the PLATE SOLVE cell's tone — see formatAnnotateState's own
+ * doc comment on why nothing else is asserted as a failure state. */
+export const ANNOTATE_STATE_OK = 'complete'

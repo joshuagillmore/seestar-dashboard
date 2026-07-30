@@ -12,15 +12,15 @@ import {
   fetchViewState,
 } from './client'
 import {
-  liveFocuserPosition,
-  liveGuardrails,
   livePreviewStacked,
-  liveStatus,
-  liveTargetObservability,
-  liveTier1,
-  liveViewState,
   recordedConditions,
+  recordedFocuserPosition,
+  recordedGuardrails,
+  recordedObservability,
   recordedPlan,
+  recordedStatus,
+  recordedTier1,
+  recordedViewState,
 } from '../test/fixtures'
 
 const mockFetch = (body: unknown, status = 200) =>
@@ -93,35 +93,51 @@ describe('api client', () => {
   })
 
   describe('live-session fetchers (slice 3)', () => {
-    it('parses a good get_view_state response, including the nested Stack/Annotate', async () => {
-      mockFetch(liveViewState())
+    it('parses a good get_view_state response, including the real view_state.result.View.Stack nesting', async () => {
+      mockFetch(recordedViewState())
       const viewState = await fetchViewState()
-      expect(viewState.result?.View?.Stack?.stacked_frame).toBe(428)
+      expect(viewState.view_state?.result?.View?.Stack?.stacked_frame).toBe(211)
     })
 
     it('parses get_status', async () => {
-      mockFetch(liveStatus())
+      mockFetch(recordedStatus())
       expect((await fetchStatus()).connected).toBe(true)
     })
 
-    it('parses check_night_guardrails', async () => {
-      mockFetch(liveGuardrails())
-      expect((await fetchGuardrails()).verdict).toBe('continue')
+    it('puts session_start_utc in the check_night_guardrails query string', async () => {
+      const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => recordedGuardrails() })
+      vi.stubGlobal('fetch', spy)
+      await fetchGuardrails('2026-07-30T03:00:00.000Z')
+      expect(spy).toHaveBeenCalledWith(
+        '/api/check_night_guardrails?session_start_utc=2026-07-30T03%3A00%3A00.000Z',
+      )
+    })
+
+    it('parses check_night_guardrails\' real flat shape', async () => {
+      mockFetch(recordedGuardrails())
+      expect((await fetchGuardrails('2026-07-30T03:00:00.000Z')).action).toBe('continue')
     })
 
     it('parses qa_tier1', async () => {
-      mockFetch(liveTier1())
-      expect((await fetchTier1()).stacked_frame).toBe(428)
+      mockFetch(recordedTier1())
+      expect((await fetchTier1()).snapshot.stacked).toBe(211)
     })
 
     it('parses get_focuser_position', async () => {
-      mockFetch(liveFocuserPosition())
-      expect((await fetchFocuserPosition()).position).toBe(1645)
+      mockFetch(recordedFocuserPosition())
+      expect((await fetchFocuserPosition()).focus_pos).toBe(1830)
+    })
+
+    it('puts the target id in the get_target_observability query string', async () => {
+      const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => recordedObservability() })
+      vi.stubGlobal('fetch', spy)
+      await fetchTargetObservability('M27')
+      expect(spy).toHaveBeenCalledWith('/api/get_target_observability?target=M27')
     })
 
     it('parses get_target_observability', async () => {
-      mockFetch(liveTargetObservability())
-      expect((await fetchTargetObservability()).in_sweet_band).toBe(true)
+      mockFetch(recordedObservability())
+      expect((await fetchTargetObservability('M27')).observability?.max_alt_deg).toBe(61.4)
     })
 
     it('parses live_preview', async () => {

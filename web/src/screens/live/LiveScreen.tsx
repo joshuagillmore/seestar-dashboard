@@ -107,47 +107,47 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
           </div>
         )}
 
-        {state.phase === 'active' && (
-          <div className={styles.columns}>
-            <PreviewCard
-              preview={state.preview}
-              annotate={state.viewState.result?.View?.Stack?.Annotate ?? null}
-            />
+        {state.phase === 'active' && (() => {
+          // get_view_state carries no target name at all (confirmed against
+          // the real fixture) — observability's own target.name is the
+          // richest source once it resolves; the catalogue id useLiveSession
+          // sourced from live_preview's `target` field is the bootstrap
+          // value shown before that.
+          const view = state.viewState.view_state?.result?.View ?? null
+          const targetName = state.observability?.target?.name ?? state.currentTarget
+          return (
+            <div className={styles.columns}>
+              <PreviewCard preview={state.preview} annotate={view?.Stack?.Annotate ?? null} />
 
-            <div className={styles.center}>
-              <TargetHeader
-                targetName={state.viewState.result?.View?.target_name ?? null}
-                stage={state.viewState.result?.View?.stage ?? null}
-              />
+              <div className={styles.center}>
+                <TargetHeader targetName={targetName} stage={view?.stage ?? null} />
 
-              <TelemetryGrid
-                stack={state.viewState.result?.View?.Stack ?? null}
-                log={state.log}
-                focuser={state.focuser}
-                focuserBaseline={state.focuserBaseline}
-                stage={state.viewState.result?.View?.stage ?? null}
-                stageHistory={state.stageHistory}
-              />
+                <TelemetryGrid
+                  stack={view?.Stack ?? null}
+                  tier1={state.tier1}
+                  focuser={state.focuser}
+                  stage={view?.stage ?? null}
+                  stageHistory={state.stageHistory}
+                />
 
-              {site?.profile ? (
-                <div className={styles.row}>
-                  <SweetBandGauge
-                    rotationCeilingDeg={site.profile.field_rotation_ceiling_deg}
-                    altitudeFloorDeg={site.profile.min_altitude_deg}
-                    currentAltDeg={state.observability?.current_alt_deg ?? null}
-                    currentAzDeg={state.observability?.current_az_deg ?? null}
-                    minutesToBandExit={state.observability?.minutes_to_band_exit ?? null}
-                  />
+                {site?.profile ? (
+                  <div className={styles.row}>
+                    <SweetBandGauge
+                      rotationCeilingDeg={site.profile.field_rotation_ceiling_deg}
+                      altitudeFloorDeg={site.profile.min_altitude_deg}
+                      observability={state.observability?.observability ?? null}
+                    />
+                    <GuardrailsCard guardrails={state.guardrails} />
+                  </div>
+                ) : (
                   <GuardrailsCard guardrails={state.guardrails} />
-                </div>
-              ) : (
-                <GuardrailsCard guardrails={state.guardrails} />
-              )}
+                )}
 
-              <TelemetryLogCard log={state.log} />
+                <TelemetryLogCard log={state.log} />
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
       </div>
     </AppShell>
   )

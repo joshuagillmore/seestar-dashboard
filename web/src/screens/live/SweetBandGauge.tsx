@@ -1,3 +1,4 @@
+import type { ObservabilityDetail } from '../../api/schemas'
 import { bandRegion, pctFromTop } from './bandGeometry'
 import styles from './SweetBandGauge.module.css'
 
@@ -6,40 +7,38 @@ export interface SweetBandGaugeProps {
    * fields. Required: without them there is no band to draw at all. */
   rotationCeilingDeg: number
   altitudeFloorDeg: number
-  /** Per-target live reading (get_target_observability) — absent while that
-   * fetch hasn't succeeded, which degrades to the static band alone. */
-  currentAltDeg: number | null
-  currentAzDeg: number | null
-  minutesToBandExit: number | null
+  /** `get_target_observability`'s real shape is the *nightly* aggregate for
+   * this target — peak altitude, the sweet-band window, whether the transit
+   * clears the ceiling — not an instantaneous current-alt/az reading (no
+   * such reading exists anywhere in the confirmed tool surface; an earlier
+   * version of this component plotted a live position marker before that
+   * was confirmed). `null` on fetch failure or before a target is known. */
+  observability: ObservabilityDetail | null
 }
 
 /**
- * Vertical 0°(horizon)–90°(zenith) altitude gauge (design README.md:436-446).
- * The shaded band is the sweet band itself — the alt-az mount's real usable
- * integration window, "clean integration is the sweet-band figure, not the
- * whole pass" (kept as static methodology copy, not a per-session claim —
- * see this module's own note on why the design's "descending toward the
- * floor" direction is NOT reproduced: this client has no confirmed
- * rising/setting field, and guessing the direction from two samples would be
- * exactly the kind of derived assessment this project avoids).
+ * Vertical 0°(horizon)–90°(zenith) altitude gauge (design README.md:436-446),
+ * showing the static band plus this target's own peak-altitude marker for
+ * tonight — not a moving "where it is right now" indicator, since nothing
+ * this client can reach provides one. `transits_above_ceiling` is the
+ * server's own verdict on whether the peak ever clears the sweet band,
+ * rendered verbatim rather than derived by comparing max_alt_deg to the
+ * ceiling client-side (they're both real numbers, but the server has
+ * already made the call once and repeating it here risks disagreeing with
+ * its own answer, e.g. at the exact boundary).
  */
-export function SweetBandGauge({
-  rotationCeilingDeg,
-  altitudeFloorDeg,
-  currentAltDeg,
-  currentAzDeg,
-  minutesToBandExit,
-}: SweetBandGaugeProps) {
+export function SweetBandGauge({ rotationCeilingDeg, altitudeFloorDeg, observability }: SweetBandGaugeProps) {
   const region = bandRegion(rotationCeilingDeg, altitudeFloorDeg)
-  const currentPct = currentAltDeg !== null ? pctFromTop(currentAltDeg) : null
+  const peakAlt = observability?.max_alt_deg ?? null
+  const peakPct = peakAlt !== null ? pctFromTop(peakAlt) : null
 
   return (
     <section className={styles.card}>
       <div className={styles.head}>
         <span className={styles.eyebrow}>Sweet band</span>
-        {minutesToBandExit !== null && (
-          <span className={styles.exit} data-testid="band-exit">
-            leaves band in {minutesToBandExit} min
+        {observability?.transits_above_ceiling && (
+          <span className={styles.warn} data-testid="transits-above-ceiling">
+            transits above the rotation ceiling
           </span>
         )}
       </div>
@@ -50,9 +49,9 @@ export function SweetBandGauge({
             className={styles.band}
             style={{ top: `${region.topPct}%`, height: `${region.heightPct}%` }}
           />
-          {currentPct !== null && (
-            <div className={styles.current} style={{ top: `${currentPct}%` }} data-testid="current-altitude-marker">
-              <span className={styles.currentLabel}>{currentAltDeg?.toFixed(1)}°</span>
+          {peakPct !== null && (
+            <div className={styles.peak} style={{ top: `${peakPct}%` }} data-testid="peak-altitude-marker">
+              <span className={styles.peakLabel}>{peakAlt?.toFixed(1)}°</span>
             </div>
           )}
         </div>
@@ -61,14 +60,18 @@ export function SweetBandGauge({
           <span className={styles.legendDim}>90° zenith</span>
           <span className={styles.legendAccent}>{rotationCeilingDeg}° rotation ceiling</span>
           <span className={styles.legendCurrent}>
-            {currentAltDeg !== null && currentAzDeg !== null
-              ? `current ${currentAltDeg.toFixed(1)}° · az ${currentAzDeg.toFixed(1)}°`
-              : 'current altitude unavailable'}
+            {peakAlt !== null ? `peak ${peakAlt.toFixed(1)}° tonight` : 'peak altitude unavailable'}
           </span>
           <span className={styles.legendAccent}>{altitudeFloorDeg}° altitude floor</span>
           <span className={styles.legendDim}>0° horizon</span>
         </div>
       </div>
+
+      {observability?.dark_minutes_in_sweet_band != null && (
+        <div className={styles.stat} data-testid="sweet-band-minutes">
+          {Math.round(observability.dark_minutes_in_sweet_band)} min of clean sweet-band time tonight
+        </div>
+      )}
 
       <div className={styles.footer}>Clean integration is the sweet-band figure, not the whole pass.</div>
     </section>
