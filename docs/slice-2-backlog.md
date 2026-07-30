@@ -113,3 +113,36 @@ with file:line references into the SeeStar-AI repo. Eight of the nine are values
 server already computes and simply does not return. Item 1 blocks the Review
 screen (slice 4) outright; items 2–5 and 9 degrade the Tonight screen, which
 renders an explicit absent state for each.
+
+## Ruling: timeline scrollbar registration (2026-07-30)
+
+The sweet-band timeline scrolls its lane list while the twilight strip, bracket
+labels and hour axis stay fixed above and below. Those four elements must share
+one horizontal coordinate frame or the bracket stops lining up with the bands —
+a bug that shipped once already, at 46px and 56px of drift, and was caught only
+by measuring in a real browser.
+
+The scroll container reserves a gutter via `scrollbar-gutter: stable`, and the
+fixed elements compensate with a `99px` right inset (90px lane budget + the 9px
+declared scrollbar treatment).
+
+**Measured, in Chrome:** left edges match exactly at 344.98px. Right edges differ
+by **2.11px**, because Chrome reserves 11px of layout gutter for
+`scrollbar-width: thin` while rendering a 9px thumb.
+
+**Ruling: accept the 2.11px. Do not retune the 99px.**
+
+Tuning it to 101px would encode Chrome's particular interpretation of `thin`,
+reintroducing the browser-specific fragility that adding the standard
+`scrollbar-width` property to `tokens.css` had just removed — before that, the
+restyle was `::-webkit-scrollbar` only, so Firefox reserved its native ~16px and
+the compensation was wrong there by far more than 2px.
+
+The compensation should track the *declared* treatment, not one engine's
+rounding. 2.11px on a ~900px chart is 0.2% and invisible; the failure this
+guards against was 20× larger.
+
+Revisit only if a real misalignment becomes visible, or if the fixed elements can
+be restructured to share the scroll container's content box directly — which
+would remove the magic number rather than retune it, and is the better fix if
+this area is ever reworked.
