@@ -7,6 +7,7 @@ import { TopBar } from '../../shell/TopBar'
 import { AppShell } from '../../shell/AppShell'
 import type { View } from '../../shell/view'
 import { PlanCard } from './PlanCard'
+import { shortlistOrderLabel } from './shortlist'
 import { SweetBandTimeline } from './SweetBandTimeline'
 import { VerdictBanner } from './VerdictBanner'
 import styles from './TonightScreen.module.css'
@@ -76,6 +77,7 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
           site={site}
           verdict={verdict}
           gpsWarning={data?.conditions.location.warning ?? null}
+          gpsMatched={data?.conditions.location.matched ?? null}
           view={view}
           onNavigate={onNavigate}
           // Tonight now fetches projects_combined too (for the ranked cards'
@@ -121,18 +123,26 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
                   conditions={data.conditions}
                   targets={data.plan.targets}
                 />
-                {/* plan_targets ranks on observability alone (astropy geometry,
-                    altitude, moon separation) — a different question from the
-                    sky judgment in assess_conditions — so the server genuinely
-                    returns a ranked shortlist even on a no-go night. Showing it
-                    is honest; this caption is what keeps it from reading as an
-                    invitation to act, which the disabled hand-off buttons
-                    already guard against structurally. */}
-                {verdict === 'NO-GO' && (
-                  <div className={styles.rankedCaption}>
-                    Ranked for reference — tonight is a no-go.
-                  </div>
-                )}
+                <div className={styles.shortlistHeader}>
+                  <span className={styles.eyebrow}>plan_targets · ranked shortlist</span>
+                  {/* plan_targets ranks on observability alone (astropy geometry,
+                      altitude, moon separation) — a different question from the
+                      sky judgment in assess_conditions — so the server genuinely
+                      returns a ranked shortlist even on a no-go night. Showing it
+                      is honest; this caption is what keeps it from reading as an
+                      invitation to act, which the disabled hand-off buttons
+                      already guard against structurally. It occupies the same
+                      slot the order line would otherwise take rather than
+                      stacking underneath it — a plan with a stated slew order
+                      still reads as a plan, which a no-go night is not. */}
+                  {verdict === 'NO-GO' ? (
+                    <span className={styles.rankedCaption}>
+                      Ranked for reference — tonight is a no-go.
+                    </span>
+                  ) : (
+                    <span className={styles.order}>{shortlistOrderLabel(data.plan.targets)}</span>
+                  )}
+                </div>
                 <div className={styles.grid}>
                   {data.plan.targets.map((target) => {
                     const entry = progressById.get(target.id)

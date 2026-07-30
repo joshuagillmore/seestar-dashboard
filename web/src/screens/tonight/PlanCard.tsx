@@ -1,6 +1,7 @@
 import { formatHours, goalLabel, goalProgressPct } from '../../api/integrationGoal'
 import type { IntegrationGoal, PlanTarget } from '../../api/schemas'
 import { TargetThumb } from '../../ui/TargetThumb'
+import { targetTypeLabel } from './targetType'
 import { localHhMm, parse } from './timeline'
 import styles from './PlanCard.module.css'
 
@@ -58,7 +59,11 @@ export function PlanCard({
           </div>
           <div className={styles.name}>{target.name}</div>
           <div className={styles.chips}>
-            <span className={styles.chip}>{target.type}</span>
+            {/* A coarse family label (nebula/galaxy/cluster/…), not the raw
+                snake_case TARGET_TYPES enum — see targetType.ts for why this
+                mapping lives client-side and where the 8 source values come
+                from. */}
+            <span className={styles.chip}>{targetTypeLabel(target.type)}</span>
           </div>
         </div>
       </div>

@@ -1,8 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectsScreen } from './ProjectsScreen'
 import { ListProjectsSchema, ProjectsCombinedSchema, SiteProfileSchema, type Health } from '../../api/schemas'
-import { recordedListProjects, recordedProjectsCombined, recordedSite } from '../../test/fixtures'
+import {
+  recordedListProjects,
+  recordedProjectsCombined,
+  recordedRecommendProjects,
+  recordedSite,
+} from '../../test/fixtures'
 
 const combined = ProjectsCombinedSchema.parse(recordedProjectsCombined())
 const listed = ListProjectsSchema.parse(recordedListProjects())
@@ -18,6 +23,8 @@ function stubApi(overrides: Record<string, unknown> = {}) {
   const bodies: Record<string, unknown> = {
     '/api/projects_combined': recordedProjectsCombined(),
     '/api/list_projects': recordedListProjects(),
+    // fetchRecommendProjects(1) always requests limit=1 — see client.ts.
+    '/api/recommend_projects?limit=1': recordedRecommendProjects(),
     ...overrides,
   }
   vi.stubGlobal(
@@ -32,6 +39,11 @@ async function renderLoaded(view: 'projects' = 'projects', onNavigate = vi.fn())
   return onNavigate
 }
 
+// selection.ts persists the selected card in localStorage (see item 5 of
+// docs/design-review-2026-07-30.md) — real localStorage, not a mock, so it
+// must be cleared between tests to avoid one test's click leaking into the
+// next test's "default selection" assumption.
+beforeEach(() => localStorage.clear())
 afterEach(() => vi.unstubAllGlobals())
 
 describe('ProjectsScreen', () => {
@@ -64,7 +76,7 @@ describe('ProjectsScreen', () => {
     // its first entry is the honest default selection.
     const top = combined.projects[0]
     expect(top.target_id).toBe('IC405')
-    expect(screen.getByText(`${top.target_id} · SESSION HISTORY — list_projects`)).toBeInTheDocument()
+    expect(screen.getByText(`${top.target_id} · SESSION HISTORY — log_session_result`)).toBeInTheDocument()
     expect(screen.getByText(/appears only in the archive scan/)).toBeInTheDocument()
   })
 
@@ -77,7 +89,7 @@ describe('ProjectsScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /M31/ }))
 
-    expect(screen.getByText('M31 · SESSION HISTORY — list_projects')).toBeInTheDocument()
+    expect(screen.getByText('M31 · SESSION HISTORY — log_session_result')).toBeInTheDocument()
     expect(screen.queryByText(/appears only in the archive scan/)).not.toBeInTheDocument()
     // The real M31 record has 3 sessions in the store — 1 header row + 3 data rows.
     expect(screen.getAllByRole('row')).toHaveLength(1 + m31Sessions.length)
@@ -109,26 +121,110 @@ describe('ProjectsScreen', () => {
   it('gives the real fixture its expected mix of goal states, not a single uniform one', async () => {
     stubApi()
     await renderLoaded()
-    // 12 of the 15 store-backed projects are short of their suggested goal
-    // (see projects.test.ts's exact-distribution test for the full split).
-    expect(screen.getAllByText('needs data')).toHaveLength(12)
-    expect(screen.getAllByText('complete').length).toBeGreaterThanOrEqual(1)
+    // Across all 33 merged projects, completion is driven by the goal math
+    // alone now — archive-only targets are no longer excluded from these
+    // counts by a separate provenance tag (see projects.test.ts's
+    // exact-distribution test for the full split, and item 3 of
+    // docs/design-review-2026-07-30.md for why the counts changed from the
+    // old store-backed-only 12/2/1).
+    expect(screen.getAllByText('needs data')).toHaveLength(22)
+    expect(screen.getAllByText('complete')).toHaveLength(3)
     // IC 405 — archive-only, and its photometry is flagged unreliable rather
     // than blank (see CLAUDE.md's honesty requirements for this exact case).
     expect(screen.getByText('photometry not credible')).toBeInTheDocument()
   })
 
-  it('shows an honest note that goals are catalogue-suggested, not user-set, instead of a recommend_projects shortfall line', async () => {
+  it('restores the recommend_projects header line with the tool\'s own top pick, alongside (not instead of) the provenance note', async () => {
     stubApi()
     await renderLoaded()
-    expect(screen.getByText(/catalogue-suggested, not user-set/)).toBeInTheDocument()
+    // Real fixture: recommend_projects's first entry is M101 / Pinwheel Galaxy.
+    expect(screen.getByText('recommend_projects: Pinwheel Galaxy first')).toBeInTheDocument()
+    // No fabricated shortfall figure — see RECOMMEND_TITLE's own honesty
+    // caveat (recommend_projects has no shortfall figure to source one from).
     expect(screen.queryByText(/short of goal/)).not.toBeInTheDocument()
+    // The provenance note is kept, not dropped, just moved to a quieter spot.
+    expect(screen.getByText(/catalogue-suggested, not user-set/)).toBeInTheDocument()
+  })
+
+  it('shows an honest absent state, not a blank gap, when recommend_projects names nothing', async () => {
+    stubApi({ '/api/recommend_projects?limit=1': { ok: true, projects: [], count: 0 } })
+    await renderLoaded()
+    expect(screen.getByText('recommend_projects: no recommendation available')).toBeInTheDocument()
+  })
+
+  it('degrades to the same honest absent state, without blocking the rest of the screen, when recommend_projects itself fails', async () => {
+    const bodies: Record<string, unknown> = {
+      '/api/projects_combined': recordedProjectsCombined(),
+      '/api/list_projects': recordedListProjects(),
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === '/api/recommend_projects?limit=1') throw new Error('ECONNREFUSED')
+        return { ok: true, status: 200, json: async () => bodies[url] }
+      }),
+    )
+    await renderLoaded()
+    expect(screen.getByText('recommend_projects: no recommendation available')).toBeInTheDocument()
+    // The rest of the screen is unaffected — this fetch is a bonus, not
+    // load-bearing data (see ProjectsScreen.tsx's own comment on the Promise.all).
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(`${combined.count} projects · ${totalHoursText} collected`, { exact: false }),
+    ).toBeInTheDocument()
   })
 
   it('passes the real total hours to the sidebar as the Projects nav headline', async () => {
     stubApi()
     await renderLoaded()
     expect(screen.getByRole('button', { name: /Projects/ })).toHaveTextContent(totalHoursText)
+  })
+
+  it('threads the real needsDataCount through to the Projects nav dot instead of leaving it idle', async () => {
+    stubApi()
+    await renderLoaded()
+    // Nav rows in order: Tonight, Live, Review, Projects — dots[3] is Projects.
+    // The real fixture has 22 projects needing data (see the goal-states test
+    // above), so this must read 'marginal', not 'idle'.
+    const dots = screen.getAllByTestId('dot')
+    expect(dots[3]).toHaveAttribute('data-dot', 'marginal')
+  })
+
+  it('persists the selected project across a remount, instead of resetting to the highest-hours default', async () => {
+    stubApi()
+    const { unmount } = render(
+      <ProjectsScreen view="projects" onNavigate={vi.fn()} site={site} health={notReplaying} />,
+    )
+    await waitFor(() => expect(screen.queryByTestId('projects-loading')).not.toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /M31/ }))
+    expect(screen.getByText('M31 · SESSION HISTORY — log_session_result')).toBeInTheDocument()
+
+    // Simulates App.tsx unmounting this screen on a navigation away and back
+    // (view.ts / App.tsx render either TonightScreen or ProjectsScreen, never
+    // both — see selection.ts's doc comment).
+    unmount()
+    render(<ProjectsScreen view="projects" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.queryByTestId('projects-loading')).not.toBeInTheDocument())
+
+    // M31 is selected again by default — not IC405 (the highest-hours card).
+    expect(screen.getByText('M31 · SESSION HISTORY — log_session_result')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /M31/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('falls back to the default selection, rather than selecting nothing, when the persisted id no longer exists in the fetched data', async () => {
+    localStorage.setItem('seestar-dashboard:selected-project:v1', JSON.stringify('NO-SUCH-TARGET'))
+    stubApi()
+    await renderLoaded()
+    // Falls back to IC405, the highest-hours default — not a blank selection.
+    expect(screen.getByText('IC405 · SESSION HISTORY — log_session_result')).toBeInTheDocument()
+  })
+
+  it('degrades to the default selection, without crashing, when the persisted value is corrupt junk', async () => {
+    localStorage.setItem('seestar-dashboard:selected-project:v1', '{not valid json')
+    stubApi()
+    await renderLoaded()
+    expect(screen.getByText('IC405 · SESSION HISTORY — log_session_result')).toBeInTheDocument()
   })
 
   it('marks Projects as the active nav item and forwards clicks on other items', async () => {

@@ -12,6 +12,7 @@ export const recordedSite = () => loadFixture('get_site_profile')
 export const goConditions = () => loadFixture('synthetic/assess_conditions.go')
 export const unknownConditions = () => loadFixture('synthetic/assess_conditions.unknown')
 export const recordedListProjects = () => loadFixture('list_projects')
+export const recordedRecommendProjects = () => loadFixture('recommend_projects')
 /** Not an MCP tool fixture recorded by record.py — projects_combined is a
  * sidecar-computed route (list_projects + a real archive scan), so this was
  * generated once by running that same computation directly against the

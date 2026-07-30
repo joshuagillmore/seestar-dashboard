@@ -1,11 +1,13 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TonightScreen } from './TonightScreen'
+import { shortlistOrderLabel } from './shortlist'
 import { ConditionsSchema, PlanTargetsSchema, SiteProfileSchema, type Health } from '../../api/schemas'
 import { goConditions, recordedConditions, recordedPlan, recordedProjectsCombined, recordedSite } from '../../test/fixtures'
 
 /** One card per ranked target — read from the fixture, not hardcoded. */
-const planTargetCount = PlanTargetsSchema.parse(recordedPlan()).targets.length
+const plan = PlanTargetsSchema.parse(recordedPlan())
+const planTargetCount = plan.targets.length
 const recorded = ConditionsSchema.parse(recordedConditions())
 
 // site/health are shell-level data owned by App.tsx's useShellData() and
@@ -81,6 +83,37 @@ describe('TonightScreen', () => {
     expect(screen.queryByText(/ranked for reference/i)).not.toBeInTheDocument()
   })
 
+  it('shows the ranked-shortlist eyebrow regardless of verdict', async () => {
+    stubApi()
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    expect(screen.getByText('plan_targets · ranked shortlist')).toBeInTheDocument()
+  })
+
+  it('shows the real order line — target order and slew count — on a GO night, in place of the no-go caption', async () => {
+    stubApi({ '/api/assess_conditions': goConditions() })
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByText('GO', { selector: 'div' })).toBeInTheDocument())
+    // Asserts the actual computed label (order + slew count), not merely that
+    // some "Order:" text exists — a test that only checked the prefix would
+    // pass even if the slew count were wrong.
+    expect(screen.getByText(shortlistOrderLabel(plan.targets))).toBeInTheDocument()
+    expect(screen.queryByText(/ranked for reference/i)).not.toBeInTheDocument()
+  })
+
+  it('replaces the order line with the no-go caption on the recorded NO-GO night — the two never both show', async () => {
+    stubApi()
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    expect(screen.getByText(/ranked for reference/i)).toBeInTheDocument()
+    expect(screen.queryByText(shortlistOrderLabel(plan.targets))).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Order:/)).not.toBeInTheDocument()
+  })
+
   // The three tests below guard the screen's OWN wiring — the individually
   // well-tested Sidebar/TopBar can each be correct in isolation while
   // TonightScreen still passes them a hardcoded or wrong prop. A prior review
@@ -125,7 +158,13 @@ describe('TonightScreen', () => {
     expect(screen.queryByText(/fixtures — not live/i)).not.toBeInTheDocument()
   })
 
-  it('threads the GPS warning from assess_conditions to the sidebar, exactly once', async () => {
+  it('threads the GPS warning from assess_conditions to both the sidebar and the banner', async () => {
+    // This briefly asserted exactly twice: the design puts the GPS row in
+    // the banner (README.md:265-280), and Sidebar kept its own copy for an
+    // interim period as an acknowledged double-render, not a regression
+    // (see VerdictBanner.tsx's doc comment). Sidebar's copy has since been
+    // removed (shell/), collapsing this back to the single render the design
+    // always specified.
     stubApi()
     render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() =>
@@ -134,6 +173,34 @@ describe('TonightScreen', () => {
     const warning = recorded.location.warning
     if (!warning) throw new Error('recorded fixture must carry a GPS warning for this test to mean anything')
     expect(screen.getAllByText(warning)).toHaveLength(1)
+  })
+
+  it('threads location.matched to the sidebar, not just the warning string', async () => {
+    // Regression test for a dead wire. Sidebar grew a `gpsMatched` prop to
+    // tell apart the server's three location states — matched / unverified /
+    // mismatch, the last of which means the horizon mask is NOT applied — but
+    // TonightScreen was never updated to pass it, so the prop sat on its
+    // `null` default and the row read "GPS unverified" whatever the server
+    // said. The whole suite stayed green: Sidebar's own tests supplied the
+    // prop directly, and every recorded fixture happens to carry
+    // `matched: null`, which is also the default the broken wire fell back to.
+    //
+    // So this test has to use a fixture where matched is NOT null — otherwise
+    // it passes with the wire cut, which is exactly how the gap survived.
+    const matched = ConditionsSchema.parse({
+      ...recorded,
+      location: { ...recorded.location, matched: true, warning: null },
+    })
+    stubApi({ '/api/assess_conditions': matched })
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    // Match the sidebar's combined row specifically — the banner legitimately
+    // says "GPS matched" too in this state, so a bare /GPS matched/ would pass
+    // on the banner alone and prove nothing about the sidebar's wiring.
+    expect(screen.getByText(/GPS matched · mask/)).toBeInTheDocument()
+    expect(screen.queryByText(/GPS unverified · mask/)).not.toBeInTheDocument()
   })
 
   it('shows a time-captured progress row on ranked cards that match a real projects_combined target', async () => {

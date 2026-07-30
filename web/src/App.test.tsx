@@ -6,6 +6,7 @@ import {
   recordedListProjects,
   recordedPlan,
   recordedProjectsCombined,
+  recordedRecommendProjects,
   recordedSite,
 } from './test/fixtures'
 
@@ -17,6 +18,7 @@ function stubApi() {
     '/api/health': { ok: true, replay: false },
     '/api/projects_combined': recordedProjectsCombined(),
     '/api/list_projects': recordedListProjects(),
+    '/api/recommend_projects?limit=1': recordedRecommendProjects(),
   }
   const fetchMock = vi.fn(async (url: string) => ({ ok: true, status: 200, json: async () => bodies[url] }))
   vi.stubGlobal('fetch', fetchMock)

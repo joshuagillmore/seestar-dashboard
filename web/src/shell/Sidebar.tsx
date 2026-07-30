@@ -24,11 +24,43 @@ export interface SidebarProps {
   site: SiteProfile | null
   verdict: Verdict | null
   /**
-   * `location.warning` from assess_conditions, or null when the site is
-   * confirmed. It does NOT live on SiteProfile — `location` is returned
-   * alongside the conditions payload — so TonightScreen threads it in.
+   * `location.warning` from assess_conditions. **No longer read by Sidebar**
+   * — see `gpsMatched` below, which replaced it as the row's actual source
+   * of truth. Kept in the type only so callers outside `web/src/shell/`
+   * (TonightScreen passes it; ProjectsScreen passes `null`) don't need an
+   * edit for this. Superseded, not merely unused: the row used to derive its
+   * two states from "is there a warning at all", which conflated two
+   * genuinely different server states (see `gpsMatched`) — carrying only
+   * this string could never have told them apart without parsing its prose,
+   * which is exactly what `gpsMatched` avoids needing.
    */
   gpsWarning: string | null
+  /**
+   * `location.matched` from assess_conditions — `true` (GPS confirmed within
+   * tolerance), `false` (GPS confirmed elsewhere: a real mismatch, and the
+   * server explicitly does **not** apply the horizon mask in this state), or
+   * `null` (GPS unknown/never checked — the server assumes the saved site
+   * and *does* still apply the mask). Verified at the source
+   * (`SeeStar-AI/src/seestar_mcp/server.py`'s `_location_block`): its
+   * `mask_applied` field is `false` if and only if `matched` is `false` — so
+   * this one field is a complete, non-inferred, non-prose-parsed source for
+   * both halves of the row (design README.md:249-250: `GPS matched · mask ON
+   * (3 arcs)`), and the three states render as three distinct labels rather
+   * than collapsing "never checked" and "confirmed elsewhere" into one
+   * generic word:
+   *
+   *   | `matched` | Row |
+   *   |---|---|
+   *   | `true`  | `GPS matched · mask on (N arcs)` / `mask off` |
+   *   | `null`  | `GPS unverified · mask on (N arcs)` / `mask off` |
+   *   | `false` | `GPS mismatch · mask not applied` |
+   *
+   * `undefined` (every caller until TonightScreen.tsx threads the real
+   * value — see this file's own hand-off note) degrades to the same
+   * treatment as `null`: an honest "never checked" default, not a guess,
+   * and exactly today's only observed real state.
+   */
+  gpsMatched?: boolean | null
   /** Which screen is currently mounted — drives the active highlight. Owned
    * by App.tsx; Sidebar stays presentational. */
   view: View
@@ -39,19 +71,40 @@ export interface SidebarProps {
    * this figure (there is no shared data layer across screens yet), so every
    * other screen's Sidebar instance passes null rather than a stale or
    * fabricated number.
+   *
+   * Kept as hours rather than switched to a "N need data" count (the
+   * design's own sample meta, README.md:241): the header above the grid
+   * already spells out the need-data count in full, so repeating it in the
+   * nav row would show the same number twice while dropping the one figure
+   * (total hours) that's only visible here.
    */
   projectsHeadline?: string | null
+  /**
+   * How many merged projects currently read `needs-data` (see
+   * screens/projects/projects.ts's projectStatus) — drives the Projects nav
+   * row's dot tone, the same way `verdict` drives Tonight's (see the design's
+   * "the dot encodes each screen's health … both must be live",
+   * README.md:243-244). `null` — the default, and what every screen other
+   * than the mounted ProjectsScreen passes — renders `idle` rather than a
+   * fabricated health signal.
+   */
+  projectsNeedsData?: number | null
 }
 
 export function Sidebar({
   site,
   verdict,
-  gpsWarning,
+  gpsMatched = null,
   view,
   onNavigate,
   projectsHeadline = null,
+  projectsNeedsData = null,
 }: SidebarProps) {
   const profile = site?.profile
+  // `undefined` (not yet threaded by a caller) collapses to `null` — see
+  // gpsMatched's own doc comment.
+  const matched = gpsMatched ?? null
+  const gpsLabel = matched === true ? 'GPS matched' : matched === false ? 'GPS mismatch' : 'GPS unverified'
 
   return (
     <nav className={styles.rail}>
@@ -61,7 +114,15 @@ export function Sidebar({
         const disabled = item.disabledLabel !== undefined
         const active = view === item.view
         const tone: DotTone =
-          item.view === 'tonight' ? (verdict ? verdictTone(verdict) : 'idle') : 'idle'
+          item.view === 'tonight'
+            ? verdict
+              ? verdictTone(verdict)
+              : 'idle'
+            : item.view === 'projects' && projectsNeedsData !== null
+              ? projectsNeedsData > 0
+                ? 'marginal'
+                : 'pass'
+              : 'idle'
         const meta = disabled
           ? item.disabledLabel
           : item.view === 'tonight'
@@ -100,18 +161,23 @@ export function Sidebar({
             Bortle {profile.bortle ?? '—'} · floor {profile.min_altitude_deg}° · ceiling{' '}
             {profile.field_rotation_ceiling_deg}°
           </div>
-          <div className={styles.siteMeta}>
-            mask {profile.horizon_mask.length > 0
-              ? `on (${profile.horizon_mask.length} arcs)`
-              : 'off'}
-          </div>
-          {/* The design shows a confident `GPS matched` row here. This
-              installation has never matched — location.matched is null and the
-              server sends a warning — so the row carries that warning verbatim
-              in the marginal tone instead of asserting a match nobody made. */}
-          <div className={gpsWarning ? styles.warnRow : styles.okRow}>
-            <Dot tone={gpsWarning ? 'marginal' : 'pass'} size="sm" />
-            <span>{gpsWarning ?? 'GPS matched'}</span>
+          {/* Short form, one row: GPS state and mask state together, per
+              README.md:249-250. Three distinct states, not a binary — see
+              SidebarProps.gpsMatched's doc comment for the mapping and its
+              source verification. Never the full warning sentence, which
+              stays VerdictBanner's job alone. */}
+          <div className={matched === true ? styles.okRow : styles.warnRow}>
+            <Dot tone={matched === true ? 'pass' : 'marginal'} size="sm" />
+            <span>
+              {gpsLabel} ·{' '}
+              {matched === false
+                ? 'mask not applied'
+                : `mask ${
+                    profile.horizon_mask.length > 0
+                      ? `on (${profile.horizon_mask.length} arcs)`
+                      : 'off'
+                  }`}
+            </span>
           </div>
         </div>
       )}

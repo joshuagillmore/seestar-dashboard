@@ -58,7 +58,7 @@ export function mergeProjects(
   }))
 }
 
-export type ProjectTag = 'archive-only' | 'no-goal' | 'beyond-reach' | 'needs-data' | 'complete'
+export type ProjectTag = 'no-goal' | 'beyond-reach' | 'needs-data' | 'complete'
 
 export interface StatusInfo {
   tag: ProjectTag
@@ -66,12 +66,18 @@ export interface StatusInfo {
 }
 
 /**
- * `archive-only` takes priority over the goal-derived tags: it answers a
- * different question ("is there a list_projects/session-history record for
- * this target at all?"), independent of whether the catalogue has a
- * suggested goal for it — an archive-only target can and often does still
- * have a real goal (see MergedProject.goal's doc comment), shown in the
- * hours row and progress bar regardless of this tag.
+ * Completion (`complete` vs `needs-data`) is driven purely by the goal math —
+ * `describeGoal`/`goalProgressPct` — regardless of whether the target has a
+ * `list_projects` record at all. This used to short-circuit to a distinct
+ * `archive-only` tag whenever `project.store` was null, which meant a target
+ * like the real M42 (archive-only, ~279% of its own suggested goal) rendered
+ * `archive only` instead of `complete`, with only the progress-bar color
+ * carrying completion — provenance and completion are different axes and
+ * shouldn't compete for one chip (see the design-fidelity review's item A6/
+ * B6). Archive-only-ness is not lost by dropping it from here: it's still
+ * fully identifiable via the card's meta line, since `summarizeSessions`
+ * already renders "archive only — no per-session detail" precisely when
+ * `project.store` is null, independent of this tag.
  *
  * `no-goal` covers both "not in the DSO catalogue at all" and "resolved but
  * no catalogued magnitude / photometry not credible" — three different
@@ -80,7 +86,6 @@ export interface StatusInfo {
  * there's room for a real sentence instead of a 9px tag.
  */
 export function projectStatus(project: MergedProject, doubled: boolean): StatusInfo {
-  if (!project.store) return { tag: 'archive-only', label: 'archive only' }
   const display = describeGoal(project.goal)
   if (display.kind === 'beyond-reach') return { tag: 'beyond-reach', label: 'beyond reach' }
   if (display.kind !== 'goal') return { tag: 'no-goal', label: 'no goal' }

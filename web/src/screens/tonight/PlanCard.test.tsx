@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { PlanCard, type PlanCardProgress } from './PlanCard'
+import { targetTypeLabel } from './targetType'
 import { PlanTargetsSchema, type IntegrationGoal } from '../../api/schemas'
 import { recordedPlan } from '../../test/fixtures'
 
@@ -37,7 +40,24 @@ describe('PlanCard', () => {
     expect(container.querySelector('img')).toBeNull()
     expect(screen.getByTestId('thumb-empty')).toBeInTheDocument()
     expect(screen.queryByText(/^LP /)).not.toBeInTheDocument()
-    expect(screen.getByText(target.type)).toBeInTheDocument()
+    expect(screen.getByText(targetTypeLabel(target.type))).toBeInTheDocument()
+  })
+
+  describe('the type chip', () => {
+    it('shows the coarse family label, not the raw snake_case TARGET_TYPES value', () => {
+      // The recorded fixture's first target is a planetary_nebula — asserting
+      // against the raw fixture value keeps this honest if the fixture is
+      // ever re-recorded with a different target in slot 0.
+      expect(target.type).toBe('planetary_nebula')
+      render(<PlanCard target={target} />)
+      expect(screen.getByText('nebula')).toBeInTheDocument()
+      expect(screen.queryByText('planetary_nebula')).not.toBeInTheDocument()
+    })
+
+    it('falls through an unrecognised type to a legible label rather than blank', () => {
+      render(<PlanCard target={{ ...target, type: 'dark_nebula' }} />)
+      expect(screen.getByText('dark nebula')).toBeInTheDocument()
+    })
   })
 
   it('renders the own capture with no survey marker when the target carries an own image', () => {
@@ -99,5 +119,22 @@ describe('PlanCard', () => {
     const progress: PlanCardProgress = { totalMinutes: 90, goal: goal({ suggested_hours: 3.0 }) }
     render(<PlanCard target={target} progress={progress} />)
     expect(screen.queryByRole('button', { name: /Double/ })).not.toBeInTheDocument()
+  })
+
+  describe('action hover states', () => {
+    // jsdom does not evaluate :hover, so this reads the actual CSS Module
+    // source (the same technique test/tokens.test.ts already uses to check
+    // for hex literals) and asserts the real declared rule and token, not
+    // just that the word "hover" appears somewhere in the file.
+    const css = readFileSync(join(__dirname, 'PlanCard.module.css'), 'utf8')
+
+    it('hovers the primary (Hand to run-session) action to accent/hover, only while enabled', () => {
+      expect(css).toMatch(/\.primary:hover:not\(:disabled\)\s*\{[^}]*background:\s*var\(--accent-hover\)/)
+    })
+
+    it('brightens the secondary (Detail) action border and text on hover', () => {
+      expect(css).toMatch(/\.secondary:hover\s*\{[^}]*border-color:\s*var\(--border-control-hover\)/)
+      expect(css).toMatch(/\.secondary:hover\s*\{[^}]*color:\s*var\(--text-primary\)/)
+    })
   })
 })

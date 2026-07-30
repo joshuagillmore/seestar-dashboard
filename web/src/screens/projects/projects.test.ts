@@ -141,8 +141,17 @@ describe('mergeProjects', () => {
 })
 
 describe('projectStatus', () => {
-  it('tags an archive-only target (no store record) as archive-only, regardless of its goal', () => {
-    expect(projectStatus(merged({ store: null, goal: goal() }), false).tag).toBe('archive-only')
+  it('gives an archive-only target (no store record) the same completion tag a store-backed target would get for the same goal — no separate archive-only tag', () => {
+    // Short of its goal: 'needs-data', same as any store-backed target.
+    expect(projectStatus(merged({ store: null, goal: goal({ suggested_hours: 100 }) }), false).tag).toBe(
+      'needs-data',
+    )
+    // Cleared its goal (the real M42 shape: archive-only, ~279% of goal):
+    // 'complete', not a provenance tag — completion always wins the slot.
+    expect(
+      projectStatus(merged({ store: null, totalMinutes: 90, goal: goal({ suggested_hours: 1.0 }) }), false)
+        .tag,
+    ).toBe('complete')
   })
 
   it('tags a store project with no catalogue record as no-goal', () => {
@@ -192,6 +201,31 @@ describe('projectStatus', () => {
       counts[tag] = (counts[tag] ?? 0) + 1
     }
     expect(counts).toEqual({ 'needs-data': 12, 'no-goal': 2, complete: 1 })
+  })
+
+  it('matches the real fixture distribution across all 33 merged projects, archive-only included — the point of this fix', () => {
+    // Independently computed against fixtures/projects_combined.json: two
+    // archive-only targets (M42 ~279%, M81 ~152%) clear their own suggested
+    // goal and must count as 'complete' here too, not fall out of the count
+    // entirely under a provenance tag.
+    const combined = ProjectsCombinedSchema.parse(recordedProjectsCombined()).projects
+    const listed = ListProjectsSchema.parse(recordedListProjects()).projects
+    const all = mergeProjects(combined, listed)
+    expect(all).toHaveLength(33)
+    const counts: Record<string, number> = {}
+    for (const p of all) {
+      const tag = projectStatus(p, false).tag
+      counts[tag] = (counts[tag] ?? 0) + 1
+    }
+    expect(counts).toEqual({ 'needs-data': 22, 'no-goal': 8, complete: 3 })
+  })
+
+  it('the real M42 (archive-only, ~279% of its suggested goal) reads complete, not archive-only', () => {
+    const combined = ProjectsCombinedSchema.parse(recordedProjectsCombined()).projects
+    const listed = ListProjectsSchema.parse(recordedListProjects()).projects
+    const m42 = mergeProjects(combined, listed).find((p) => p.targetId === 'M42')
+    expect(m42?.store).toBeNull() // archive-only, confirming this exercises the real case
+    expect(projectStatus(m42 as MergedProject, false).tag).toBe('complete')
   })
 })
 

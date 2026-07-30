@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
-import { fetchProjects, fetchProjectsCombined } from '../../api/client'
-import type { Health, ListProjects, ProjectsCombined, SiteProfile } from '../../api/schemas'
+import { fetchProjects, fetchProjectsCombined, fetchRecommendProjects } from '../../api/client'
+import type {
+  Health,
+  ListProjects,
+  ProjectsCombined,
+  RecommendProjects,
+  SiteProfile,
+} from '../../api/schemas'
 import { AppShell } from '../../shell/AppShell'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
@@ -8,12 +14,37 @@ import type { View } from '../../shell/view'
 import { ProjectCard } from './ProjectCard'
 import { SessionHistory } from './SessionHistory'
 import { formatHours, mergeProjects, projectStatus } from './projects'
+import { readSelectedProjectId, writeSelectedProjectId } from './selection'
 import styles from './ProjectsScreen.module.css'
 
 interface Data {
   combined: ProjectsCombined
   listed: ListProjects
+  /** `null` covers both "the fetch failed" and "the tool answered but named
+   * nothing" — neither is worth a separate loading/error state of its own
+   * for what's a best-effort header line; see fetchRecommendProjects's own
+   * `.catch(() => null)` below. */
+  recommended: RecommendProjects | null
 }
+
+/**
+ * `recommend_projects` is allowlisted and live (routes.py:171) but, verified
+ * against the recorded fixture, currently returns `list_projects`'s own
+ * stored order truncated to `limit` — byte-identical, not reordered — because
+ * every real project has `goal_minutes: 0` (see ProjectsScreen's own comment
+ * below and the phase-2 spec). There is no shortfall figure anywhere in the
+ * payload, so the design's "N h short of goal" clause (README.md:649) has no
+ * honest source yet: computing one from this screen's own suggested-goal
+ * model (projects_combined's `goal` field) would attribute a number to a pick
+ * that wasn't actually made using it — two independent computations that
+ * happen to share a target. Restoring `set_project_goal` (a write tool,
+ * permanently outside the allowlist) is what would make this a scored
+ * recommendation.
+ */
+const RECOMMEND_TITLE =
+  "recommend_projects is live, but every real project's goal_minutes is 0 in the store, so it " +
+  "currently returns list_projects's own stored order rather than a scored shortfall ranking — " +
+  'there is no "N h short of goal" figure to show yet. See docs/design-review-2026-07-30.md item B5.'
 
 export interface ProjectsScreenProps {
   view: View
@@ -38,13 +69,29 @@ export interface ProjectsScreenProps {
 export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScreenProps) {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // Read once at mount from localStorage (see selection.ts) so a round trip
+  // to another screen and back — App.tsx unmounts this screen entirely —
+  // restores the same card instead of resetting to the default.
+  const [selectedId, setSelectedId] = useState<string | null>(() => readSelectedProjectId())
+
+  const selectProject = (targetId: string) => {
+    setSelectedId(targetId)
+    writeSelectedProjectId(targetId)
+  }
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetchProjectsCombined(), fetchProjects()])
-      .then(([combined, listed]) => {
-        if (!cancelled) setData({ combined, listed })
+    Promise.all([
+      fetchProjectsCombined(),
+      fetchProjects(),
+      // Best-effort: a hiccup here degrades to an honest absent state in the
+      // header (see RECOMMEND_TITLE), not a failure of the whole screen —
+      // this line is a bonus, not load-bearing data the rest of the screen
+      // depends on.
+      fetchRecommendProjects(1).catch(() => null),
+    ])
+      .then(([combined, listed, recommended]) => {
+        if (!cancelled) setData({ combined, listed, recommended })
       })
       .catch((cause: Error) => {
         if (!cancelled) setError(cause.message)
@@ -64,6 +111,11 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
   // change what the header claims about the fleet as a whole.
   const needsDataCount = merged.filter((p) => projectStatus(p, false).tag === 'needs-data').length
 
+  const topRecommendation = data?.recommended?.projects[0] ?? null
+  const recommendText = topRecommendation
+    ? `recommend_projects: ${topRecommendation.target_name} first`
+    : 'recommend_projects: no recommendation available'
+
   return (
     <AppShell
       topBar={<TopBar site={site} replay={health?.replay ?? false} />}
@@ -75,6 +127,7 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
           view={view}
           onNavigate={onNavigate}
           projectsHeadline={totalHours}
+          projectsNeedsData={data ? needsDataCount : null}
         />
       }
     >
@@ -90,10 +143,15 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
             </h1>
           </div>
           {data && (
-            <div className={styles.source}>
-              {formatHours(data.combined.totals.store_minutes)} store ·{' '}
-              {formatHours(data.combined.totals.archive_minutes)} archive · goals are
-              catalogue-suggested, not user-set
+            <div className={styles.headerRight}>
+              <div className={styles.recommend} title={topRecommendation ? RECOMMEND_TITLE : undefined}>
+                {recommendText}
+              </div>
+              <div className={styles.source}>
+                {formatHours(data.combined.totals.store_minutes)} store ·{' '}
+                {formatHours(data.combined.totals.archive_minutes)} archive · goals are
+                catalogue-suggested, not user-set
+              </div>
             </div>
           )}
         </div>
@@ -119,7 +177,7 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
                     key={project.targetId}
                     project={project}
                     selected={project.targetId === selected?.targetId}
-                    onSelect={() => setSelectedId(project.targetId)}
+                    onSelect={() => selectProject(project.targetId)}
                   />
                 ))}
               </div>
