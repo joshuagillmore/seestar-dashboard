@@ -111,11 +111,35 @@ export const ListProjectsSchema = z.object({
   count: z.number(),
 })
 
+/** `suggest_integration_goal()`'s return shape — see
+ * sidecar/seestar_sidecar/integration_goal.py's module docstring, "The
+ * `reason` field", for what each state means. Never `null` from
+ * `suggest_integration_goal` unless the whole target failed to resolve in
+ * the catalogue at all (see `ProjectsCombinedEntrySchema.goal` below) —
+ * every *resolved* target gets one of these, even a target with nothing to
+ * show a bar for. `track: "none"` always carries a non-null `reason`;
+ * `reason` is null on every other track (those are self-describing via
+ * `coarse`/`beyond_reach`). This module renders the four resulting states;
+ * it must never compute a new one — see web/src/api/integrationGoal.ts. */
+export const IntegrationGoalSchema = z.object({
+  track: z.enum(['photometric', 'cluster', 'none']),
+  suggested_hours: z.number().nullable(),
+  coarse: z.boolean(),
+  beyond_reach: z.boolean(),
+  surface_brightness: z.number().nullable(),
+  bortle_multiplier: z.number().nullable(),
+  reason: z.enum(['no_magnitude', 'photometry_unreliable']).nullable(),
+  note: z.string(),
+})
+
 /** From the sidecar-computed `/api/projects_combined` — not an MCP tool
  * response, so it has no `goal_minutes`/`status`/`sessions`: those live only
  * on the matching `list_projects` entry, joined by `target_id` client-side
  * (see screens/projects/projects.ts). `sources` says which of the two the
- * minutes came from, so a merged total is never shown unexplained. */
+ * minutes came from, so a merged total is never shown unexplained. `goal` is
+ * `null` only when the target doesn't resolve to a single catalogued object
+ * at all (e.g. the archive's own "Unknown" bucket, or a Caldwell id with no
+ * canonical target) — see `IntegrationGoalSchema`. */
 export const ProjectsCombinedEntrySchema = z.object({
   target_id: z.string(),
   target_name: z.string(),
@@ -123,6 +147,7 @@ export const ProjectsCombinedEntrySchema = z.object({
   archive_minutes: z.number(),
   sources: z.array(z.enum(['store', 'archive'])),
   total_minutes: z.number(),
+  goal: IntegrationGoalSchema.nullable(),
 })
 
 export const ProjectsCombinedSchema = z.object({
@@ -144,5 +169,6 @@ export type Health = z.infer<typeof HealthSchema>
 export type SessionRecord = z.infer<typeof SessionRecordSchema>
 export type Project = z.infer<typeof ProjectSchema>
 export type ListProjects = z.infer<typeof ListProjectsSchema>
+export type IntegrationGoal = z.infer<typeof IntegrationGoalSchema>
 export type ProjectsCombinedEntry = z.infer<typeof ProjectsCombinedEntrySchema>
 export type ProjectsCombined = z.infer<typeof ProjectsCombinedSchema>

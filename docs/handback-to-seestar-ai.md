@@ -271,6 +271,95 @@ each call.
 
 ---
 
+## 11. The planner's catalogue is 120 objects, so the ranker cannot suggest half the user's own targets
+
+**Affects:** `plan_targets` itself, and every screen that shows a suggested
+target. An artifact is attached — see *What is attached* below.
+
+`planning/data/dso_catalog.json` holds **120 objects** (110 Messier plus ten
+showpieces). **Ten of the user's twenty archive targets are not in it**,
+including **IC 405 — their single largest investment at 217 minutes.**
+
+This is not a display problem the dashboard can work around. `plan_targets` can
+only rank what the catalogue contains, so **the ranker is structurally incapable
+of ever suggesting IC 405, NGC 1499 or SH2-142**, however well placed they are
+on a given night. The user's most-observed objects are invisible to their own
+planner.
+
+### What is attached
+
+`data/dso_catalog_extended.json` in the dashboard repo — **12,517 objects**,
+generated from OpenNGC by `data/build_catalogue.py`, emitted in
+`dso_catalog.json`'s exact shape so it is a drop-in replacement. Verified: no
+duplicate ids, nothing outside `TARGET_TYPES`, 91.4% carry both magnitude and
+size.
+
+Also `data/dso_aliases.json` — 28,802 alternative designations mapped to
+canonical ids. This exists because of a failure worth repeating: **two of the
+user's targets could not be found by the names they actually use.** `NGC 2244`
+is a `Dup` redirect to `NGC 2239`, and `C33` is Caldwell notation for
+`NGC 6992`. Both objects were present all along. With the alias index,
+resolution goes from 30/32 to **32/32**.
+
+**Licensing matters here and is not optional.** OpenNGC is CC BY-SA 4.0. The
+share-alike condition binds the data files and anything adapted from them, but
+**not** the application code that reads them — so this is compatible with
+SeeStar-AI being MIT, provided the attribution ships with the data.
+`data/ATTRIBUTION-OpenNGC.md` is written and must travel with the JSON.
+
+### Adopting the catalogue alone would make the ranker worse
+
+This is the important part. **Do not merge the catalogue without these two
+changes.**
+
+**a. The observability computation must be vectorised first.** Measured on this
+machine: the current per-target astropy path runs at **79 ms/target**. At 12,517
+objects that is **16.5 minutes per `plan_targets` call** — unusable. A
+vectorised spherical-trig implementation
+(`sin(alt) = sin δ sin φ + cos δ cos φ cos H`) measured **0.0033 ms/target**,
+about **24,000× faster**, giving ~41 ms for the whole catalogue, with a maximum
+error of 0.24° against astropy. At the scale of a horizon mask and a sweet-band
+test, that error is irrelevant.
+
+This measurement is also what killed the alternative of shipping a
+deliberately-crippled catalogue: the bottleneck was never storage, it was
+compute, and the compute is fixable.
+
+**b. The ranker needs a brightness/feasibility term, which it currently has
+none of.** The score (`planning/ranker.py:126`) is:
+
+| Weight | Value |
+|---|---|
+| `W_SWEET_BAND` | 0.40 |
+| `W_LP_FIT` | 0.20 |
+| `W_MOON` | 0.15 |
+| `W_FIELD_ROT` | 0.15 |
+| `W_FRAMING` | 0.10 |
+
+Every term is about *when and where* the object is, and none about *whether the
+instrument can actually record it*. With 120 curated showpieces that was safe —
+they are all imageable by construction. **86.2% of the extended catalogue is
+galaxies** (10,792 of 12,517), most of them faint, and against that population a
+ranker with no feasibility term will happily recommend a 15th-magnitude smudge
+that an f/5 50 mm cannot resolve, purely because it sits high at midnight.
+
+The dashboard has an integration-time model
+(`sidecar/seestar_sidecar/integration_goal.py`) that estimates hours from
+surface brightness and could inform such a term, but **the ranker is server-side
+policy and the weighting is not the dashboard's call** — flagging it, not
+proposing a number.
+
+### Two smaller notes
+
+- Ambiguous OpenNGC type codes (`Neb`, `Cl+N`) affect `lp_suitability()`, which
+  keys off `type`. They are resolved against SIMBAD `otype` where SIMBAD answers
+  unambiguously, and left as `other` where it does not.
+- One upstream OpenNGC error is corrected in the attached data as a documented
+  divergence: `IC 434`'s common name is recorded as "Flame Nebula", which the
+  same row's own NED note contradicts — the Flame is `NGC 2024`.
+
+---
+
 ## 12. `SessionRecord` has no filter field, though the filter is known
 
 **Affects:** the FILTER column of the Projects screen's session-history table
@@ -325,7 +414,7 @@ a field as well.
 | 8 | ~~No target imagery~~ — **not a server gap**, the archive is on disk | All thumbnails | N/A — dashboard feature, see `slice-2-backlog.md` |
 | 9 | Only the longest sweet-band span returned | Fragmented-band rendering; ranker figure and chart disagree | Yes — the mask exists, `_longest_run` is one reduction over it |
 | 10 | Provenance cannot distinguish clients | Live operator panel (slice 5) | Partly — `log_call` already accepts the fields, the wrappers never pass them |
-| 11 | Catalogue covers 120 objects; half the user's targets are absent | Suggested integration targets; **and the ranker can never suggest IC 405, NGC 1499, SH2-142** | No — but a filtered OpenNGC extension is supplied, see below |
+| 11 | Catalogue covers 120 objects; half the user's targets are absent | Suggested integration targets; **and the ranker can never suggest IC 405, NGC 1499, SH2-142** | No — a 12,517-object OpenNGC extension plus alias index is supplied, but **must not be merged without the two paired ranker changes** (vectorise observability, add a feasibility term) |
 | 12 | `SessionRecord` has no `filter` field | FILTER column of the session-history table | Yes — it is in the session notes as prose, and on every one of the 7,753 archive filenames |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an

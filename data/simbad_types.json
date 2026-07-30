@@ -1,0 +1,5587 @@
+{
+ "_meta": {
+  "description": "Raw SIMBAD facts for every OpenNGC-derived catalogue object whose OpenNGC Type mapped to 'other' (ambiguous Neb/Cl+N/DrkN/Other). This file stores facts only (SIMBAD's main otype code and its full otype list) -- the RECLASSIFICATION RULE lives in build_catalogue.py (GALAXY_OTYPES / OTHER_OTYPE_MAP / Builder.apply_simbad_reclassification), not here, so the rule stays versioned, auditable code rather than a value baked into this cache. This file is a committed, offline cache: the build does not query SIMBAD live.",
+  "source": "SIMBAD (https://simbad.u-strasbg.fr), sim-script batched 'query id <designation>' with format directive '%IDLIST(1)||%OTYPE(3)||%OTYPELIST(3)'. otype3 is SIMBAD's main/primary object type for that designation; otype_list is every type code on record for it (an object can genuinely be more than one thing -- a star cluster embedded in an HII region is both).",
+  "queried": "2026-07-30",
+  "counts": {
+   "total_queried": 583,
+   "resolved": 272,
+   "not_found": 311
+  },
+  "retry_pass": {
+   "description": "The bare designation token failed to resolve for 2 objects whose OpenNGC row has a Common name; retried once with that Common name as the query (SIMBAD does not index Barnard dark-nebula numbers like \"B33\" unambiguously -- bare \"B33\"/\"B 33\" match 3 different catalogs (GC, Batten, Barnard) and SIMBAD refuses to guess; it does not index Caldwell numbers like \"C99\" at all, under any spacing). Cross-checked: of the 313 objects that failed the first pass, only these 2 have any OpenNGC Common name to retry with -- the other 311 have none, consistent with them being genuinely obscure/unconfirmed IC or NGC designations rather than a batching or parsing defect (independently verified: a fresh, differently-sized re-query of a random 40-object sample of the not_found set reproduced 40/40 failures with fully sequential, unmisaligned error numbering).",
+   "queried": "2026-07-30",
+   "fixed": {
+    "B33": "Horsehead Nebula",
+    "C99": "Coalsack Nebula"
+   }
+  }
+ },
+ "objects": {
+  "B33": {
+   "query_token": "B33",
+   "status": "resolved",
+   "simbad_main_id": "NAME Horsehead Nebula",
+   "otype3": "DNe",
+   "otype_list": [
+    "Cld",
+    "DNe",
+    "MoC"
+   ],
+   "retry_query": "Horsehead Nebula"
+  },
+  "C99": {
+   "query_token": "C99",
+   "status": "resolved",
+   "simbad_main_id": "NAME Coalsack Nebula",
+   "otype3": "DNe",
+   "otype_list": [
+    "DNe"
+   ],
+   "retry_query": "Coalsack Nebula"
+  },
+  "IC1090": {
+   "query_token": "IC1090",
+   "status": "resolved",
+   "simbad_main_id": "IC 1090",
+   "otype3": "bCG",
+   "otype_list": [
+    "bCG",
+    "EmG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  },
+  "IC110": {
+   "query_token": "IC110",
+   "status": "resolved",
+   "simbad_main_id": "IC  110",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC111": {
+   "query_token": "IC111",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1140": {
+   "query_token": "IC1140",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1150": {
+   "query_token": "IC1150",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1184": {
+   "query_token": "IC1184",
+   "status": "resolved",
+   "simbad_main_id": "IC 1183",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiC",
+    "GiG",
+    "*",
+    "G",
+    "G",
+    "G",
+    "Opt",
+    "X"
+   ]
+  },
+  "IC1217": {
+   "query_token": "IC1217",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1240": {
+   "query_token": "IC1240",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1243": {
+   "query_token": "IC1243",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1271": {
+   "query_token": "IC1271",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1272": {
+   "query_token": "IC1272",
+   "status": "resolved",
+   "simbad_main_id": "IC 1272",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC1275": {
+   "query_token": "IC1275",
+   "status": "resolved",
+   "simbad_main_id": "IC 1275",
+   "otype3": "HII",
+   "otype_list": [
+    "HII"
+   ]
+  },
+  "IC1278": {
+   "query_token": "IC1278",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1282": {
+   "query_token": "IC1282",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1284": {
+   "query_token": "IC1284",
+   "status": "resolved",
+   "simbad_main_id": "IC 1284",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe",
+    "ISM"
+   ]
+  },
+  "IC1285": {
+   "query_token": "IC1285",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1292": {
+   "query_token": "IC1292",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1293": {
+   "query_token": "IC1293",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1294": {
+   "query_token": "IC1294",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1298": {
+   "query_token": "IC1298",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1305": {
+   "query_token": "IC1305",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1310": {
+   "query_token": "IC1310",
+   "status": "resolved",
+   "simbad_main_id": "IC 1310",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "OpC",
+    "Cl*",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "ISM"
+   ]
+  },
+  "IC1312": {
+   "query_token": "IC1312",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1315": {
+   "query_token": "IC1315",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1316": {
+   "query_token": "IC1316",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6901",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  },
+  "IC1329": {
+   "query_token": "IC1329",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1376": {
+   "query_token": "IC1376",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1378": {
+   "query_token": "IC1378",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1396": {
+   "query_token": "IC1396",
+   "status": "resolved",
+   "simbad_main_id": "IC 1396",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "HII",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "As*",
+    "As*",
+    "Cl*",
+    "Cl*",
+    "Rad"
+   ]
+  },
+  "IC1415": {
+   "query_token": "IC1415",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1416": {
+   "query_token": "IC1416",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1457": {
+   "query_token": "IC1457",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1465": {
+   "query_token": "IC1465",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1475": {
+   "query_token": "IC1475",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1497": {
+   "query_token": "IC1497",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC151": {
+   "query_token": "IC151",
+   "status": "resolved",
+   "simbad_main_id": "IC  151",
+   "otype3": "err",
+   "otype_list": [
+    "err"
+   ]
+  },
+  "IC152": {
+   "query_token": "IC152",
+   "status": "resolved",
+   "simbad_main_id": "IC  152",
+   "otype3": "G",
+   "otype_list": [
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "Opt"
+   ]
+  },
+  "IC153": {
+   "query_token": "IC153",
+   "status": "resolved",
+   "simbad_main_id": "IC  153",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC1533": {
+   "query_token": "IC1533",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1537": {
+   "query_token": "IC1537",
+   "status": "resolved",
+   "simbad_main_id": "IC 1537",
+   "otype3": "G",
+   "otype_list": [
+    "G",
+    "IR"
+   ]
+  },
+  "IC1538": {
+   "query_token": "IC1538",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1547": {
+   "query_token": "IC1547",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC155": {
+   "query_token": "IC155",
+   "status": "resolved",
+   "simbad_main_id": "IC  155",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC1560": {
+   "query_token": "IC1560",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC157": {
+   "query_token": "IC157",
+   "status": "resolved",
+   "simbad_main_id": "IC  157",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC1572": {
+   "query_token": "IC1572",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1580": {
+   "query_token": "IC1580",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1590": {
+   "query_token": "IC1590",
+   "status": "resolved",
+   "simbad_main_id": "IC 1590",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl*",
+    "Cl?"
+   ]
+  },
+  "IC1604": {
+   "query_token": "IC1604",
+   "status": "resolved",
+   "simbad_main_id": "IC 1604",
+   "otype3": "Sy2",
+   "otype_list": [
+    "Sy2",
+    "EmG",
+    "*",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Rad"
+   ]
+  },
+  "IC1606": {
+   "query_token": "IC1606",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1651": {
+   "query_token": "IC1651",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1664": {
+   "query_token": "IC1664",
+   "status": "resolved",
+   "simbad_main_id": "IC 1664",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "IC1665": {
+   "query_token": "IC1665",
+   "status": "resolved",
+   "simbad_main_id": "IC 1665",
+   "otype3": "?",
+   "otype_list": [
+    "*"
+   ]
+  },
+  "IC1707": {
+   "query_token": "IC1707",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1717": {
+   "query_token": "IC1717",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1737": {
+   "query_token": "IC1737",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1800": {
+   "query_token": "IC1800",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1805": {
+   "query_token": "IC1805",
+   "status": "resolved",
+   "simbad_main_id": "IC 1805",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "OpC",
+    "*",
+    "Cl*",
+    "Cl*",
+    "IR",
+    "Rad"
+   ]
+  },
+  "IC1831": {
+   "query_token": "IC1831",
+   "status": "resolved",
+   "simbad_main_id": "IC 1831",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC1848": {
+   "query_token": "IC1848",
+   "status": "resolved",
+   "simbad_main_id": "IC 1848",
+   "otype3": "OpC",
+   "otype_list": [
+    "HII",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "OpC",
+    "*",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "Rad"
+   ]
+  },
+  "IC1872": {
+   "query_token": "IC1872",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1905": {
+   "query_token": "IC1905",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1910": {
+   "query_token": "IC1910",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1921": {
+   "query_token": "IC1921",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1923": {
+   "query_token": "IC1923",
+   "status": "resolved",
+   "simbad_main_id": "IC 1923",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "IC1925": {
+   "query_token": "IC1925",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1939": {
+   "query_token": "IC1939",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1941": {
+   "query_token": "IC1941",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1988": {
+   "query_token": "IC1988",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1425",
+   "otype3": "EmG",
+   "otype_list": [
+    "HI",
+    "EmG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Rad"
+   ]
+  },
+  "IC1990": {
+   "query_token": "IC1990",
+   "status": "resolved",
+   "simbad_main_id": "IC 1990",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "IC1992": {
+   "query_token": "IC1992",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC1995": {
+   "query_token": "IC1995",
+   "status": "resolved",
+   "simbad_main_id": "IC 1995",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "IC2013": {
+   "query_token": "IC2013",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2030": {
+   "query_token": "IC2030",
+   "status": "resolved",
+   "simbad_main_id": "IC 2030",
+   "otype3": "G",
+   "otype_list": [
+    "*",
+    "G"
+   ]
+  },
+  "IC2055": {
+   "query_token": "IC2055",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2061": {
+   "query_token": "IC2061",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2067": {
+   "query_token": "IC2067",
+   "status": "resolved",
+   "simbad_main_id": "IC 2067",
+   "otype3": "ISM",
+   "otype_list": [
+    "*",
+    "ISM"
+   ]
+  },
+  "IC2069": {
+   "query_token": "IC2069",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2072": {
+   "query_token": "IC2072",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2074": {
+   "query_token": "IC2074",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2076": {
+   "query_token": "IC2076",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2084": {
+   "query_token": "IC2084",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2087": {
+   "query_token": "IC2087",
+   "status": "resolved",
+   "simbad_main_id": "IRAS 0437+257P08",
+   "otype3": "Or*",
+   "otype_list": [
+    "Y*O",
+    "Y*O",
+    "Y*O",
+    "Or*",
+    "Em*",
+    "MIR",
+    "NIR",
+    "RNe",
+    "smm",
+    "GNe",
+    "Y*O",
+    "HII",
+    "*",
+    "*",
+    "IR",
+    "ISM",
+    "Rad",
+    "TT?",
+    "X"
+   ]
+  },
+  "IC2088": {
+   "query_token": "IC2088",
+   "status": "resolved",
+   "simbad_main_id": "IC 2088",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC2090": {
+   "query_token": "IC2090",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2091": {
+   "query_token": "IC2091",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2092": {
+   "query_token": "IC2092",
+   "status": "resolved",
+   "simbad_main_id": "IC 2092",
+   "otype3": "**",
+   "otype_list": [
+    "**"
+   ]
+  },
+  "IC2096": {
+   "query_token": "IC2096",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2105": {
+   "query_token": "IC2105",
+   "status": "resolved",
+   "simbad_main_id": "IC 2105",
+   "otype3": "HII",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "*"
+   ]
+  },
+  "IC2111": {
+   "query_token": "IC2111",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1722",
+   "otype3": "HII",
+   "otype_list": [
+    "HII",
+    "MIR",
+    "*",
+    "IR",
+    "Rad"
+   ]
+  },
+  "IC2117": {
+   "query_token": "IC2117",
+   "status": "resolved",
+   "simbad_main_id": "IC 2117",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe",
+    "*"
+   ]
+  },
+  "IC2120": {
+   "query_token": "IC2120",
+   "status": "resolved",
+   "simbad_main_id": "IC 2120",
+   "otype3": "HII",
+   "otype_list": [
+    "HII",
+    "HII",
+    "PN",
+    "HII",
+    "IR",
+    "PN?",
+    "Rad"
+   ]
+  },
+  "IC2128": {
+   "query_token": "IC2128",
+   "status": "resolved",
+   "simbad_main_id": "IC 2128",
+   "otype3": "HII",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "*",
+    "G",
+    "IR",
+    "Rad"
+   ]
+  },
+  "IC2145": {
+   "query_token": "IC2145",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2086",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "*",
+    "Cl*"
+   ]
+  },
+  "IC2159": {
+   "query_token": "IC2159",
+   "status": "resolved",
+   "simbad_main_id": "IC 2159",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "IC2170": {
+   "query_token": "IC2170",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2183": {
+   "query_token": "IC2183",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2189": {
+   "query_token": "IC2189",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2195": {
+   "query_token": "IC2195",
+   "status": "resolved",
+   "simbad_main_id": "IC 2195",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC2215": {
+   "query_token": "IC2215",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2274": {
+   "query_token": "IC2274",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2276": {
+   "query_token": "IC2276",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2278": {
+   "query_token": "IC2278",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC229": {
+   "query_token": "IC229",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2325": {
+   "query_token": "IC2325",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2326": {
+   "query_token": "IC2326",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2328": {
+   "query_token": "IC2328",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2350": {
+   "query_token": "IC2350",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC240": {
+   "query_token": "IC240",
+   "status": "resolved",
+   "simbad_main_id": "NGC   999",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G"
+   ]
+  },
+  "IC2438": {
+   "query_token": "IC2438",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2484": {
+   "query_token": "IC2484",
+   "status": "resolved",
+   "simbad_main_id": "IC 2484",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC2485": {
+   "query_token": "IC2485",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2489": {
+   "query_token": "IC2489",
+   "status": "resolved",
+   "simbad_main_id": "IC 2489",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "IC2504": {
+   "query_token": "IC2504",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2595": {
+   "query_token": "IC2595",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2603": {
+   "query_token": "IC2603",
+   "status": "resolved",
+   "simbad_main_id": "IC 2603",
+   "otype3": "*",
+   "otype_list": [
+    "*"
+   ]
+  },
+  "IC2605": {
+   "query_token": "IC2605",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2610": {
+   "query_token": "IC2610",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2631": {
+   "query_token": "IC2631",
+   "status": "resolved",
+   "simbad_main_id": "Ced 112",
+   "otype3": "RNe",
+   "otype_list": [
+    "GNe",
+    "RNe",
+    "ISM"
+   ]
+  },
+  "IC2642": {
+   "query_token": "IC2642",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2662": {
+   "query_token": "IC2662",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2681": {
+   "query_token": "IC2681",
+   "status": "resolved",
+   "simbad_main_id": "IC 2681",
+   "otype3": "G",
+   "otype_list": [
+    "*",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "Opt"
+   ]
+  },
+  "IC2721": {
+   "query_token": "IC2721",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2726": {
+   "query_token": "IC2726",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC274": {
+   "query_token": "IC274",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2778": {
+   "query_token": "IC2778",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC280": {
+   "query_token": "IC280",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC286": {
+   "query_token": "IC286",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2872": {
+   "query_token": "IC2872",
+   "status": "resolved",
+   "simbad_main_id": "HD  99898",
+   "otype3": "**",
+   "otype_list": [
+    "EB*",
+    "HII",
+    "MIR",
+    "NIR",
+    "V*",
+    "**",
+    "*",
+    "*",
+    "IR"
+   ]
+  },
+  "IC2888": {
+   "query_token": "IC2888",
+   "status": "resolved",
+   "simbad_main_id": "IC 2888",
+   "otype3": "GiC",
+   "otype_list": [
+    "GiC",
+    "GiC",
+    "*",
+    "G",
+    "G",
+    "IR"
+   ]
+  },
+  "IC2940": {
+   "query_token": "IC2940",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2944": {
+   "query_token": "IC2944",
+   "status": "resolved",
+   "simbad_main_id": "IC 2944",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "HII",
+    "*",
+    "Cl*",
+    "ISM",
+    "Rad"
+   ]
+  },
+  "IC2948": {
+   "query_token": "IC2948",
+   "status": "resolved",
+   "simbad_main_id": "IC 2948",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl*"
+   ]
+  },
+  "IC295": {
+   "query_token": "IC295",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC296": {
+   "query_token": "IC296",
+   "status": "resolved",
+   "simbad_main_id": "IC  294",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "Opt"
+   ]
+  },
+  "IC2962": {
+   "query_token": "IC2962",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2964": {
+   "query_token": "IC2964",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2970": {
+   "query_token": "IC2970",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2983": {
+   "query_token": "IC2983",
+   "status": "resolved",
+   "simbad_main_id": "NGC  4006",
+   "otype3": "rG",
+   "otype_list": [
+    "rG",
+    "rG",
+    "GiG",
+    "MIR",
+    "NIR",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "Opt",
+    "Rad",
+    "X"
+   ]
+  },
+  "IC2988": {
+   "query_token": "IC2988",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC2997": {
+   "query_token": "IC2997",
+   "status": "resolved",
+   "simbad_main_id": "NGC  4090",
+   "otype3": "AGN",
+   "otype_list": [
+    "AGN",
+    "GiC",
+    "GiG",
+    "*",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "GrG",
+    "IR",
+    "Opt"
+   ]
+  },
+  "IC2998": {
+   "query_token": "IC2998",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3000": {
+   "query_token": "IC3000",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3006": {
+   "query_token": "IC3006",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3009": {
+   "query_token": "IC3009",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3026": {
+   "query_token": "IC3026",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3027": {
+   "query_token": "IC3027",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3030": {
+   "query_token": "IC3030",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3045": {
+   "query_token": "IC3045",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3057": {
+   "query_token": "IC3057",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3133": {
+   "query_token": "IC3133",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3166": {
+   "query_token": "IC3166",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3177": {
+   "query_token": "IC3177",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3180": {
+   "query_token": "IC3180",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3223": {
+   "query_token": "IC3223",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC323": {
+   "query_token": "IC323",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3245": {
+   "query_token": "IC3245",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3257": {
+   "query_token": "IC3257",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3277": {
+   "query_token": "IC3277",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3281": {
+   "query_token": "IC3281",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3295": {
+   "query_token": "IC3295",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3319": {
+   "query_token": "IC3319",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC333": {
+   "query_token": "IC333",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3352": {
+   "query_token": "IC3352",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC336": {
+   "query_token": "IC336",
+   "status": "resolved",
+   "simbad_main_id": "IC  336",
+   "otype3": "HII",
+   "otype_list": [
+    "HII",
+    "RNe",
+    "ISM"
+   ]
+  },
+  "IC337": {
+   "query_token": "IC337",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3404": {
+   "query_token": "IC3404",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC341": {
+   "query_token": "IC341",
+   "status": "resolved",
+   "simbad_main_id": "IC  341",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC3456": {
+   "query_token": "IC3456",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3463": {
+   "query_token": "IC3463",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC348": {
+   "query_token": "IC348",
+   "status": "resolved",
+   "simbad_main_id": "IC  348",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "SFR",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "RNe",
+    "*",
+    "As*",
+    "As*",
+    "Cl*",
+    "Cl*",
+    "ISM"
+   ]
+  },
+  "IC353": {
+   "query_token": "IC353",
+   "status": "resolved",
+   "simbad_main_id": "IC  353",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe",
+    "ISM"
+   ]
+  },
+  "IC354": {
+   "query_token": "IC354",
+   "status": "resolved",
+   "simbad_main_id": "IC  354",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "IC3566": {
+   "query_token": "IC3566",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3577": {
+   "query_token": "IC3577",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3596": {
+   "query_token": "IC3596",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC360": {
+   "query_token": "IC360",
+   "status": "resolved",
+   "simbad_main_id": "IC  360",
+   "otype3": "ISM",
+   "otype_list": [
+    "HII",
+    "ISM"
+   ]
+  },
+  "IC3668": {
+   "query_token": "IC3668",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3669": {
+   "query_token": "IC3669",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3708": {
+   "query_token": "IC3708",
+   "status": "resolved",
+   "simbad_main_id": "NGC  4654",
+   "otype3": "H2G",
+   "otype_list": [
+    "HI",
+    "GiG",
+    "GiP",
+    "H2G",
+    "HI",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt",
+    "Rad"
+   ]
+  },
+  "IC3712": {
+   "query_token": "IC3712",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3716": {
+   "query_token": "IC3716",
+   "status": "resolved",
+   "simbad_main_id": "IC 3716",
+   "otype3": "GiG",
+   "otype_list": [
+    "HI",
+    "GiG",
+    "HI",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "Opt"
+   ]
+  },
+  "IC3722": {
+   "query_token": "IC3722",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3739": {
+   "query_token": "IC3739",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3743": {
+   "query_token": "IC3743",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3757": {
+   "query_token": "IC3757",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3797": {
+   "query_token": "IC3797",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3801": {
+   "query_token": "IC3801",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3807": {
+   "query_token": "IC3807",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3846": {
+   "query_token": "IC3846",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3849": {
+   "query_token": "IC3849",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC3936": {
+   "query_token": "IC3936",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC394": {
+   "query_token": "IC394",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC397": {
+   "query_token": "IC397",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC403": {
+   "query_token": "IC403",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC405": {
+   "query_token": "IC405",
+   "status": "resolved",
+   "simbad_main_id": "IC  405",
+   "otype3": "Rad",
+   "otype_list": [
+    "HII",
+    "Rad"
+   ]
+  },
+  "IC4055": {
+   "query_token": "IC4055",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC406": {
+   "query_token": "IC406",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4093": {
+   "query_token": "IC4093",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC410": {
+   "query_token": "IC410",
+   "status": "resolved",
+   "simbad_main_id": "IC  410",
+   "otype3": "Cl*",
+   "otype_list": [
+    "HII",
+    "Cl*",
+    "ISM",
+    "Rad"
+   ]
+  },
+  "IC419": {
+   "query_token": "IC419",
+   "status": "resolved",
+   "simbad_main_id": "IC  419",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "IC4192": {
+   "query_token": "IC4192",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC420": {
+   "query_token": "IC420",
+   "status": "resolved",
+   "simbad_main_id": "IC  420",
+   "otype3": "RNe",
+   "otype_list": [
+    "RNe"
+   ]
+  },
+  "IC423": {
+   "query_token": "IC423",
+   "status": "resolved",
+   "simbad_main_id": "IC  423",
+   "otype3": "MoC",
+   "otype_list": [
+    "Cld",
+    "DNe",
+    "HII",
+    "MoC",
+    "RNe",
+    "ISM"
+   ]
+  },
+  "IC424": {
+   "query_token": "IC424",
+   "status": "resolved",
+   "simbad_main_id": "IC  424",
+   "otype3": "RNe",
+   "otype_list": [
+    "Cld",
+    "HII",
+    "MoC",
+    "RNe",
+    "ISM"
+   ]
+  },
+  "IC425": {
+   "query_token": "IC425",
+   "status": "resolved",
+   "simbad_main_id": "IC  425",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "IC4257": {
+   "query_token": "IC4257",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC426": {
+   "query_token": "IC426",
+   "status": "resolved",
+   "simbad_main_id": "IC  426",
+   "otype3": "MoC",
+   "otype_list": [
+    "Cld",
+    "DNe",
+    "HII",
+    "MoC",
+    "RNe",
+    "ISM"
+   ]
+  },
+  "IC427": {
+   "query_token": "IC427",
+   "status": "resolved",
+   "simbad_main_id": "IC  427",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC428": {
+   "query_token": "IC428",
+   "status": "resolved",
+   "simbad_main_id": "IC  428",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC429": {
+   "query_token": "IC429",
+   "status": "resolved",
+   "simbad_main_id": "IC  429",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "IC430": {
+   "query_token": "IC430",
+   "status": "resolved",
+   "simbad_main_id": "IC  430",
+   "otype3": "RNe",
+   "otype_list": [
+    "GNe",
+    "RNe",
+    "smm",
+    "*",
+    "ISM"
+   ]
+  },
+  "IC4308": {
+   "query_token": "IC4308",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4353": {
+   "query_token": "IC4353",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC436": {
+   "query_token": "IC436",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4376": {
+   "query_token": "IC4376",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4385": {
+   "query_token": "IC4385",
+   "status": "resolved",
+   "simbad_main_id": "IC 4385",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "IC439": {
+   "query_token": "IC439",
+   "status": "resolved",
+   "simbad_main_id": "IC  439",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "IC4392": {
+   "query_token": "IC4392",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4394": {
+   "query_token": "IC4394",
+   "status": "resolved",
+   "simbad_main_id": "IC 4394",
+   "otype3": "G",
+   "otype_list": [
+    "*",
+    "G",
+    "Opt"
+   ]
+  },
+  "IC4400": {
+   "query_token": "IC4400",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4411": {
+   "query_token": "IC4411",
+   "status": "resolved",
+   "simbad_main_id": "IC 4411",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "IC446": {
+   "query_token": "IC446",
+   "status": "resolved",
+   "simbad_main_id": "IC  446",
+   "otype3": "Cl*",
+   "otype_list": [
+    "GNe",
+    "HII",
+    "RNe",
+    "Cl*",
+    "Cl?",
+    "ISM"
+   ]
+  },
+  "IC45": {
+   "query_token": "IC45",
+   "status": "resolved",
+   "simbad_main_id": "IC   45",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR"
+   ]
+  },
+  "IC4510": {
+   "query_token": "IC4510",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4511": {
+   "query_token": "IC4511",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4513": {
+   "query_token": "IC4513",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4540": {
+   "query_token": "IC4540",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4600": {
+   "query_token": "IC4600",
+   "status": "resolved",
+   "simbad_main_id": "IC 4600",
+   "otype3": "Sy2",
+   "otype_list": [
+    "Sy2",
+    "EmG",
+    "*",
+    "G",
+    "G",
+    "Rad"
+   ]
+  },
+  "IC4601": {
+   "query_token": "IC4601",
+   "status": "resolved",
+   "simbad_main_id": "IC 4601",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe"
+   ]
+  },
+  "IC4603": {
+   "query_token": "IC4603",
+   "status": "resolved",
+   "simbad_main_id": "IC 4603",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe",
+    "HII",
+    "RNe",
+    "ISM"
+   ]
+  },
+  "IC4604": {
+   "query_token": "IC4604",
+   "status": "resolved",
+   "simbad_main_id": "IC 4604",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe",
+    "HII",
+    "RNe",
+    "ISM"
+   ]
+  },
+  "IC4605": {
+   "query_token": "IC4605",
+   "status": "resolved",
+   "simbad_main_id": "IC 4605",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe",
+    "HII",
+    "RNe",
+    "ISM"
+   ]
+  },
+  "IC4606": {
+   "query_token": "IC4606",
+   "status": "resolved",
+   "simbad_main_id": "IC 4606",
+   "otype3": "HII",
+   "otype_list": [
+    "HII"
+   ]
+  },
+  "IC4613": {
+   "query_token": "IC4613",
+   "status": "resolved",
+   "simbad_main_id": "IC 4613",
+   "otype3": "GiC",
+   "otype_list": [
+    "GiC",
+    "*",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  },
+  "IC4622": {
+   "query_token": "IC4622",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4628": {
+   "query_token": "IC4628",
+   "status": "resolved",
+   "simbad_main_id": "HD 152723",
+   "otype3": "SB*",
+   "otype_list": [
+    "SB*",
+    "SB*",
+    "NIR",
+    "V*",
+    "**",
+    "HII",
+    "*",
+    "*",
+    "*",
+    "UV"
+   ]
+  },
+  "IC4629": {
+   "query_token": "IC4629",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4631": {
+   "query_token": "IC4631",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4632": {
+   "query_token": "IC4632",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4655": {
+   "query_token": "IC4655",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4657": {
+   "query_token": "IC4657",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4658": {
+   "query_token": "IC4658",
+   "status": "resolved",
+   "simbad_main_id": "IC 4658",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "IC4659": {
+   "query_token": "IC4659",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4667": {
+   "query_token": "IC4667",
+   "status": "resolved",
+   "simbad_main_id": "IC 4667",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC4671": {
+   "query_token": "IC4671",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4675": {
+   "query_token": "IC4675",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4677": {
+   "query_token": "IC4677",
+   "status": "resolved",
+   "simbad_main_id": "IC 4677",
+   "otype3": "PN",
+   "otype_list": [
+    "PN",
+    "G",
+    "IG",
+    "X"
+   ]
+  },
+  "IC4678": {
+   "query_token": "IC4678",
+   "status": "resolved",
+   "simbad_main_id": "IC 4678",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe",
+    "ISM"
+   ]
+  },
+  "IC468": {
+   "query_token": "IC468",
+   "status": "resolved",
+   "simbad_main_id": "IC  468",
+   "otype3": "HII",
+   "otype_list": [
+    "HII",
+    "*"
+   ]
+  },
+  "IC4683": {
+   "query_token": "IC4683",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4685": {
+   "query_token": "IC4685",
+   "status": "resolved",
+   "simbad_main_id": "IC 4685",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "IC4693": {
+   "query_token": "IC4693",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4701": {
+   "query_token": "IC4701",
+   "status": "resolved",
+   "simbad_main_id": "IC 4701",
+   "otype3": "Rad",
+   "otype_list": [
+    "HII",
+    "Rad"
+   ]
+  },
+  "IC4703": {
+   "query_token": "IC4703",
+   "status": "resolved",
+   "simbad_main_id": "M  16",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "Rad"
+   ]
+  },
+  "IC4706": {
+   "query_token": "IC4706",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4707": {
+   "query_token": "IC4707",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4711": {
+   "query_token": "IC4711",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC473": {
+   "query_token": "IC473",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4802": {
+   "query_token": "IC4802",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4812": {
+   "query_token": "IC4812",
+   "status": "resolved",
+   "simbad_main_id": "IC 4812",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe"
+   ]
+  },
+  "IC488": {
+   "query_token": "IC488",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4898": {
+   "query_token": "IC4898",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4922": {
+   "query_token": "IC4922",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4924": {
+   "query_token": "IC4924",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4930": {
+   "query_token": "IC4930",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4940": {
+   "query_token": "IC4940",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4955": {
+   "query_token": "IC4955",
+   "status": "resolved",
+   "simbad_main_id": "IC 4955",
+   "otype3": "HII",
+   "otype_list": [
+    "HII"
+   ]
+  },
+  "IC4959": {
+   "query_token": "IC4959",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4966": {
+   "query_token": "IC4966",
+   "status": "resolved",
+   "simbad_main_id": "IC 4966",
+   "otype3": "G",
+   "otype_list": [
+    "*",
+    "G"
+   ]
+  },
+  "IC4977": {
+   "query_token": "IC4977",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC4988": {
+   "query_token": "IC4988",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5056": {
+   "query_token": "IC5056",
+   "status": "resolved",
+   "simbad_main_id": "IC 5056",
+   "otype3": "IG",
+   "otype_list": [
+    "*",
+    "G",
+    "IG",
+    "IR"
+   ]
+  },
+  "IC5061": {
+   "query_token": "IC5061",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5067": {
+   "query_token": "IC5067",
+   "status": "resolved",
+   "simbad_main_id": "IC 5067",
+   "otype3": "ISM",
+   "otype_list": [
+    "HII",
+    "ISM"
+   ]
+  },
+  "IC5081": {
+   "query_token": "IC5081",
+   "status": "resolved",
+   "simbad_main_id": "IC 5081",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "IC5097": {
+   "query_token": "IC5097",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5098": {
+   "query_token": "IC5098",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5132": {
+   "query_token": "IC5132",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5133": {
+   "query_token": "IC5133",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5134": {
+   "query_token": "IC5134",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5137": {
+   "query_token": "IC5137",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5146": {
+   "query_token": "IC5146",
+   "status": "resolved",
+   "simbad_main_id": "IC 5146",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "*",
+    "As*",
+    "As*",
+    "Cl*",
+    "Cl*",
+    "ISM"
+   ]
+  },
+  "IC5163": {
+   "query_token": "IC5163",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC518": {
+   "query_token": "IC518",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5194": {
+   "query_token": "IC5194",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5214": {
+   "query_token": "IC5214",
+   "status": "resolved",
+   "simbad_main_id": "IC 5214",
+   "otype3": "Sy2",
+   "otype_list": [
+    "Sy2",
+    "GiG",
+    "EmG",
+    "*",
+    "G",
+    "G",
+    "Rad"
+   ]
+  },
+  "IC5216": {
+   "query_token": "IC5216",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5248": {
+   "query_token": "IC5248",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5251": {
+   "query_token": "IC5251",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5255": {
+   "query_token": "IC5255",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5268": {
+   "query_token": "IC5268",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5275": {
+   "query_token": "IC5275",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC532": {
+   "query_token": "IC532",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5340": {
+   "query_token": "IC5340",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5344": {
+   "query_token": "IC5344",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5360": {
+   "query_token": "IC5360",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5365": {
+   "query_token": "IC5365",
+   "status": "resolved",
+   "simbad_main_id": "IC 5365",
+   "otype3": "G",
+   "otype_list": [
+    "*",
+    "G",
+    "G",
+    "G"
+   ]
+  },
+  "IC5366": {
+   "query_token": "IC5366",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5383": {
+   "query_token": "IC5383",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC5385": {
+   "query_token": "IC5385",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC541": {
+   "query_token": "IC541",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC543": {
+   "query_token": "IC543",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2902",
+   "otype3": "EmG",
+   "otype_list": [
+    "GiG",
+    "EmG",
+    "HI",
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G"
+   ]
+  },
+  "IC640": {
+   "query_token": "IC640",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC641": {
+   "query_token": "IC641",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC656": {
+   "query_token": "IC656",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC759": {
+   "query_token": "IC759",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC765": {
+   "query_token": "IC765",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC808": {
+   "query_token": "IC808",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC877": {
+   "query_token": "IC877",
+   "status": "resolved",
+   "simbad_main_id": "IC  877",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC878": {
+   "query_token": "IC878",
+   "status": "resolved",
+   "simbad_main_id": "IC  878",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC880": {
+   "query_token": "IC880",
+   "status": "resolved",
+   "simbad_main_id": "IC  880",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "IC884": {
+   "query_token": "IC884",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC887": {
+   "query_token": "IC887",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC953": {
+   "query_token": "IC953",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC955": {
+   "query_token": "IC955",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "IC957": {
+   "query_token": "IC957",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "LDN1625": {
+   "query_token": "LDN1625",
+   "status": "resolved",
+   "simbad_main_id": "LDN 1625",
+   "otype3": "DNe",
+   "otype_list": [
+    "DNe"
+   ]
+  },
+  "M16": {
+   "query_token": "M16",
+   "status": "resolved",
+   "simbad_main_id": "M  16",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "Rad"
+   ]
+  },
+  "M17": {
+   "query_token": "M17",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6618",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "HII",
+    "*",
+    "As*",
+    "As*",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "Rad",
+    "X"
+   ]
+  },
+  "M20": {
+   "query_token": "M20",
+   "status": "resolved",
+   "simbad_main_id": "M  20",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "OpC",
+    "*",
+    "Cl*",
+    "Cl?",
+    "Rad"
+   ]
+  },
+  "M42": {
+   "query_token": "M42",
+   "status": "resolved",
+   "simbad_main_id": "M  42",
+   "otype3": "HII",
+   "otype_list": [
+    "HII",
+    "OpC",
+    "Cl*",
+    "Cl?",
+    "Rad",
+    "X"
+   ]
+  },
+  "M73": {
+   "query_token": "M73",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6994",
+   "otype3": "err",
+   "otype_list": [
+    "Cl*",
+    "err"
+   ]
+  },
+  "M8": {
+   "query_token": "M8",
+   "status": "resolved",
+   "simbad_main_id": "M   8",
+   "otype3": "OpC",
+   "otype_list": [
+    "HII",
+    "OpC",
+    "Cl*",
+    "Rad"
+   ]
+  },
+  "NGC1037": {
+   "query_token": "NGC1037",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1037",
+   "otype3": "Sy2",
+   "otype_list": [
+    "Sy2",
+    "*",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  },
+  "NGC111": {
+   "query_token": "NGC111",
+   "status": "resolved",
+   "simbad_main_id": "NGC   111",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "NGC1146": {
+   "query_token": "NGC1146",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1147": {
+   "query_token": "NGC1147",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1170": {
+   "query_token": "NGC1170",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1173": {
+   "query_token": "NGC1173",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1197": {
+   "query_token": "NGC1197",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1330": {
+   "query_token": "NGC1330",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1330",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "GiG",
+    "GiC",
+    "*",
+    "AG?",
+    "G",
+    "G"
+   ]
+  },
+  "NGC1333": {
+   "query_token": "NGC1333",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1333",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "HII",
+    "OpC",
+    "RNe",
+    "GNe",
+    "As*",
+    "As*",
+    "Cl*",
+    "Cl*",
+    "ISM",
+    "Rad"
+   ]
+  },
+  "NGC1420": {
+   "query_token": "NGC1420",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1429": {
+   "query_token": "NGC1429",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1435": {
+   "query_token": "NGC1435",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1435",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "NGC1458": {
+   "query_token": "NGC1458",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1479": {
+   "query_token": "NGC1479",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1480": {
+   "query_token": "NGC1480",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1499": {
+   "query_token": "NGC1499",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1499",
+   "otype3": "HII",
+   "otype_list": [
+    "HII"
+   ]
+  },
+  "NGC1523": {
+   "query_token": "NGC1523",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1579": {
+   "query_token": "NGC1579",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1579",
+   "otype3": "OpC",
+   "otype_list": [
+    "HII",
+    "OpC",
+    "OpC",
+    "OpC",
+    "RNe",
+    "GNe",
+    "OpC",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "ISM"
+   ]
+  },
+  "NGC1624": {
+   "query_token": "NGC1624",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1624",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl*",
+    "Cl?"
+   ]
+  },
+  "NGC1639": {
+   "query_token": "NGC1639",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1655": {
+   "query_token": "NGC1655",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1674": {
+   "query_token": "NGC1674",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1675": {
+   "query_token": "NGC1675",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1707": {
+   "query_token": "NGC1707",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1714": {
+   "query_token": "NGC1714",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1714",
+   "otype3": "EmO",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "*",
+    "Cl*",
+    "G",
+    "Rad"
+   ]
+  },
+  "NGC1722": {
+   "query_token": "NGC1722",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1722",
+   "otype3": "HII",
+   "otype_list": [
+    "HII",
+    "MIR",
+    "*",
+    "IR",
+    "Rad"
+   ]
+  },
+  "NGC1727": {
+   "query_token": "NGC1727",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1727",
+   "otype3": "HII",
+   "otype_list": [
+    "HII",
+    "As*",
+    "Cl*"
+   ]
+  },
+  "NGC1743": {
+   "query_token": "NGC1743",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1743",
+   "otype3": "Cl*",
+   "otype_list": [
+    "*",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC1745": {
+   "query_token": "NGC1745",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1745",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*"
+   ]
+  },
+  "NGC1748": {
+   "query_token": "NGC1748",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1748",
+   "otype3": "As*",
+   "otype_list": [
+    "*",
+    "As*",
+    "G",
+    "IR",
+    "Rad"
+   ]
+  },
+  "NGC1757": {
+   "query_token": "NGC1757",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1763": {
+   "query_token": "NGC1763",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1763",
+   "otype3": "As*",
+   "otype_list": [
+    "EmO",
+    "As*",
+    "Cl*"
+   ]
+  },
+  "NGC1770": {
+   "query_token": "NGC1770",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1770",
+   "otype3": "HII",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "Cl*",
+    "Rad"
+   ]
+  },
+  "NGC1773": {
+   "query_token": "NGC1773",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1773",
+   "otype3": "HII",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "As*",
+    "IR",
+    "Rad"
+   ]
+  },
+  "NGC1814": {
+   "query_token": "NGC1814",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1814",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "*",
+    "As*",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC1829": {
+   "query_token": "NGC1829",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1829",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*"
+   ]
+  },
+  "NGC1833": {
+   "query_token": "NGC1833",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1833",
+   "otype3": "EmO",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC1858": {
+   "query_token": "NGC1858",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1858",
+   "otype3": "Cl*",
+   "otype_list": [
+    "*",
+    "As*",
+    "Cl*",
+    "Rad"
+   ]
+  },
+  "NGC1869": {
+   "query_token": "NGC1869",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1869",
+   "otype3": "As*",
+   "otype_list": [
+    "As*",
+    "Cl*"
+   ]
+  },
+  "NGC1871": {
+   "query_token": "NGC1871",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1871",
+   "otype3": "As*",
+   "otype_list": [
+    "As*",
+    "Cl*"
+   ]
+  },
+  "NGC1873": {
+   "query_token": "NGC1873",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1873",
+   "otype3": "As*",
+   "otype_list": [
+    "As*",
+    "Cl*"
+   ]
+  },
+  "NGC1874": {
+   "query_token": "NGC1874",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1874",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "*",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC1876": {
+   "query_token": "NGC1876",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1876",
+   "otype3": "Cl*",
+   "otype_list": [
+    "*",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC1877": {
+   "query_token": "NGC1877",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1877",
+   "otype3": "Cl*",
+   "otype_list": [
+    "*",
+    "Cl*"
+   ]
+  },
+  "NGC1884": {
+   "query_token": "NGC1884",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1895": {
+   "query_token": "NGC1895",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1895",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "Cl*"
+   ]
+  },
+  "NGC1908": {
+   "query_token": "NGC1908",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1910": {
+   "query_token": "NGC1910",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1910",
+   "otype3": "As*",
+   "otype_list": [
+    "*",
+    "As*",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC1914": {
+   "query_token": "NGC1914",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1914",
+   "otype3": "As*",
+   "otype_list": [
+    "As*",
+    "Cl*"
+   ]
+  },
+  "NGC1919": {
+   "query_token": "NGC1919",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1919",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*"
+   ]
+  },
+  "NGC1923": {
+   "query_token": "NGC1923",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1923",
+   "otype3": "As*",
+   "otype_list": [
+    "HII",
+    "As*",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC1927": {
+   "query_token": "NGC1927",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC1931": {
+   "query_token": "NGC1931",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1931",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "HII",
+    "Cl*",
+    "Cl?",
+    "IR",
+    "ISM"
+   ]
+  },
+  "NGC1934": {
+   "query_token": "NGC1934",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1934",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "NGC1941": {
+   "query_token": "NGC1941",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1941",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*"
+   ]
+  },
+  "NGC1948": {
+   "query_token": "NGC1948",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1948",
+   "otype3": "As*",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "SNR",
+    "As*",
+    "Cl*",
+    "SR?"
+   ]
+  },
+  "NGC1949": {
+   "query_token": "NGC1949",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1949",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "*",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC1973": {
+   "query_token": "NGC1973",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1973",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe",
+    "ISM"
+   ]
+  },
+  "NGC1975": {
+   "query_token": "NGC1975",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1975",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe"
+   ]
+  },
+  "NGC1977": {
+   "query_token": "NGC1977",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1977",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "HII",
+    "SFR",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl*",
+    "Cl?"
+   ]
+  },
+  "NGC1980": {
+   "query_token": "NGC1980",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1980",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "Cl*",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "Cl?"
+   ]
+  },
+  "NGC1981": {
+   "query_token": "NGC1981",
+   "status": "resolved",
+   "simbad_main_id": "NGC  1981",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "Cl?"
+   ]
+  },
+  "NGC2014": {
+   "query_token": "NGC2014",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2014",
+   "otype3": "As*",
+   "otype_list": [
+    "EmO",
+    "As*",
+    "Cl*",
+    "Rad"
+   ]
+  },
+  "NGC2024": {
+   "query_token": "NGC2024",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2024",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*"
+   ]
+  },
+  "NGC2035": {
+   "query_token": "NGC2035",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2035",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "NGC2039": {
+   "query_token": "NGC2039",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2039",
+   "otype3": "Cl?",
+   "otype_list": [
+    "Cl?"
+   ]
+  },
+  "NGC2040": {
+   "query_token": "NGC2040",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2040",
+   "otype3": "As*",
+   "otype_list": [
+    "EmO",
+    "*",
+    "As*",
+    "G",
+    "IR",
+    "Rad",
+    "X"
+   ]
+  },
+  "NGC2052": {
+   "query_token": "NGC2052",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2054": {
+   "query_token": "NGC2054",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2063": {
+   "query_token": "NGC2063",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2063",
+   "otype3": "err",
+   "otype_list": [
+    "Cl?"
+   ]
+  },
+  "NGC2069": {
+   "query_token": "NGC2069",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2069",
+   "otype3": "ISM",
+   "otype_list": [
+    "G",
+    "ISM"
+   ]
+  },
+  "NGC2071": {
+   "query_token": "NGC2071",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2071",
+   "otype3": "RNe",
+   "otype_list": [
+    "GNe",
+    "HII",
+    "RNe",
+    "Cl*",
+    "Cl?",
+    "IR",
+    "ISM"
+   ]
+  },
+  "NGC2074": {
+   "query_token": "NGC2074",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2074",
+   "otype3": "As*",
+   "otype_list": [
+    "As*",
+    "Cl*"
+   ]
+  },
+  "NGC2075": {
+   "query_token": "NGC2075",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2075",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "*",
+    "Cl*"
+   ]
+  },
+  "NGC2077": {
+   "query_token": "NGC2077",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2077",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "*",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC2081": {
+   "query_token": "NGC2081",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2081",
+   "otype3": "HII",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "IR",
+    "Rad"
+   ]
+  },
+  "NGC2083": {
+   "query_token": "NGC2083",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2083",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "Cl*"
+   ]
+  },
+  "NGC2084": {
+   "query_token": "NGC2084",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2084",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*"
+   ]
+  },
+  "NGC2085": {
+   "query_token": "NGC2085",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2085",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC2086": {
+   "query_token": "NGC2086",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2086",
+   "otype3": "Cl*",
+   "otype_list": [
+    "EmO",
+    "*",
+    "Cl*"
+   ]
+  },
+  "NGC2113": {
+   "query_token": "NGC2113",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2113",
+   "otype3": "Cl*",
+   "otype_list": [
+    "*",
+    "Cl*",
+    "IR",
+    "Rad"
+   ]
+  },
+  "NGC2122": {
+   "query_token": "NGC2122",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2122",
+   "otype3": "As*",
+   "otype_list": [
+    "EmO",
+    "HII",
+    "As*",
+    "Cl*"
+   ]
+  },
+  "NGC2171": {
+   "query_token": "NGC2171",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2171",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*",
+    "G"
+   ]
+  },
+  "NGC2174": {
+   "query_token": "NGC2174",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2174",
+   "otype3": "HII",
+   "otype_list": [
+    "HII"
+   ]
+  },
+  "NGC2175": {
+   "query_token": "NGC2175",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2175",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "HII",
+    "Cl*",
+    "Cl?",
+    "Rad"
+   ]
+  },
+  "NGC2185": {
+   "query_token": "NGC2185",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2185",
+   "otype3": "RNe",
+   "otype_list": [
+    "HII",
+    "RNe",
+    "ISM"
+   ]
+  },
+  "NGC2189": {
+   "query_token": "NGC2189",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2189",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "Cl*"
+   ]
+  },
+  "NGC2198": {
+   "query_token": "NGC2198",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2218": {
+   "query_token": "NGC2218",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2220": {
+   "query_token": "NGC2220",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2220",
+   "otype3": "MGr",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "MGr",
+    "err"
+   ]
+  },
+  "NGC2224": {
+   "query_token": "NGC2224",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2224",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "As*",
+    "As*"
+   ]
+  },
+  "NGC2237": {
+   "query_token": "NGC2237",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2237",
+   "otype3": "Cl*",
+   "otype_list": [
+    "OpC",
+    "*",
+    "Cl*"
+   ]
+  },
+  "NGC2239": {
+   "query_token": "NGC2239",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2244",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "Mas",
+    "OpC",
+    "HH",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "Cl?",
+    "ISM"
+   ]
+  },
+  "NGC2246": {
+   "query_token": "NGC2246",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2246",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe"
+   ]
+  },
+  "NGC2248": {
+   "query_token": "NGC2248",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2248",
+   "otype3": "Cl?",
+   "otype_list": [
+    "Cl?"
+   ]
+  },
+  "NGC2264": {
+   "query_token": "NGC2264",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2264",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "SB*",
+    "HII",
+    "*",
+    "As*",
+    "As*",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "ISM",
+    "Rad"
+   ]
+  },
+  "NGC2277": {
+   "query_token": "NGC2277",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2279": {
+   "query_token": "NGC2279",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2284": {
+   "query_token": "NGC2284",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2316": {
+   "query_token": "NGC2316",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2316",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*",
+    "ISM"
+   ]
+  },
+  "NGC2317": {
+   "query_token": "NGC2317",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2361": {
+   "query_token": "NGC2361",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2386": {
+   "query_token": "NGC2386",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2399": {
+   "query_token": "NGC2399",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2400": {
+   "query_token": "NGC2400",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2433": {
+   "query_token": "NGC2433",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2433",
+   "otype3": "**",
+   "otype_list": [
+    "**"
+   ]
+  },
+  "NGC2464": {
+   "query_token": "NGC2464",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2467": {
+   "query_token": "NGC2467",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2467",
+   "otype3": "OpC",
+   "otype_list": [
+    "HII",
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl?",
+    "ISM",
+    "Rad"
+   ]
+  },
+  "NGC248": {
+   "query_token": "NGC248",
+   "status": "resolved",
+   "simbad_main_id": "NGC   248",
+   "otype3": "Cl*",
+   "otype_list": [
+    "SFR",
+    "EmO",
+    "HII",
+    "Cl*",
+    "IR",
+    "reg"
+   ]
+  },
+  "NGC2529": {
+   "query_token": "NGC2529",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2529",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  },
+  "NGC2531": {
+   "query_token": "NGC2531",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2529",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  },
+  "NGC2579": {
+   "query_token": "NGC2579",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2579",
+   "otype3": "OpC",
+   "otype_list": [
+    "HII",
+    "OpC",
+    "OpC",
+    "mm",
+    "PN",
+    "RNe",
+    "HII",
+    "*",
+    "Cl*",
+    "Cl?",
+    "G",
+    "IR",
+    "ISM",
+    "Rad"
+   ]
+  },
+  "NGC2586": {
+   "query_token": "NGC2586",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2586",
+   "otype3": "Sy2",
+   "otype_list": [
+    "Sy2",
+    "*",
+    "G",
+    "G",
+    "G",
+    "G"
+   ]
+  },
+  "NGC2589": {
+   "query_token": "NGC2589",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC261": {
+   "query_token": "NGC261",
+   "status": "resolved",
+   "simbad_main_id": "NGC   261",
+   "otype3": "HII",
+   "otype_list": [
+    "HII",
+    "As*",
+    "Cl*",
+    "G",
+    "IR"
+   ]
+  },
+  "NGC2630": {
+   "query_token": "NGC2630",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2630",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "IR"
+   ]
+  },
+  "NGC2631": {
+   "query_token": "NGC2631",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2630",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "IR"
+   ]
+  },
+  "NGC2757": {
+   "query_token": "NGC2757",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2818A": {
+   "query_token": "NGC2818A",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2818A",
+   "otype3": "PN",
+   "otype_list": [
+    "PN",
+    "*",
+    "G",
+    "IR",
+    "UV"
+   ]
+  },
+  "NGC2875": {
+   "query_token": "NGC2875",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2874",
+   "otype3": "LIN",
+   "otype_list": [
+    "rG",
+    "LIN",
+    "GiP",
+    "NIR",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "Opt",
+    "Rad",
+    "UV"
+   ]
+  },
+  "NGC2879": {
+   "query_token": "NGC2879",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2886": {
+   "query_token": "NGC2886",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2901": {
+   "query_token": "NGC2901",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC2953": {
+   "query_token": "NGC2953",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2953",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "NGC2973": {
+   "query_token": "NGC2973",
+   "status": "resolved",
+   "simbad_main_id": "NGC  2973",
+   "otype3": "EmG",
+   "otype_list": [
+    "EmG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G"
+   ]
+  },
+  "NGC305": {
+   "query_token": "NGC305",
+   "status": "resolved",
+   "simbad_main_id": "NGC   305",
+   "otype3": "G",
+   "otype_list": [
+    "*",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  },
+  "NGC3097": {
+   "query_token": "NGC3097",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3123": {
+   "query_token": "NGC3123",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC313": {
+   "query_token": "NGC313",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3167": {
+   "query_token": "NGC3167",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3176": {
+   "query_token": "NGC3176",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3199": {
+   "query_token": "NGC3199",
+   "status": "resolved",
+   "simbad_main_id": "NGC  3199",
+   "otype3": "HII",
+   "otype_list": [
+    "HII",
+    "ISM",
+    "Rad"
+   ]
+  },
+  "NGC3229": {
+   "query_token": "NGC3229",
+   "status": "resolved",
+   "simbad_main_id": "NGC  3229",
+   "otype3": "AG?",
+   "otype_list": [
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  },
+  "NGC3317": {
+   "query_token": "NGC3317",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3324": {
+   "query_token": "NGC3324",
+   "status": "resolved",
+   "simbad_main_id": "NGC  3324",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl*",
+    "Cl?"
+   ]
+  },
+  "NGC3387": {
+   "query_token": "NGC3387",
+   "status": "resolved",
+   "simbad_main_id": "NGC  3387",
+   "otype3": "LIN",
+   "otype_list": [
+    "rG",
+    "LIN",
+    "HI",
+    "rG",
+    "rG",
+    "GiG",
+    "*",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "Opt",
+    "PaG",
+    "Rad"
+   ]
+  },
+  "NGC3401": {
+   "query_token": "NGC3401",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3472": {
+   "query_token": "NGC3472",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3484": {
+   "query_token": "NGC3484",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3498": {
+   "query_token": "NGC3498",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3578": {
+   "query_token": "NGC3578",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3579": {
+   "query_token": "NGC3579",
+   "status": "resolved",
+   "simbad_main_id": "NGC  3579",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "NGC358": {
+   "query_token": "NGC358",
+   "status": "resolved",
+   "simbad_main_id": "NGC   358",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC"
+   ]
+  },
+  "NGC3582": {
+   "query_token": "NGC3582",
+   "status": "resolved",
+   "simbad_main_id": "NGC  3582",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "NGC3584": {
+   "query_token": "NGC3584",
+   "status": "resolved",
+   "simbad_main_id": "NGC  3584",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "NGC3586": {
+   "query_token": "NGC3586",
+   "status": "resolved",
+   "simbad_main_id": "NGC  3586",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "NGC3603": {
+   "query_token": "NGC3603",
+   "status": "resolved",
+   "simbad_main_id": "NGC  3603",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "HII",
+    "*",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "ISM",
+    "Rad",
+    "X"
+   ]
+  },
+  "NGC370": {
+   "query_token": "NGC370",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3708": {
+   "query_token": "NGC3708",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC3709": {
+   "query_token": "NGC3709",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC405": {
+   "query_token": "NGC405",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC421": {
+   "query_token": "NGC421",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC4280": {
+   "query_token": "NGC4280",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC4317": {
+   "query_token": "NGC4317",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC4397": {
+   "query_token": "NGC4397",
+   "status": "resolved",
+   "simbad_main_id": "NGC  4397",
+   "otype3": "**",
+   "otype_list": [
+    "**"
+   ]
+  },
+  "NGC4399": {
+   "query_token": "NGC4399",
+   "status": "resolved",
+   "simbad_main_id": "NGC  4399",
+   "otype3": "PoG",
+   "otype_list": [
+    "PoG"
+   ]
+  },
+  "NGC4400": {
+   "query_token": "NGC4400",
+   "status": "resolved",
+   "simbad_main_id": "NGC  4400",
+   "otype3": "PoG",
+   "otype_list": [
+    "PoG"
+   ]
+  },
+  "NGC4401": {
+   "query_token": "NGC4401",
+   "status": "resolved",
+   "simbad_main_id": "NGC  4401",
+   "otype3": "AG?",
+   "otype_list": [
+    "AG?",
+    "PoG"
+   ]
+  },
+  "NGC453": {
+   "query_token": "NGC453",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC4557": {
+   "query_token": "NGC4557",
+   "status": "resolved",
+   "simbad_main_id": "NGC  4557",
+   "otype3": "mul",
+   "otype_list": [
+    "mul"
+   ]
+  },
+  "NGC460": {
+   "query_token": "NGC460",
+   "status": "resolved",
+   "simbad_main_id": "NGC   460",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*",
+    "IR"
+   ]
+  },
+  "NGC4982": {
+   "query_token": "NGC4982",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC5242": {
+   "query_token": "NGC5242",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC5388": {
+   "query_token": "NGC5388",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC5432": {
+   "query_token": "NGC5432",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC5449": {
+   "query_token": "NGC5449",
+   "status": "resolved",
+   "simbad_main_id": "NGC  5449",
+   "otype3": "PoG",
+   "otype_list": [
+    "G",
+    "PoG",
+    "PoG",
+    "UV"
+   ]
+  },
+  "NGC5571": {
+   "query_token": "NGC5571",
+   "status": "resolved",
+   "simbad_main_id": "NGC  5571",
+   "otype3": "mul",
+   "otype_list": [
+    "mul"
+   ]
+  },
+  "NGC5586": {
+   "query_token": "NGC5586",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC56": {
+   "query_token": "NGC56",
+   "status": "resolved",
+   "simbad_main_id": "NGC    56",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "NGC5621": {
+   "query_token": "NGC5621",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC5665A": {
+   "query_token": "NGC5665A",
+   "status": "resolved",
+   "simbad_main_id": "NGC  5665A",
+   "otype3": "EmG",
+   "otype_list": [
+    "rG",
+    "EmG",
+    "H2G",
+    "GiG",
+    "NIR",
+    "*",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt",
+    "Rad"
+   ]
+  },
+  "NGC5840": {
+   "query_token": "NGC5840",
+   "status": "resolved",
+   "simbad_main_id": "NGC  5840",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "NGC603": {
+   "query_token": "NGC603",
+   "status": "resolved",
+   "simbad_main_id": "NGC   603",
+   "otype3": "mul",
+   "otype_list": [
+    "mul"
+   ]
+  },
+  "NGC607": {
+   "query_token": "NGC607",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6082": {
+   "query_token": "NGC6082",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC610": {
+   "query_token": "NGC610",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC611": {
+   "query_token": "NGC611",
+   "status": "resolved",
+   "simbad_main_id": "NGC   611",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "NGC6133": {
+   "query_token": "NGC6133",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6151": {
+   "query_token": "NGC6151",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6151",
+   "otype3": "G",
+   "otype_list": [
+    "*",
+    "G"
+   ]
+  },
+  "NGC6164": {
+   "query_token": "NGC6164",
+   "status": "resolved",
+   "simbad_main_id": "HD 148937",
+   "otype3": "SB*",
+   "otype_list": [
+    "V*",
+    "SB*",
+    "Em*",
+    "EmO",
+    "HII",
+    "MIR",
+    "NIR",
+    "PN",
+    "V*",
+    "**",
+    "*",
+    "*",
+    "G",
+    "ISM",
+    "UV",
+    "X"
+   ]
+  },
+  "NGC6165": {
+   "query_token": "NGC6165",
+   "status": "resolved",
+   "simbad_main_id": "HD 148937",
+   "otype3": "SB*",
+   "otype_list": [
+    "V*",
+    "SB*",
+    "Em*",
+    "EmO",
+    "HII",
+    "MIR",
+    "NIR",
+    "PN",
+    "V*",
+    "**",
+    "*",
+    "*",
+    "G",
+    "ISM",
+    "UV",
+    "X"
+   ]
+  },
+  "NGC6188": {
+   "query_token": "NGC6188",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6188",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM",
+    "Rad"
+   ]
+  },
+  "NGC6237": {
+   "query_token": "NGC6237",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6248",
+   "otype3": "AG?",
+   "otype_list": [
+    "AG?",
+    "G",
+    "G"
+   ]
+  },
+  "NGC6245": {
+   "query_token": "NGC6245",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6245",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "NGC6250": {
+   "query_token": "NGC6250",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6250",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "*",
+    "As*",
+    "As*",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "UV"
+   ]
+  },
+  "NGC629": {
+   "query_token": "NGC629",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6353": {
+   "query_token": "NGC6353",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6353",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "NGC6354": {
+   "query_token": "NGC6354",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6357": {
+   "query_token": "NGC6357",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6357",
+   "otype3": "OpC",
+   "otype_list": [
+    "HII",
+    "OpC",
+    "OpC",
+    "*",
+    "Cl*",
+    "Cl*",
+    "Cl?",
+    "Rad"
+   ]
+  },
+  "NGC6413": {
+   "query_token": "NGC6413",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6432": {
+   "query_token": "NGC6432",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6432",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "NGC6448": {
+   "query_token": "NGC6448",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6450": {
+   "query_token": "NGC6450",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6465": {
+   "query_token": "NGC6465",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6465",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "NGC6481": {
+   "query_token": "NGC6481",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6481",
+   "otype3": "err",
+   "otype_list": [
+    "Cl*",
+    "Cl?",
+    "err"
+   ]
+  },
+  "NGC6526": {
+   "query_token": "NGC6526",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6526",
+   "otype3": "RNe",
+   "otype_list": [
+    "RNe"
+   ]
+  },
+  "NGC6530": {
+   "query_token": "NGC6530",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6530",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl?"
+   ]
+  },
+  "NGC6551": {
+   "query_token": "NGC6551",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6559": {
+   "query_token": "NGC6559",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6559",
+   "otype3": "GNe",
+   "otype_list": [
+    "GNe",
+    "HII",
+    "G"
+   ]
+  },
+  "NGC6564": {
+   "query_token": "NGC6564",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6588": {
+   "query_token": "NGC6588",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6588",
+   "otype3": "err",
+   "otype_list": [
+    "Cl*",
+    "err"
+   ]
+  },
+  "NGC6589": {
+   "query_token": "NGC6589",
+   "status": "resolved",
+   "simbad_main_id": "IRAS 18138-1954",
+   "otype3": "IR",
+   "otype_list": [
+    "HII",
+    "RNe",
+    "IR",
+    "ISM"
+   ]
+  },
+  "NGC6648": {
+   "query_token": "NGC6648",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6666": {
+   "query_token": "NGC6666",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6669": {
+   "query_token": "NGC6669",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6669",
+   "otype3": "AG?",
+   "otype_list": [
+    "HI",
+    "AG?",
+    "G"
+   ]
+  },
+  "NGC6729": {
+   "query_token": "NGC6729",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6729",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "NGC6797": {
+   "query_token": "NGC6797",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6797",
+   "otype3": "**",
+   "otype_list": [
+    "**"
+   ]
+  },
+  "NGC6820": {
+   "query_token": "NGC6820",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6820",
+   "otype3": "GNe",
+   "otype_list": [
+    "HII",
+    "Mas",
+    "GNe",
+    "HII",
+    "MIR",
+    "OpC",
+    "smm",
+    "*",
+    "Cl*",
+    "IR"
+   ]
+  },
+  "NGC6823": {
+   "query_token": "NGC6823",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6823",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl*"
+   ]
+  },
+  "NGC6839": {
+   "query_token": "NGC6839",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6839",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl?"
+   ]
+  },
+  "NGC6847": {
+   "query_token": "NGC6847",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6847",
+   "otype3": "OpC",
+   "otype_list": [
+    "HII",
+    "OpC",
+    "OpC",
+    "HII",
+    "ISM"
+   ]
+  },
+  "NGC6859": {
+   "query_token": "NGC6859",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6863": {
+   "query_token": "NGC6863",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6863",
+   "otype3": "?",
+   "otype_list": [
+    "?",
+    "Cl*"
+   ]
+  },
+  "NGC6892": {
+   "query_token": "NGC6892",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6953": {
+   "query_token": "NGC6953",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC6997": {
+   "query_token": "NGC6997",
+   "status": "resolved",
+   "simbad_main_id": "NGC  6997",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "As*",
+    "As*",
+    "Cl*",
+    "Cl*",
+    "Cl?"
+   ]
+  },
+  "NGC7005": {
+   "query_token": "NGC7005",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7023": {
+   "query_token": "NGC7023",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7023",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "HII",
+    "OpC",
+    "RNe",
+    "V*",
+    "Cl*",
+    "IR",
+    "ISM",
+    "UV"
+   ]
+  },
+  "NGC7088": {
+   "query_token": "NGC7088",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7129": {
+   "query_token": "NGC7129",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7129",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "RNe",
+    "HII",
+    "Cl*",
+    "Cl*"
+   ]
+  },
+  "NGC7133": {
+   "query_token": "NGC7133",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7133",
+   "otype3": "err",
+   "otype_list": [
+    "RNe",
+    "err"
+   ]
+  },
+  "NGC7134": {
+   "query_token": "NGC7134",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7134",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*"
+   ]
+  },
+  "NGC7143": {
+   "query_token": "NGC7143",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7150": {
+   "query_token": "NGC7150",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7158": {
+   "query_token": "NGC7158",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7158",
+   "otype3": "Sy1",
+   "otype_list": [
+    "Sy1",
+    "Sy1",
+    "AGN",
+    "*",
+    "G",
+    "G",
+    "G",
+    "X"
+   ]
+  },
+  "NGC7161": {
+   "query_token": "NGC7161",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7186": {
+   "query_token": "NGC7186",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7238": {
+   "query_token": "NGC7238",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC728": {
+   "query_token": "NGC728",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7304": {
+   "query_token": "NGC7304",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7303",
+   "otype3": "EmG",
+   "otype_list": [
+    "EmG",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR"
+   ]
+  },
+  "NGC7352": {
+   "query_token": "NGC7352",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7352",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC"
+   ]
+  },
+  "NGC737": {
+   "query_token": "NGC737",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7380": {
+   "query_token": "NGC7380",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7380",
+   "otype3": "OpC",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "OpC",
+    "Cl*",
+    "Cl*",
+    "Cl?"
+   ]
+  },
+  "NGC7447": {
+   "query_token": "NGC7447",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7447",
+   "otype3": "?",
+   "otype_list": []
+  },
+  "NGC7453": {
+   "query_token": "NGC7453",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7471": {
+   "query_token": "NGC7471",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7481": {
+   "query_token": "NGC7481",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7481",
+   "otype3": "EmG",
+   "otype_list": [
+    "EmG",
+    "G"
+   ]
+  },
+  "NGC7486": {
+   "query_token": "NGC7486",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7486",
+   "otype3": "G",
+   "otype_list": [
+    "G"
+   ]
+  },
+  "NGC7502": {
+   "query_token": "NGC7502",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7520": {
+   "query_token": "NGC7520",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7526": {
+   "query_token": "NGC7526",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7538": {
+   "query_token": "NGC7538",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7538",
+   "otype3": "OpC",
+   "otype_list": [
+    "HII",
+    "OpC",
+    "Cl*",
+    "IR",
+    "ISM",
+    "Rad",
+    "X"
+   ]
+  },
+  "NGC7555": {
+   "query_token": "NGC7555",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7565": {
+   "query_token": "NGC7565",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7613": {
+   "query_token": "NGC7613",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7613",
+   "otype3": "G",
+   "otype_list": [
+    "*",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "Opt"
+   ]
+  },
+  "NGC7614": {
+   "query_token": "NGC7614",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7666": {
+   "query_token": "NGC7666",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7668": {
+   "query_token": "NGC7668",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7669": {
+   "query_token": "NGC7669",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7670": {
+   "query_token": "NGC7670",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC7772": {
+   "query_token": "NGC7772",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7772",
+   "otype3": "err",
+   "otype_list": [
+    "OpC",
+    "Cl*",
+    "Cl?",
+    "err",
+    "err"
+   ]
+  },
+  "NGC7826": {
+   "query_token": "NGC7826",
+   "status": "resolved",
+   "simbad_main_id": "NGC  7826",
+   "otype3": "err",
+   "otype_list": [
+    "OpC",
+    "OpC",
+    "err",
+    "err"
+   ]
+  },
+  "NGC7833": {
+   "query_token": "NGC7833",
+   "status": "not_found",
+   "simbad_main_id": null,
+   "otype3": null,
+   "otype_list": []
+  },
+  "NGC843": {
+   "query_token": "NGC843",
+   "status": "resolved",
+   "simbad_main_id": "NGC   843",
+   "otype3": "Cl*",
+   "otype_list": [
+    "Cl*"
+   ]
+  },
+  "NGC894": {
+   "query_token": "NGC894",
+   "status": "resolved",
+   "simbad_main_id": "NGC   894",
+   "otype3": "Sy2",
+   "otype_list": [
+    "Sy2",
+    "EmG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  },
+  "NGC896": {
+   "query_token": "NGC896",
+   "status": "resolved",
+   "simbad_main_id": "NGC   896",
+   "otype3": "ISM",
+   "otype_list": [
+    "ISM"
+   ]
+  },
+  "NGC930": {
+   "query_token": "NGC930",
+   "status": "resolved",
+   "simbad_main_id": "NGC   930",
+   "otype3": "GiG",
+   "otype_list": [
+    "GiG",
+    "*",
+    "AG?",
+    "G",
+    "G",
+    "G",
+    "G",
+    "G",
+    "IR",
+    "Opt"
+   ]
+  }
+ }
+}

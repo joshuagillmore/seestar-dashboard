@@ -7,7 +7,7 @@ import { TopBar } from '../../shell/TopBar'
 import type { View } from '../../shell/view'
 import { ProjectCard } from './ProjectCard'
 import { SessionHistory } from './SessionHistory'
-import { formatHours, mergeProjects } from './projects'
+import { formatHours, mergeProjects, projectStatus } from './projects'
 import styles from './ProjectsScreen.module.css'
 
 interface Data {
@@ -60,6 +60,9 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
   // an integration-led screen.
   const selected = merged.find((p) => p.targetId === selectedId) ?? merged[0] ?? null
   const totalHours = data ? formatHours(data.combined.totals.total_minutes) : null
+  // Aggregate headline only — not doubled: a per-card view toggle shouldn't
+  // change what the header claims about the fleet as a whole.
+  const needsDataCount = merged.filter((p) => projectStatus(p, false).tag === 'needs-data').length
 
   return (
     <AppShell
@@ -80,13 +83,17 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
           <div>
             <div className={styles.eyebrow}>list_projects · multi-night integration</div>
             <h1 className={styles.heading}>
-              {data ? `${data.combined.count} projects · ${totalHours} collected` : 'Projects'}
+              {data
+                ? `${data.combined.count} projects · ${totalHours} collected` +
+                  (needsDataCount > 0 ? ` · ${needsDataCount} need data` : '')
+                : 'Projects'}
             </h1>
           </div>
           {data && (
             <div className={styles.source}>
               {formatHours(data.combined.totals.store_minutes)} store ·{' '}
-              {formatHours(data.combined.totals.archive_minutes)} archive · no goals set
+              {formatHours(data.combined.totals.archive_minutes)} archive · goals are
+              catalogue-suggested, not user-set
             </div>
           )}
         </div>

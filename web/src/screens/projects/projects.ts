@@ -1,4 +1,5 @@
-import type { Project, ProjectsCombinedEntry } from '../../api/schemas'
+import { describeGoal, goalProgressPct } from '../../api/integrationGoal'
+import type { IntegrationGoal, Project, ProjectsCombinedEntry } from '../../api/schemas'
 
 /**
  * One row for the Projects screen: projects_combined's totals/provenance for
@@ -18,6 +19,12 @@ export interface MergedProject {
   archiveMinutes: number
   sources: ('store' | 'archive')[]
   store: Project | null
+  /** The sidecar's suggested integration-time goal for this target (see
+   * integrationGoal.ts / integration_goal.py's module docstring) — computed
+   * independently of whether the target has a `store` record at all, so an
+   * archive-only target (e.g. IC 405, never logged as a project) still gets
+   * an honest goal state instead of one gated on `store` existing. */
+  goal: IntegrationGoal | null
 }
 
 /**
@@ -38,11 +45,12 @@ export function mergeProjects(
     storeMinutes: entry.store_minutes,
     archiveMinutes: entry.archive_minutes,
     sources: entry.sources,
+    goal: entry.goal,
     store: byId.get(entry.target_id) ?? null,
   }))
 }
 
-export type ProjectTag = 'archive-only' | 'no-goal' | 'needs-data' | 'complete'
+export type ProjectTag = 'archive-only' | 'no-goal' | 'beyond-reach' | 'needs-data' | 'complete'
 
 export interface StatusInfo {
   tag: ProjectTag
@@ -50,38 +58,44 @@ export interface StatusInfo {
 }
 
 /**
- * Every project in the live store has goal_minutes 0.0 today (the phase-2
- * spec's central finding), so 'needs-data' and 'complete' are unreachable
- * against real data — exercised only with synthetic MergedProject values in
- * projects.test.ts. That is deliberate: the day a real goal is set, this
- * function (and progressPct below) already know what to do with it, and the
- * screen degrades into the originally designed goal-progress view with no
- * further UI change.
+ * `archive-only` takes priority over the goal-derived tags: it answers a
+ * different question ("is there a list_projects/session-history record for
+ * this target at all?"), independent of whether the catalogue has a
+ * suggested goal for it — an archive-only target can and often does still
+ * have a real goal (see MergedProject.goal's doc comment), shown in the
+ * hours row and progress bar regardless of this tag.
+ *
+ * `no-goal` covers both "not in the DSO catalogue at all" and "resolved but
+ * no catalogued magnitude / photometry not credible" — three different
+ * reasons (see integrationGoal.ts's describeGoal), one badge; the honest
+ * distinction between them lives in the hours-row label and its title, where
+ * there's room for a real sentence instead of a 9px tag.
  */
-export function projectStatus(project: MergedProject): StatusInfo {
+export function projectStatus(project: MergedProject, doubled: boolean): StatusInfo {
   if (!project.store) return { tag: 'archive-only', label: 'archive only' }
-  if (project.store.goal_minutes <= 0) return { tag: 'no-goal', label: 'no goal' }
-  return project.totalMinutes >= project.store.goal_minutes
+  const display = describeGoal(project.goal)
+  if (display.kind === 'beyond-reach') return { tag: 'beyond-reach', label: 'beyond reach' }
+  if (display.kind !== 'goal') return { tag: 'no-goal', label: 'no goal' }
+  const pct = goalProgressPct(project.totalMinutes, project.goal, doubled)
+  return pct !== null && pct >= 100
     ? { tag: 'complete', label: 'complete' }
     : { tag: 'needs-data', label: 'needs data' }
 }
 
 /**
- * Null means "nothing to draw a track against" — no store record, or a store
- * record with goal_minutes <= 0 (every project today). The progress track
- * must not render at all in that case: see design/README.md § Screen 4 and
- * the phase-2 spec's "integration-led, not goal-led" ruling — this screen
- * shows hours collected as the lead fact precisely because there is
- * currently no goal for any project to show progress against.
+ * Null means "nothing to draw a proportional fill against" (no catalogue
+ * record, no catalogued magnitude, photometry not credible, or beyond
+ * practical reach) — the caller renders an empty rail instead of a bar with
+ * a fabricated denominator. See integrationGoal.ts's goalProgressPct, which
+ * this delegates to (shared with Tonight's ranked cards).
  *
  * Measures against `totalMinutes` (store + archive union), not the store's
  * own `collected_minutes` alone: a goal is about real integration time, and
- * the union exists because the store alone undercounts it for the four
- * targets recorded in both places.
+ * the union exists because the store alone undercounts it for targets
+ * recorded in both places.
  */
-export function progressPct(project: MergedProject): number | null {
-  if (!project.store || project.store.goal_minutes <= 0) return null
-  return Math.min(100, Math.round((project.totalMinutes / project.store.goal_minutes) * 100))
+export function progressPct(project: MergedProject, doubled: boolean): number | null {
+  return goalProgressPct(project.totalMinutes, project.goal, doubled)
 }
 
 export const formatHours = (minutes: number): string => `${(minutes / 60).toFixed(1)} h`

@@ -202,6 +202,62 @@ where a match is meant; a *count* where a source is meant; an attribute or
 test-id that nothing in the codebase sets; and any bound that the code under
 test already enforces by construction.
 
+## Standing check: tests that pin a transient state as an invariant (2026-07-30)
+
+A second failure shape, distinct from the proxy-assertion one above and found in
+phase 3. Fifteen web tests failed the moment the goal model started returning
+real values, and every one of them was asserting something that was only ever
+*temporarily* true:
+
+```
+× every real project is archive-only or no-goal — none reach needs-data/complete
+× no real project has a non-null progress percentage today
+× renders no progress track anywhere — every project has goal_minutes 0 today
+```
+
+Those held only because the server never set goals, so `goal_minutes` was
+permanently 0. The word **"today"** appears in three of them, which is the tell:
+the author knew it was a snapshot and encoded it anyway.
+
+**These tests were not vacuous** — they did their job, failing loudly the moment
+the assumption broke, which is exactly what the proxy assertions never did. The
+risk is not in writing them, it is in **resolving them by weakening or deleting
+them to get back to green.** The correct fix is to rewrite the assertion as the
+durable property.
+
+Worked example from the same phase: a test asserted "NGC 1579 lands in track 3".
+A live SIMBAD reclassification retyped the object mid-task and it failed. The fix
+was not to update the expected track — it was to assert *a target with no
+catalogued magnitude never gets a confident number, only `None` or the coarse
+band*, which survives any further retyping. Same input, same intent, but pinned
+to a rule rather than a snapshot.
+
+**The check:** when a test's name or body contains "today", "currently", "every
+real X", or a count of production data, ask what makes it true. If the answer is
+a condition that could change without the code changing, express the condition
+instead of its current consequence.
+
+## Decision pending: NGC 2244 resolves to the cluster, not the nebula
+
+Not a defect — a judgement call that is the user's, recorded so it does not get
+silently "fixed".
+
+The user's archive has a target folder for **NGC 2244**, which the alias index
+resolves to **NGC 2239**, the Rosette's open cluster. That redirect is OpenNGC's
+own and is factually correct: NGC 2244 *is* the cluster designation. The
+consequence is that the target renders with a flat coarse cluster goal rather
+than the nebula's photometric one.
+
+The nebula exists in the catalogue and is correct — `NGC2238`, `emission_nebula`,
+mag 6.0, 80′, reachable as `Rosette`, `SH2-275` or `C49`. So the fix, if wanted,
+is a one-line entry in `data/alias_overrides.json` pointing `NGC2244` at
+`NGC2238`.
+
+**Left as-is deliberately.** Overriding an upstream redirect to guess which
+object the user meant is the kind of unfounded assertion this build has avoided
+throughout, and the user images the whole complex under either name. Worth
+asking; not worth assuming.
+
 ## Two process notes from phase 1
 
 **Verify the gate on the merged result *before* pushing, and check it actually

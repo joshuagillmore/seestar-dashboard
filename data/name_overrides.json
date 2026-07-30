@@ -1,0 +1,13 @@
+{
+  "_readme": "Corrections to an OpenNGC `Common names` value where that same row's own `NED notes` field contradicts it. Audited exhaustively: every OpenNGC row carrying both a Common name and a NED note (34 rows, out of 12,517 included objects) was checked for this specific kind of contradiction. IC434 is the only one found. Applied by build_catalogue.py after the normal name-selection step (Builder.apply_name_overrides). A deliberate, cited divergence from upstream OpenNGC data, not a bug in this generator.",
+  "overrides": [
+    {
+      "id": "IC434",
+      "openngc_common_names": "Flame Nebula,Orion B",
+      "corrected_name": "IC434",
+      "reason": "OpenNGC's row for IC0434 lists Common names 'Flame Nebula,Orion B', but that same row's NED notes field reads 'The Horsehead Nebula is an absorption patch in this' -- correctly describing IC434 as the diffuse emission field behind the Horsehead, not the Flame Nebula. The Flame Nebula is a separate object, NGC 2024, whose OpenNGC row has no Common name at all (Common names field is empty) -- so this isn't a name that belongs on a different existing row either; it's simply misattributed. Falling back to the bare designation 'IC434' rather than propagating a name known to be wrong, per this project's Common-names convention of falling back to the designation when there's no citable name.",
+      "source": "OpenNGC NGC.csv: row Name=IC0434 (Common names + NED notes columns) and row Name=NGC2024 (Common names column, empty). Verified 2026-07-30 against the OpenNGC snapshot recorded in data/README.md.",
+      "audit_note": "All 34 OpenNGC rows with both a Common name and a NED note were reviewed for this pattern (see .superpowers/catalogue-extension-report.md). One other row, NGC1909, hedges rather than contradicts (\"Identification as NGC 1909 is uncertain\" for 'the Witch Head Nebula') -- left as-is since OpenNGC itself doesn't assert a specific error, just uncertainty, and there's no citable replacement to substitute."
+    }
+  ]
+}

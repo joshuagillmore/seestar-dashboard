@@ -31,3 +31,8 @@ CLAUDE.local.md
 
 # SDD / agent working artifacts — scratch, never committed
 .superpowers/
+
+# OpenNGC raw source CSVs — ~3.7 MB, not ours to redistribute as raw source.
+# Regenerate via data/build_catalogue.py; see data/README.md for the download
+# URLs and the SHA-256 of the snapshot the committed catalogue was built from.
+data/openngc/

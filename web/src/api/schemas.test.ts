@@ -79,4 +79,20 @@ describe('fixture contract', () => {
     expect(seen.has('store')).toBe(true)
     expect(seen.has('archive')).toBe(true)
   })
+
+  it('parses every goal shape the recorded fixture actually contains: null, track "none" with each reason, and a real number', () => {
+    const parsed = ProjectsCombinedSchema.parse(recordedProjectsCombined())
+    const goals = parsed.projects.map((p) => p.goal)
+    expect(goals.some((g) => g === null)).toBe(true) // e.g. "Unknown"
+    expect(goals.some((g) => g?.reason === 'no_magnitude')).toBe(true) // e.g. SH2-142
+    expect(goals.some((g) => g?.reason === 'photometry_unreliable')).toBe(true) // IC 405
+    expect(goals.some((g) => g !== null && g.track !== 'none' && g.suggested_hours !== null)).toBe(true)
+  })
+
+  it('finds IC 405 flagged photometry_unreliable, not beyond_reach — the case CLAUDE.md singles out by name', () => {
+    const parsed = ProjectsCombinedSchema.parse(recordedProjectsCombined())
+    const ic405 = parsed.projects.find((p) => p.target_id === 'IC405')
+    expect(ic405?.goal?.reason).toBe('photometry_unreliable')
+    expect(ic405?.goal?.beyond_reach).toBe(false)
+  })
 })
