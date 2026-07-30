@@ -10,19 +10,34 @@
    gap on the left and a 78px window column + 12px gap on the right. Without
    matching insets, identical percentages land at different pixel offsets —
    the same instant renders tens of pixels apart. Keep these three in register:
-   86px left / 90px right, everywhere a percentage from buildScale is drawn. */
+   86px left / 99px right, everywhere a percentage from buildScale is drawn.
+
+   The right inset is 99px, not 90px: .lane now sits inside .laneScroll, which
+   reserves a 9px scrollbar-gutter on its right (matching the 9px scrollbar
+   width restyled globally in tokens.css) whether or not it is currently
+   scrolling, so .laneTrack's box is always 9px narrower than .strip's. Without
+   the extra 9px here, the two drift apart the moment .laneScroll gets enough
+   lanes to scroll — the same class of bug this comment already existed to
+   prevent once. */
 .strip {
   position: relative;
   height: 14px;
   border-radius: 3px;
   background: var(--twilight-strip);
-  margin: 0 90px 0 86px;
+  margin: 0 99px 0 86px;
 }
 
 .bracket { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--chart-rail-empty); border-right: 1px solid var(--chart-rail-empty); }
-.bracketLabels { position: relative; height: 14px; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dimmer); margin: 0 90px 0 86px; }
+.bracketLabels { position: relative; height: 14px; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dimmer); margin: 0 99px 0 86px; }
 .bracketLabel { position: absolute; top: 0; }
 .bracketLabelEnd { transform: translateX(-100%); }
+
+/* ~3 lanes visible (3 * 30px: 20px track + 5px top/bottom padding from
+   .lane), the rest reached by scroll. scrollbar-gutter: stable is what keeps
+   .laneTrack in register with .strip/.bracketLabels/.axis above and below —
+   see the comment on .strip. overflow-x is not needed: spanToPercent clamps
+   every band to [0, 100], so a lane never overflows horizontally. */
+.laneScroll { max-height: 90px; overflow-y: auto; scrollbar-gutter: stable; }
 
 .lane { display: flex; align-items: center; gap: 12px; padding: 5px 0; }
 .laneName { width: 74px; font-family: var(--font-sans); font-weight: 500; font-size: 12px; color: var(--text-secondary); }
@@ -46,4 +61,4 @@
   overflow: hidden;
 }
 
-.axis { display: flex; justify-content: space-between; padding: 8px 90px 0 86px; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-ghost); }
+.axis { display: flex; justify-content: space-between; padding: 8px 99px 0 86px; font-family: var(--font-mono); font-size: 9.5px; color: var(--text-ghost); }

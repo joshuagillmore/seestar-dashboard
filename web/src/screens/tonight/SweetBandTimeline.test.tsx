@@ -45,10 +45,10 @@ describe('SweetBandTimeline', () => {
     const { container } = render(
       <SweetBandTimeline conditions={conditions} targets={plan.targets} />,
     )
-    // Pinned against the recorded fixture (dark 19:48:37–03:53:37 UTC):
+    // Pinned against the recorded fixture (dark 19:43:20–03:58:20 UTC):
     // buildScale pads an hour each side and rounds outward to the hour, giving
     // an 18:00Z–05:00Z axis (12 hourly ticks) and a first band starting at
-    // ~16.46% of it, 21.56% wide. These are exact enough that reverting
+    // ~15.67% of it, 21.26% wide. These are exact enough that reverting
     // buildScale to a hardcoded window, or deleting the axis/strip, changes
     // them — unlike a bare [0,100] clamp check, which holds for any input by
     // construction. Tick count (not label text) is asserted because the
@@ -64,7 +64,22 @@ describe('SweetBandTimeline', () => {
       expect(left).toBeGreaterThanOrEqual(0)
       expect(left + width).toBeLessThanOrEqual(100.01)
     }
-    expect(parseFloat(bands[0].style.left)).toBeCloseTo(16.46, 1)
-    expect(parseFloat(bands[0].style.width)).toBeCloseTo(21.56, 1)
+    expect(parseFloat(bands[0].style.left)).toBeCloseTo(15.67, 1)
+    expect(parseFloat(bands[0].style.width)).toBeCloseTo(21.26, 1)
+  })
+
+  it('renders all 12 lanes inside the scroll container, not just the visible ~3', () => {
+    // Pinned against the real fixture count (limit=12), not merely
+    // plan.targets.length, so a regression that silently clips to some other
+    // bound still fails even if it coincidentally matches a looser check. A
+    // scroll container that drops rows to fit the visible area would be worse
+    // than no scroll at all — nothing on screen would reveal it.
+    expect(plan.targets).toHaveLength(12)
+    render(<SweetBandTimeline conditions={conditions} targets={plan.targets} />)
+    const scroller = screen.getByTestId('lane-scroll')
+    expect(scroller.querySelectorAll('[data-band]')).toHaveLength(12)
+    for (const target of plan.targets) {
+      expect(scroller).toContainElement(screen.getByText(target.id))
+    }
   })
 })
