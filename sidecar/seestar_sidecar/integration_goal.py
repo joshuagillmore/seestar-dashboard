@@ -163,8 +163,9 @@ The flat band is still scaled by the broadband Bortle curve (see below):
 No magnitude (dark nebulae; diffuse HII regions SIMBAD carries with no
 integrated magnitude, e.g. SH2-142, NGC 281, NGC 2237, NGC 1579; any
 catalogue record missing magnitude or a usable size), or no catalogue record
-at all. **No target is returned** — the caller shows hours captured with no
-progress bar, rather than a fabricated denominator. There is no published
+at all. **No number is shown** — the caller shows hours captured with no
+progress bar, rather than a fabricated denominator — but *why* is always
+machine-readable; see "The `reason` field" below. There is no published
 linkage from Sharpless brightness class or Lynds opacity class to exposure
 time in any source found — those schemes predate digital SNR calculation —
 so nothing tries to derive one.
@@ -253,11 +254,41 @@ their beyond_reach answers are trusted and stay exactly as before — the
 distinction is about the reliability of *this class of input*, not about
 raising the bound generally.
 
-The fallback is logged (not returned — the external "no goal" contract stays
-a bare `None`, same as every other Track 3 case) with a distinct reason tag,
-`photometry_unreliable`, specifically so this is never confused in the logs
-with the ordinary "no magnitude at all" Track 3 case (which logs nothing —
-there is nothing anomalous about a target simply lacking photometry).
+**Corrected.** The fallback is *also* logged (`reason=photometry_unreliable`,
+matching the token below), but a log line is not reachable from the browser
+that has to render an honest absent state — see "The `reason` field" next.
+
+## The `reason` field
+
+The UI renders what this module decides and must never re-derive it or
+guess at wording — that cuts both ways: if this module *knows* why there is
+no goal, it has to say so in the payload, not just in a log a browser can
+never read. So `suggest_integration_goal()` only ever returns a bare `None`
+when there is no catalogue record at all (an unresolved id — "Unknown", or a
+Caldwell number with no single canonical object); every *resolved* target
+gets a dict, even when there is nothing to show a bar for.
+
+`reason` is `None` whenever a real result exists — a normal photometric
+number, a coarse cluster/planetary-nebula estimate, or a trusted
+`beyond_reach` — because those three are already self-describing through
+their own fields (`coarse`, `beyond_reach`). It is one of two short, stable, machine-readable tokens
+(`REASON_NO_MAGNITUDE`, `REASON_PHOTOMETRY_UNRELIABLE` below) exactly when
+`track` is `"none"` — four genuinely
+different "why is there no bar" states in total, once the bare-`None`
+"not a catalogue object" case is counted too:
+
+| State | `track` | `reason` | Meaning |
+|---|---|---|---|
+| not in the catalogue | *(the whole return is `None`)* | — | no record resolved at all |
+| no magnitude | `"none"` | `no_magnitude` | integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured |
+| unreliable photometry | `"none"` | `photometry_unreliable` | magnitude present but not credible for this object class (IC 405) |
+| beyond reach | `"photometric"` | `None` | a trusted target whose computed hours exceed `BEYOND_REACH_HOURS` |
+| coarse | `"cluster"` or `"photometric"` | `None` | a real number, flagged low-confidence |
+| normal | `"photometric"` or `"cluster"` | `None` | a real, trusted number |
+
+The wording that turns a `reason` token into a sentence a user reads is the
+UI's job, and belongs with the design, not here — this module hands over a
+token, never prose for that token.
 
 ## f-ratio
 
@@ -324,6 +355,12 @@ _COARSE_PHOTOMETRIC_TYPES = frozenset({"planetary_nebula"})
 #: honest beyond_reach answer.
 _UNRELIABLE_PHOTOMETRY_TYPES = frozenset({"emission_nebula", "reflection_nebula", "other"})
 
+#: `reason` tokens — see "The `reason` field" in the module docstring. Short
+#: and stable because they are a wire contract with the UI: the wording a
+#: user reads belongs to the UI/design, never to this module.
+REASON_NO_MAGNITUDE = "no_magnitude"
+REASON_PHOTOMETRY_UNRELIABLE = "photometry_unreliable"
+
 _BORTLE_RATIO = {
     "broadband": BROADBAND_BORTLE_RATIO,
     "narrowband": NARROWBAND_BORTLE_RATIO,
@@ -369,32 +406,51 @@ def _select_track(entry: dict) -> str:
 
 def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> dict | None:
     """Suggested integration-time goal for one catalogue record, or `None`
-    when Track 3 applies (see module docstring) — including when `entry`
-    itself is `None` (the target isn't in the catalogue at all, e.g. an
-    unresolved alias or a target like "Unknown").
+    when there is no catalogue record at all (see module docstring — `entry`
+    itself is `None`, e.g. an unresolved alias or a target like "Unknown").
+    Every *resolved* target returns a dict, even when there is no bar to
+    show for it — see "The `reason` field" in the module docstring.
 
     Never raises on a malformed/missing `entry` field — a target this
-    model can't say anything honest about degrades to no target, the same
+    model can't say anything honest about degrades to no goal, the same
     as a target genuinely lacking photometry.
 
     Returned dict (always the same shape when not `None`), never phrased as
     a requirement — "suggested_hours", never "goal_minutes" or "needed":
 
-        track:               "photometric" | "cluster"
-        suggested_hours:     float, or None when beyond_reach is True
+        track:               "photometric" | "cluster" | "none"
+        suggested_hours:     float, or None when there is no number to show
         coarse:              True for the cluster track, and for any
                               planetary nebula on the photometric track (see
                               "Planetary nebulae — coarse, not corrected")
-        beyond_reach:        True when the curve computes past BEYOND_REACH_HOURS
-        surface_brightness:  mag/arcsec^2, or None for the cluster track
-        bortle_multiplier:   the scale factor actually applied
+        beyond_reach:        True for a trusted target whose computed hours
+                              exceed BEYOND_REACH_HOURS
+        surface_brightness:  mag/arcsec^2, or None when not computed
+        bortle_multiplier:   the scale factor actually applied, or None
+        reason:              None for a normal/coarse/beyond_reach result;
+                              REASON_NO_MAGNITUDE or
+                              REASON_PHOTOMETRY_UNRELIABLE when track is
+                              "none" — see "The `reason` field"
         note:                a one-line, auditable explanation for the UI
     """
     if entry is None:
         return None
     track = _select_track(entry)
     if track == "none":
-        return None
+        return {
+            "track": "none",
+            "suggested_hours": None,
+            "coarse": False,
+            "beyond_reach": False,
+            "surface_brightness": None,
+            "bortle_multiplier": None,
+            "reason": REASON_NO_MAGNITUDE,
+            "note": (
+                "No catalogued magnitude (or no usable size) for this target — "
+                "integrated magnitude is undefined for many dark/diffuse "
+                "nebulae, not merely unmeasured."
+            ),
+        }
 
     band = _band_for_type(entry.get("type"))
     multiplier = bortle_multiplier(bortle, band)
@@ -408,6 +464,7 @@ def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> d
             "beyond_reach": False,
             "surface_brightness": None,
             "bortle_multiplier": round(multiplier, 3),
+            "reason": None,
             "note": (
                 f"Flat {CLUSTER_HOURS:.1f} h band for open/globular clusters — "
                 "mean surface brightness misrepresents concentrated starlight, so "
@@ -421,24 +478,40 @@ def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> d
 
     if raw_hours > BEYOND_REACH_HOURS:
         if entry.get("type") in _UNRELIABLE_PHOTOMETRY_TYPES:
-            # See "Beyond reach vs. unreliable photometry" in the module
-            # docstring — IC 405's real case. Logged, not returned: the
-            # external "no goal" contract stays a bare None like every other
-            # Track 3 case; the reason tag is what a log search distinguishes
-            # this from the ordinary no-magnitude case (which logs nothing).
+            # See "Beyond reach vs. unreliable photometry" and "The `reason`
+            # field" in the module docstring — IC 405's real case. Logged
+            # (useful for ops) AND returned (the browser can't read a log):
+            # the reason tag ties the two together, and is never emitted
+            # for the ordinary no-magnitude case, which logs nothing because
+            # there is nothing anomalous about it.
             logger.info(
                 "integration_goal: %s (type=%s) computes to ~%.0f h at SB "
                 "%.2f mag/arcsec², past BEYOND_REACH_HOURS=%.0f h — "
-                "reason=photometry_unreliable, not beyond_reach (diffuse-"
-                "nebula integrated magnitude is not trusted this far out); "
-                "falling back to Track 3 (no goal).",
+                "reason=%s, not beyond_reach (diffuse-nebula integrated "
+                "magnitude is not trusted this far out); falling back to "
+                "Track 3 (no goal).",
                 entry.get("id", "<unknown>"),
                 entry.get("type"),
                 raw_hours,
                 sb,
                 BEYOND_REACH_HOURS,
+                REASON_PHOTOMETRY_UNRELIABLE,
             )
-            return None
+            return {
+                "track": "none",
+                "suggested_hours": None,
+                "coarse": False,
+                "beyond_reach": False,
+                "surface_brightness": round(sb, 2),
+                "bortle_multiplier": round(multiplier, 3),
+                "reason": REASON_PHOTOMETRY_UNRELIABLE,
+                "note": (
+                    f"SB {sb:.2f} mag/arcsec² computes to ~{raw_hours:.0f} h, which "
+                    "is not credible for this object class — treating the "
+                    "catalogued magnitude as unreliable, not the target as "
+                    "unreachable."
+                ),
+            }
         return {
             "track": "photometric",
             "suggested_hours": None,
@@ -446,6 +519,7 @@ def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> d
             "beyond_reach": True,
             "surface_brightness": round(sb, 2),
             "bortle_multiplier": round(multiplier, 3),
+            "reason": None,
             "note": (
                 f"SB {sb:.2f} mag/arcsec² computes to ~{raw_hours:.0f} h — "
                 "beyond practical reach for this instrument and site."
@@ -473,5 +547,6 @@ def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> d
         "beyond_reach": False,
         "surface_brightness": round(sb, 2),
         "bortle_multiplier": round(multiplier, 3),
+        "reason": None,
         "note": note,
     }

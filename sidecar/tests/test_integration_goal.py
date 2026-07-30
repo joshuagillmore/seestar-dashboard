@@ -15,6 +15,8 @@ from seestar_sidecar.integration_goal import (
     CLUSTER_HOURS,
     FLOOR_HOURS,
     K,
+    REASON_NO_MAGNITUDE,
+    REASON_PHOTOMETRY_UNRELIABLE,
     SB_REF,
     SITE_BORTLE_REF,
     T_REF,
@@ -146,6 +148,10 @@ class TestBounds:
         result = suggest_integration_goal(_entry_at_sb(27.0), bortle=SITE_BORTLE_REF)
         assert result["beyond_reach"] is True
         assert result["suggested_hours"] is None
+        # beyond_reach is trusted and self-describing via its own flag — the
+        # `reason` field (see "The `reason` field") is reserved for track:
+        # "none" and stays None here, the "ordinary case carries none" check.
+        assert result["reason"] is None
 
     def test_just_under_the_cap_still_returns_a_number(self):
         # Solve for the SB whose raw (pre-floor) hours sits just under the cap.
@@ -162,11 +168,12 @@ class TestBounds:
 
 class TestUnreliableDiffuseNebulaPhotometry:
     """IC 405's real case (see integration_goal.py's "Beyond reach vs.
-    unreliable photometry"): a diffuse nebula computing past
-    BEYOND_REACH_HOURS is treated as unreliable integrated-magnitude
-    photometry, not a genuinely unreachable target, and falls back to no
-    goal at all (same external contract as any other Track 3 case) rather
-    than `beyond_reach: True`. Scoped to a type *set*
+    unreliable photometry" and "The `reason` field"): a diffuse nebula
+    computing past BEYOND_REACH_HOURS is treated as unreliable integrated-
+    magnitude photometry, not a genuinely unreachable target, and falls back
+    to `track: "none"` with `reason: REASON_PHOTOMETRY_UNRELIABLE` — never
+    a bare `None` (the UI has to be able to render *why*), and never
+    `beyond_reach: True`. Scoped to a type *set*
     (`_UNRELIABLE_PHOTOMETRY_TYPES`), not to IC405's id, because the
     in-flight SIMBAD reclassification may retype it from "other" to
     "emission_nebula" — both must behave identically.
@@ -175,7 +182,10 @@ class TestUnreliableDiffuseNebulaPhotometry:
     @pytest.mark.parametrize("type_", ["other", "emission_nebula", "reflection_nebula"])
     def test_diffuse_nebula_family_falls_back_to_no_goal(self, type_):
         result = suggest_integration_goal(_entry_at_sb(27.0, type_=type_), bortle=SITE_BORTLE_REF)
-        assert result is None
+        assert result["track"] == "none"
+        assert result["suggested_hours"] is None
+        assert result["beyond_reach"] is False
+        assert result["reason"] == REASON_PHOTOMETRY_UNRELIABLE
 
     @pytest.mark.parametrize("type_", ["galaxy", "planetary_nebula", "supernova_remnant"])
     def test_types_outside_the_diffuse_family_keep_the_honest_beyond_reach_answer(self, type_):
@@ -184,23 +194,26 @@ class TestUnreliableDiffuseNebulaPhotometry:
         the exact same SB that falls back to nothing for the nebula family.
         """
         result = suggest_integration_goal(_entry_at_sb(27.0, type_=type_), bortle=SITE_BORTLE_REF)
-        assert result is not None
+        assert result["track"] != "none"
         assert result["beyond_reach"] is True
         assert result["suggested_hours"] is None
+        assert result["reason"] is None
 
     def test_real_ic405_catalog_entry_falls_back_to_no_goal(self, real_catalog_and_aliases):
         catalog, aliases = real_catalog_and_aliases
         entry = resolve("IC405", catalog, aliases)
         assert entry is not None
         assert entry["magnitude"] is not None  # has photometry, just untrustworthy
-        assert suggest_integration_goal(entry, bortle=8) is None
+        result = suggest_integration_goal(entry, bortle=8)
+        assert result["track"] == "none"
+        assert result["reason"] == REASON_PHOTOMETRY_UNRELIABLE
 
     def test_fallback_is_logged_with_a_distinct_reason(self, caplog):
         import logging as _logging
 
         with caplog.at_level(_logging.INFO, logger="seestar_sidecar.integration_goal"):
             suggest_integration_goal(_entry_at_sb(27.0, type_="other"), bortle=SITE_BORTLE_REF)
-        assert "photometry_unreliable" in caplog.text
+        assert REASON_PHOTOMETRY_UNRELIABLE in caplog.text
 
     def test_ordinary_no_magnitude_case_logs_nothing(self, caplog):
         """Contrast: the routine "no photometry at all" Track 3 path is not
@@ -211,7 +224,8 @@ class TestUnreliableDiffuseNebulaPhotometry:
 
         entry = {"type": "emission_nebula", "magnitude": None, "size_arcmin": 30.0}
         with caplog.at_level(_logging.INFO, logger="seestar_sidecar.integration_goal"):
-            assert suggest_integration_goal(entry, bortle=SITE_BORTLE_REF) is None
+            result = suggest_integration_goal(entry, bortle=SITE_BORTLE_REF)
+        assert result["reason"] == REASON_NO_MAGNITUDE
         assert caplog.text == ""
 
 
@@ -223,6 +237,7 @@ class TestTrackSelection:
         assert result["coarse"] is True
         assert result["surface_brightness"] is None
         assert result["suggested_hours"] == CLUSTER_HOURS
+        assert result["reason"] is None  # coarse is self-describing; not a "none" track
 
     def test_globular_cluster_also_flat_band(self):
         entry = {"type": "globular_cluster", "magnitude": 6.3, "size_arcmin": 11.1}
@@ -246,20 +261,28 @@ class TestTrackSelection:
         result = suggest_integration_goal(entry, bortle=SITE_BORTLE_REF)
         assert result["track"] == "photometric"
         assert result["coarse"] is False
+        assert result["reason"] is None
 
     def test_missing_magnitude_is_no_target(self):
         entry = {"type": "emission_nebula", "magnitude": None, "size_arcmin": 30.0}
-        assert suggest_integration_goal(entry, bortle=SITE_BORTLE_REF) is None
+        result = suggest_integration_goal(entry, bortle=SITE_BORTLE_REF)
+        assert result["track"] == "none"
+        assert result["suggested_hours"] is None
+        assert result["reason"] == REASON_NO_MAGNITUDE
 
     def test_missing_size_is_no_target(self):
         entry = {"type": "galaxy", "magnitude": 10.0, "size_arcmin": None}
-        assert suggest_integration_goal(entry, bortle=SITE_BORTLE_REF) is None
+        result = suggest_integration_goal(entry, bortle=SITE_BORTLE_REF)
+        assert result["track"] == "none"
+        assert result["reason"] == REASON_NO_MAGNITUDE
 
     def test_zero_size_is_no_target(self):
         # A handful of real catalogue rows have magnitude but size_arcmin: 0.0
         # (no measured extent) — log10(0) must degrade to "no target", not raise.
         entry = {"type": "planetary_nebula", "magnitude": 10.4, "size_arcmin": 0.0}
-        assert suggest_integration_goal(entry, bortle=SITE_BORTLE_REF) is None
+        result = suggest_integration_goal(entry, bortle=SITE_BORTLE_REF)
+        assert result["track"] == "none"
+        assert result["reason"] == REASON_NO_MAGNITUDE
 
     def test_no_catalogue_entry_is_no_target(self):
         assert suggest_integration_goal(None, bortle=SITE_BORTLE_REF) is None
@@ -281,6 +304,7 @@ class TestPlanetaryNebulaCoarseFlag:
         assert result["track"] == "photometric"
         assert result["coarse"] is True
         assert result["surface_brightness"] is not None  # unlike the cluster track
+        assert result["reason"] is None  # coarse, not "no goal"
 
     def test_galaxy_at_the_same_sb_is_not_coarse(self):
         """Isolates the type-based flag from the SB value itself: a galaxy
@@ -323,8 +347,9 @@ class TestRealUserTargetsNeverGetAConfidentNumber:
 
     The real invariant, true regardless of how `type` gets reclassified: a
     target with no catalogued magnitude must never get a confident,
-    SB-computed number. It gets either no goal at all (Track 3) or a coarse
-    flat-band one (Track 2, if retyped as a cluster) — never `coarse: False`.
+    SB-computed number. It gets either `track: "none"` (Track 3, with
+    `reason: REASON_NO_MAGNITUDE`) or a coarse flat-band one (Track 2, if
+    retyped as a cluster) — never `coarse: False` with real hours.
     """
 
     @pytest.mark.parametrize(
@@ -341,4 +366,4 @@ class TestRealUserTargetsNeverGetAConfidentNumber:
             "longer holds and it should be revisited, not left green by accident"
         )
         result = suggest_integration_goal(entry, bortle=8)
-        assert result is None or result["coarse"] is True
+        assert result["track"] == "none" or result["coarse"] is True

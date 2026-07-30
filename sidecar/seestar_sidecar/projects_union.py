@@ -115,7 +115,11 @@ def attach_integration_goals(
     A target neither the catalogue nor the alias index can place (the
     archive's own "Unknown" bucket; a Caldwell id with no single canonical
     object, e.g. the Double Cluster) gets `goal: None`, not a missing key —
-    the caller can then treat "no bar" uniformly regardless of why.
+    the caller can treat that absence uniformly. Every *resolved* target
+    gets a dict instead, even one with no bar to show (`goal["track"] ==
+    "none"`) — see integration_goal.py's "The `reason` field": the UI needs
+    to tell "no photometry at all" apart from "photometry present but not
+    trusted" (IC405), and a bare `None` can't carry that distinction.
     """
     for project in projects:
         entry = resolve_catalog_entry(project["target_id"], catalog, aliases)

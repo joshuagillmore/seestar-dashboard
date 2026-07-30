@@ -88,9 +88,11 @@ def test_unions_store_and_archive(client):
     # implausible SB — see integration_goal.py's "Beyond reach vs. unreliable
     # photometry" (this is the user's single largest archive investment, 217
     # real minutes, so a bare "beyond practical reach" reading would be
-    # empirically wrong, not just improbable). Falls back to no goal at all,
-    # end to end through the real route.
-    assert ic405["goal"] is None
+    # empirically wrong, not just improbable). Falls back to track "none"
+    # with a machine-readable reason, not a bare None, end to end through
+    # the real route — the UI needs this to render an honest absent state.
+    assert ic405["goal"]["track"] == "none"
+    assert ic405["goal"]["reason"] == "photometry_unreliable"
 
 
 def test_reports_totals_split_by_source(client):
