@@ -77,3 +77,22 @@ def test_registered_routes_are_exactly_health_plus_the_allowlist_plus_sidecar_ro
         | {f"/api/{name}" for name in SIDECAR_ROUTES}
     )
     assert registered == expected
+
+
+async def test_call_tool_refuses_a_non_allowlisted_tool_name():
+    """The route-absence tests above only prove a forbidden tool has no URL
+    to reach call_tool through. SIDECAR_ROUTES is the first route class where
+    a handler's URL name and the tool it calls internally can differ (a
+    hypothetical /api/session_wrapup calling qa_session_report, say) — a
+    mistake there would sail past both the FORBIDDEN_TOOLS route-absence
+    test and the route-set invariant, since neither inspects a handler's
+    body. This is the guard that would still catch it.
+
+    Passing `request=None` is deliberate: the assert must fire before
+    call_tool ever touches `request.app.state`, so this needs no app, no
+    client, and no connection to prove it.
+    """
+    from seestar_sidecar import routes
+
+    with pytest.raises(AssertionError):
+        await routes.call_tool(None, "qa_session_report", {})

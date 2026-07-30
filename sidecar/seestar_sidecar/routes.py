@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
+from seestar_sidecar.allowlist import ALLOWED_TOOLS
 from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR, scan_archive
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 from seestar_sidecar.projects_union import combine_projects
@@ -26,7 +27,18 @@ async def call_tool(request: Request, tool: str, arguments: dict) -> dict:
 
     The connection lives on app.state, not a module global: one per app
     instance, so two apps in a process cannot clobber each other.
+
+    The assert is a second, independent check on top of the literal routes
+    below it: those only guarantee an unlisted tool has no *route* to reach
+    this function. SIDECAR_ROUTES is the first route class where a handler's
+    URL name and the tool name it calls internally can differ (projects_
+    combined calls list_projects, not "projects_combined") — a future
+    handler that got that wrong internally (e.g. called qa_session_report)
+    would sail past both the FORBIDDEN_TOOLS route-absence test and the
+    route-set invariant, since neither inspects what a route's handler body
+    calls. This is the one place left that can still say no.
     """
+    assert tool in ALLOWED_TOOLS, f"call_tool invoked for a non-allowlisted tool: {tool!r}"
     connection = getattr(request.app.state, "connection", None)
     if connection is None:
         raise ProxyTransportError("MCP connection not started")

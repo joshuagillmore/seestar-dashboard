@@ -13,11 +13,18 @@ No cache, no database: this is a per-request scan (measured ~0.04s for the
 archive's 7,500+ frames). A cache here would be a third source of truth
 beside the projects store and the filesystem itself — see
 docs/slice-2-backlog.md.
+
+Each frame's filename also encodes a LOCAL wall-clock timestamp (verified
+against the file's own mtime — no offset applied), while the projects
+store's `date_utc` is a UTC instant. `observing_night()` is the one place
+that reconciles the two, so both sides of the union key on the same thing —
+see its docstring and projects_union.py, which is its other caller.
 """
 import logging
 import os
 import re
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -36,7 +43,7 @@ EXPOSURE_SECONDS = 10.0
 
 _SUB_DIR_SUFFIX = re.compile(r"(-sub|_sub)$")
 _LIGHT_FILENAME = re.compile(
-    r"^Light_.+_(?P<exposure>\d+(?:\.\d+)?)s_.+_(?P<night>\d{8})-\d{6}\.fit$"
+    r"^Light_.+_(?P<exposure>\d+(?:\.\d+)?)s_.+_(?P<date>\d{8})-(?P<time>\d{6})\.fit$"
 )
 #: A spaced catalog designator: letters, whitespace, then a numeric id —
 #: "M 31", "NGC 281", "IC 405", "LDN 1625". Directories that instead lead
@@ -66,11 +73,64 @@ def normalize_target_id(raw_name: str) -> str:
     return tokens[0] if tokens else raw_name
 
 
+def observing_night(instant_utc: datetime) -> date:
+    """The astronomical observing night a UTC instant belongs to.
+
+    A night runs from local evening to the following local morning, so
+    labelling it by the wall-clock date of the instant itself is wrong for
+    roughly half of it: a capture at 01:07 local is still "last night's"
+    session, not the start of a new one. Shifting back 12 hours before
+    taking the date moves the label boundary into the middle of the day,
+    where nothing gets captured, instead of the middle of the night, where
+    everything does — so any instant from evening through dawn resolves to
+    the same date the evening started on.
+
+    This is the ONE place both call sites key on: archive.py's per-frame
+    local timestamps (converted to UTC first — see `_parse_light_filename`)
+    and projects_union.py's store `date_utc` session timestamps. They used
+    to derive keys independently (a UTC calendar date here, a naive local
+    date there), which silently failed to detect a real collision — a store
+    session logged at 03:50 UTC (past local midnight) and archive frames
+    from the evening before both belong to one night but compared as two
+    different calendar dates. Keying through this function is what makes
+    the comparison meaningful again.
+    """
+    return (instant_utc - timedelta(hours=12)).date()
+
+
+def _local_capture_instant_utc(
+    date_str: str, time_str: str, local_tz: timezone | None = None
+) -> datetime:
+    """Parse a filename's `YYYYMMDD` + `HHMMSS` as a naive LOCAL timestamp
+    and return the equivalent aware UTC instant.
+
+    `local_tz=None` (the production default, used by every real call site)
+    assumes the sidecar runs on the same machine — and therefore in the same
+    timezone — that wrote the archive. Verified true today: a sample frame's
+    filename timestamp matches its file's own mtime exactly, with no offset.
+    This breaks if the archive is ever copied to, or read by, a machine in a
+    different timezone: the naive datetime would then be localised to the
+    WRONG zone, silently mis-keying every night by however many hours
+    separate them.
+
+    Tests pass an explicit `local_tz` instead of relying on `None` here, so
+    the suite's result does not depend on the timezone of whatever machine
+    happens to run it — that dependency is real for the production path (see
+    above), not something a test should also inherit.
+    """
+    naive_local = datetime.strptime(f"{date_str}{time_str}", "%Y%m%d%H%M%S")
+    if local_tz is not None:
+        return naive_local.replace(tzinfo=local_tz).astimezone(timezone.utc)
+    return naive_local.astimezone(timezone.utc)
+
+
 @dataclass
 class ArchiveNight:
-    """One calendar night's captures for one target, from the filenames."""
+    """One observing night's captures for one target (see observing_night()),
+    not a raw filename calendar date.
+    """
 
-    night: str  # YYYYMMDD
+    night: str  # ISO date (YYYY-MM-DD), from observing_night()
     subs: int
     minutes: float
 
@@ -92,12 +152,15 @@ class ArchiveScan:
     warnings: list[str]
 
 
-def scan_archive(root: Path) -> ArchiveScan:
+def scan_archive(root: Path, local_tz: timezone | None = None) -> ArchiveScan:
     """Scan every `<target>-sub` / `<target>_sub` directory under `root`.
 
     A missing root is a normal state — no archive configured yet, or a
     machine without one synced — not an error: returns an empty scan so the
     sidecar keeps serving the store's data alone.
+
+    `local_tz` is exposed only for tests — see `_local_capture_instant_utc`.
+    Every real caller leaves it `None` and gets the system's local timezone.
     """
     if not root.is_dir():
         return ArchiveScan(targets={}, warnings=[])
@@ -116,7 +179,7 @@ def scan_archive(root: Path) -> ArchiveScan:
 
         nights: dict[str, int] = {}
         for fit in entry.glob("Light_*.fit"):
-            night, warning = _parse_light_filename(fit.name)
+            night, warning = _parse_light_filename(fit.name, local_tz)
             if warning is not None:
                 warnings.append(f"{entry.name}/{fit.name}: {warning}")
             if night is not None:
@@ -148,8 +211,11 @@ def scan_archive(root: Path) -> ArchiveScan:
     return ArchiveScan(targets=targets, warnings=warnings)
 
 
-def _parse_light_filename(name: str) -> tuple[str | None, str | None]:
-    """Return `(night, warning)`.
+def _parse_light_filename(
+    name: str, local_tz: timezone | None = None
+) -> tuple[str | None, str | None]:
+    """Return `(night, warning)`, where `night` is the *observing* night
+    (see `observing_night()`) — not the raw calendar date in the filename.
 
     `night` is `None` only when the filename doesn't match the expected
     shape at all, so its subs can't be counted toward any night. `warning`
@@ -160,8 +226,10 @@ def _parse_light_filename(name: str) -> tuple[str | None, str | None]:
     """
     match = _LIGHT_FILENAME.match(name)
     if not match:
-        return None, "did not match Light_<target>_<exposure>s_<filter>_<night>-<time>.fit"
+        return None, "did not match Light_<target>_<exposure>s_<filter>_<date>-<time>.fit"
+    instant = _local_capture_instant_utc(match["date"], match["time"], local_tz)
+    night = observing_night(instant).isoformat()
     exposure = float(match["exposure"])
     if abs(exposure - EXPOSURE_SECONDS) > 1e-9:
-        return match["night"], f"exposure {exposure}s disagrees with the assumed {EXPOSURE_SECONDS}s"
-    return match["night"], None
+        return night, f"exposure {exposure}s disagrees with the assumed {EXPOSURE_SECONDS}s"
+    return night, None

@@ -1,8 +1,11 @@
 """combine_projects is pure — no filesystem, no MCP — so these exercise the
 union and its de-duplication-by-night logic directly against constructed
-data. The overlapping-night case is the one live data cannot reach today
-(the store and the archive share no calendar date yet), so it is only
-exercised here, per the slice-2 spec.
+data. `ArchiveNight.night` values below are the ISO date strings
+`archive.observing_night()` actually produces (see archive.py), not a raw
+filename date — test_night_dedup_real_case.py covers the archive-side
+timezone conversion that produces them from a real filename, plus the exact
+UTC-past-local-midnight case that the naive `date_utc[:10]` keying this
+module used to use would have missed silently.
 """
 from seestar_sidecar.archive import ArchiveNight, ArchiveTarget
 from seestar_sidecar.projects_union import combine_projects
@@ -19,7 +22,14 @@ def _store_project(target_id, name, minutes, session_dates):
         "updated_utc": session_dates[-1] if session_dates else "",
         "sessions": [
             {
-                "date_utc": f"{date}T00:00:00+00:00",
+                # 20:00 UTC: comfortably clear of observing_night()'s noon-UTC
+                # boundary in both directions, so `date` round-trips through
+                # the night-keying unchanged and these fixtures can reason in
+                # plain calendar dates. The boundary itself is covered
+                # directly in test_archive.py; a UTC-past-midnight collision
+                # that a plain date slice would miss is covered in
+                # test_night_dedup_real_case.py.
+                "date_utc": f"{date}T20:00:00+00:00",
                 "integration_minutes": minutes / max(len(session_dates), 1),
                 "subs_total": 10,
                 "subs_kept": 10,
@@ -55,7 +65,7 @@ def test_archive_only_target_appears_with_zero_store_minutes():
             target_id="IC405",
             display_name="IC 405",
             minutes=217.2,
-            nights=[ArchiveNight(night="20240101", subs=1303, minutes=217.2)],
+            nights=[ArchiveNight(night="2024-01-01", subs=1303, minutes=217.2)],
         )
     }
 
@@ -84,7 +94,7 @@ def test_overlapping_target_with_no_shared_night_sums_both_sources():
             target_id="M31",
             display_name="M 31",
             minutes=38.3333,
-            nights=[ArchiveNight(night="20240104", subs=230, minutes=38.3333)],
+            nights=[ArchiveNight(night="2024-01-04", subs=230, minutes=38.3333)],
         )
     }
 
@@ -112,9 +122,9 @@ def test_overlapping_night_is_not_double_counted():
             minutes=100.0,
             nights=[
                 # Same night as the store session above — must be dropped.
-                ArchiveNight(night="20240104", subs=600, minutes=100.0),
+                ArchiveNight(night="2024-01-04", subs=600, minutes=100.0),
                 # A different night — must still be counted.
-                ArchiveNight(night="20240105", subs=60, minutes=10.0),
+                ArchiveNight(night="2024-01-05", subs=60, minutes=10.0),
             ],
         )
     }
@@ -141,8 +151,8 @@ def test_mutation_double_counting_would_be_caught():
             display_name="TEST",
             minutes=archive_minutes_if_undeduped,
             nights=[
-                ArchiveNight(night="20240104", subs=600, minutes=100.0),
-                ArchiveNight(night="20240105", subs=60, minutes=10.0),
+                ArchiveNight(night="2024-01-04", subs=600, minutes=100.0),
+                ArchiveNight(night="2024-01-05", subs=60, minutes=10.0),
             ],
         )
     }
@@ -162,7 +172,7 @@ def test_results_are_sorted_by_total_minutes_descending():
             target_id="MEDIUM",
             display_name="Medium",
             minutes=40.0,
-            nights=[ArchiveNight(night="20240101", subs=1, minutes=40.0)],
+            nights=[ArchiveNight(night="2024-01-01", subs=1, minutes=40.0)],
         )
     }
 
