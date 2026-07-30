@@ -4,6 +4,8 @@ Route order is the whole trick — see frontend.py's module docstring — so
 these prove behaviour (what a client actually receives) rather than just
 the presence of a mount.
 """
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -113,7 +115,18 @@ def test_default_web_dist_points_at_the_sibling_web_dist_directory():
     # Proves DEFAULT_WEB_DIST resolves relative to the package, not the
     # process's current working directory — a launcher invoked from a
     # different directory must still find the same web/dist every time.
+    #
+    # Asserts the resolved absolute path, computed independently of
+    # frontend.py's own expression rather than derived from it: this test's
+    # __file__ lives two directories closer to the repo root than
+    # frontend.py's does, so it repeats the "how many parents up" arithmetic
+    # against a different starting point. A wrong hop count in frontend.py
+    # (parents[1] instead of parents[2]) now produces an actual path
+    # mismatch — the previous version of this test only checked the last
+    # two segments' NAMES ("web", "dist"), and parents[1] resolves to
+    # sidecar/web/dist, which also ends in ".../web/dist" and stayed green
+    # despite pointing at a directory that can never exist.
     from seestar_sidecar.frontend import DEFAULT_WEB_DIST
 
-    assert DEFAULT_WEB_DIST.parent.name == "web"
-    assert DEFAULT_WEB_DIST.name == "dist"
+    repo_root = Path(__file__).resolve().parents[2]
+    assert DEFAULT_WEB_DIST == repo_root / "web" / "dist"
