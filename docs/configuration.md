@@ -105,6 +105,73 @@ telescope, and no `SEESTAR_AI_DIR`, involved.
 | Windows (cmd) | `set SEESTAR_AI_DIR=C:\Users\you\seestar-mcp` |
 | macOS / Linux | `export SEESTAR_AI_DIR=/home/you/seestar-mcp` |
 
+## SEESTAR_LIVE_SHARE_DIR
+
+The Seestar's OWN SMB share on the LAN (typically reachable as `\\Seestar\...`
+or `\\seestar.local\...` — see `docs/seestar-mcp-design.md`) — where the Live
+session screen's preview card reads a live stacked thumbnail or the newest
+per-sub thumbnail from. Read by
+`sidecar/seestar_sidecar/live_preview.py`.
+
+**This is a DIFFERENT directory from `SEESTAR_ARCHIVE_DIR` above.**
+`SEESTAR_ARCHIVE_DIR` is a periodic export (OneDrive, in this build's own
+case) — useful for browsing past sessions, but confirmed **not live**: its
+newest file was 24 days old with nothing written in the preceding five days.
+`SEESTAR_LIVE_SHARE_DIR` should point at the scope's share itself, which is
+updated in near-real-time while a session runs. Pointing both variables at
+the same path will make the preview card show stale, once-a-session data
+without telling you why.
+
+**Only ever polled while a session is confirmed running** (via `get_view_state`
+— see `live_preview.py`'s module docstring) and only thumbnails are ever
+read — never the full-resolution stacked JPEG (measured ~476 KB) and never a
+raw FITS sub (measured ~4 MB). A directory scan is also bounded by a short
+timeout (`live_preview.SHARE_SCAN_TIMEOUT_SECONDS`) so a share that goes quiet
+mid-scan (the scope rebooting, Wi-Fi dropping) fails fast instead of hanging
+a request.
+
+**Unset:** the sidecar still boots; `GET /api/live_preview` reports
+`{"source": null, "reason": "not_configured", ...}` rather than guessing at a
+path. This is the default — no personal-path guess is baked in, the same
+discipline `SEESTAR_ARCHIVE_DIR`/`SEESTAR_AI_DIR` already hold themselves to.
+
+### Prerequisite: `AllowInsecureGuestAuth`
+
+A Seestar's SMB share typically offers only anonymous/guest access — it has
+no facility for the NTLM/Kerberos authentication a modern Windows client
+expects by default. Recent Windows versions **block guest SMB access
+out of the box** as a security hardening measure (guest sessions have no real
+authentication, so Windows now refuses them unless a machine explicitly opts
+back in). Without this setting, Windows will simply fail to reach the share
+at all — `GET /api/live_preview` would report `share_unreachable` even with
+`SEESTAR_LIVE_SHARE_DIR` correctly set and the scope observing.
+
+**This is a host-wide relaxation, not something this repo enables for you.**
+It lowers a real (if narrow) security bar on the machine running the
+sidecar: anonymous SMB guest access, wherever else it might be offered on
+your network, is allowed through once this is set — not scoped to the
+Seestar's share specifically. Only enable it if you understand and accept
+that trade-off for this machine; this project's own dev machine already had
+it enabled for unrelated reasons, so this feature did not have to change
+that machine's stance itself.
+
+To check/enable it (elevated PowerShell — requires a local Group Policy or
+registry change, and typically a restart of the Workstation service or a
+reboot to take effect):
+
+```powershell
+# Check the current setting
+Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Name AllowInsecureGuestAuth -ErrorAction SilentlyContinue
+
+# Enable it (requires an elevated/Administrator prompt)
+Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" -Name AllowInsecureGuestAuth -Value 1 -Type DWord
+```
+
+| OS | Example |
+|---|---|
+| Windows (PowerShell) | `$env:SEESTAR_LIVE_SHARE_DIR = "\\Seestar\EMMC Images"` |
+| macOS / Linux | Mount the share first (`mount_smbfs`/`mount -t cifs`), then point this at the local mount point, e.g. `/Volumes/EMMC Images` or `/mnt/seestar` — `AllowInsecureGuestAuth` is a Windows-specific setting; other OSes have their own guest-SMB posture and are untested here. |
+
 ## SEESTAR_IMAGE_CACHE_DIR
 
 Where fetched sky-survey cutouts (DSS2, via CDS's hips2fits — see

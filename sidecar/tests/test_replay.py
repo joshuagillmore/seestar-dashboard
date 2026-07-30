@@ -40,14 +40,25 @@ def client(monkeypatch, tmp_path):
 #: `image` field per target — see routes._attach_images), so it is no longer
 #: a byte-for-byte passthrough and gets its own test below instead of this
 #: parametrization.
-_PASSTHROUGH_TOOLS = sorted(ALLOWED_TOOLS - {"plan_targets"})
+#:
+#: check_night_guardrails and get_target_observability (slice 3) each have a
+#: REQUIRED query param with no route-side default (session_start_utc / target
+#: — see routes.py) — a bare `GET /api/{tool}` 422s before ever reaching
+#: replay, so the generic no-args parametrization below can't exercise them
+#: either. Each gets its own test below instead, supplying the required
+#: param(s) — replay mode ignores the actual arguments regardless (see
+#: routes._fetch), so the exact values only matter for making the request
+#: valid, not for which fixture comes back.
+_PASSTHROUGH_TOOLS = sorted(
+    ALLOWED_TOOLS - {"plan_targets", "check_night_guardrails", "get_target_observability"}
+)
 
 
 @pytest.mark.parametrize("tool", _PASSTHROUGH_TOOLS)
 def test_replay_returns_the_fixture_unmodified(client, tool):
     response = client.get(f"/api/{tool}")
     assert response.status_code == 200
-    assert response.json() == json.loads((FIXTURES / f"{tool}.json").read_text())
+    assert response.json() == json.loads((FIXTURES / f"{tool}.json").read_text(encoding="utf-8"))
 
 
 def test_plan_targets_replay_adds_only_the_image_field(client):
@@ -72,12 +83,28 @@ def test_plan_targets_replay_adds_only_the_image_field(client):
     stripped = json.loads(json.dumps(body))
     for target in stripped["targets"]:
         del target["image"]
-    assert stripped == json.loads((FIXTURES / "plan_targets.json").read_text())
+    assert stripped == json.loads((FIXTURES / "plan_targets.json").read_text(encoding="utf-8"))
 
 
 def test_recorded_night_is_a_no_go(client):
     """Guards against someone quietly replacing the fixture with a rosier one."""
     assert client.get("/api/assess_conditions").json()["go"] is False
+
+
+def test_check_night_guardrails_replay_returns_the_fixture_unmodified(client):
+    response = client.get("/api/check_night_guardrails?session_start_utc=2026-07-30T02:00:00Z")
+    assert response.status_code == 200
+    assert response.json() == json.loads(
+        (FIXTURES / "check_night_guardrails.json").read_text(encoding="utf-8")
+    )
+
+
+def test_get_target_observability_replay_returns_the_fixture_unmodified(client):
+    response = client.get("/api/get_target_observability?target=M27")
+    assert response.status_code == 200
+    assert response.json() == json.loads(
+        (FIXTURES / "get_target_observability.json").read_text(encoding="utf-8")
+    )
 
 
 def test_transport_failure_uses_the_same_error_shape(monkeypatch):

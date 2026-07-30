@@ -87,6 +87,14 @@ def test_allowlist_is_exactly_the_expected_tools():
             "get_site_profile",
             "list_projects",
             "recommend_projects",
+            # slice 3 (Live session screen) — see allowlist.py's own comments
+            # for what was verified before each was added.
+            "get_view_state",
+            "get_status",
+            "check_night_guardrails",
+            "qa_tier1",
+            "get_focuser_position",
+            "get_target_observability",
         }
     )
 

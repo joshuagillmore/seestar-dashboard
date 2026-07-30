@@ -29,6 +29,18 @@ from seestar_sidecar.imagery import (
     is_plausible_target_id,
     resolve_image_pointer,
 )
+from seestar_sidecar.live_preview import (
+    DEFAULT_LIVE_SHARE_DIR,
+    REASON_BRIDGE_DOWN,
+    REASON_IDLE,
+    REASON_NO_FRAME,
+    REASON_NOT_CONFIGURED,
+    REASON_SHARE_UNREACHABLE,
+    LiveFrame,
+    ShareUnreachableError,
+    discover_frame_within_timeout,
+    extract_stack_count,
+)
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar.replay import load_fixture
@@ -202,6 +214,60 @@ async def recommend_projects(
     return await _serve(request, "recommend_projects", {"limit": limit})
 
 
+# --- slice 3 (Live session screen) — plain passthroughs, same _serve pattern
+# as every route above. Each tool was verified read-only against
+# SeeStar-AI/src/seestar_mcp/server.py before being added to ALLOWED_TOOLS —
+# see allowlist.py's own comments for what was checked, and for why
+# `pi_get_info` (battery) is NOT among them: it isn't an MCP tool at all.
+
+
+@router.get("/get_view_state")
+async def get_view_state(request: Request) -> JSONResponse:
+    return await _serve(request, "get_view_state", {})
+
+
+@router.get("/get_status")
+async def get_status(request: Request) -> JSONResponse:
+    return await _serve(request, "get_status", {})
+
+
+@router.get("/get_focuser_position")
+async def get_focuser_position(request: Request) -> JSONResponse:
+    return await _serve(request, "get_focuser_position", {})
+
+
+@router.get("/qa_tier1")
+async def qa_tier1(request: Request) -> JSONResponse:
+    return await _serve(request, "qa_tier1", {})
+
+
+@router.get("/get_target_observability")
+async def get_target_observability(
+    request: Request, target: str, date: str | None = Query(default=None)
+) -> JSONResponse:
+    return await _serve(request, "get_target_observability", {"target": target, "date": date})
+
+
+@router.get("/check_night_guardrails")
+async def check_night_guardrails(
+    request: Request,
+    session_start_utc: str,
+    max_session_hours: float = Query(default=10.0, gt=0),
+    battery_floor_pct: float = Query(default=20.0, ge=0, le=100),
+    dawn_margin_min: float = Query(default=15.0, ge=0),
+) -> JSONResponse:
+    return await _serve(
+        request,
+        "check_night_guardrails",
+        {
+            "session_start_utc": session_start_utc,
+            "max_session_hours": max_session_hours,
+            "battery_floor_pct": battery_floor_pct,
+            "dawn_margin_min": dawn_margin_min,
+        },
+    )
+
+
 async def _fetch_bortle(request: Request) -> int | None:
     """Best-effort site Bortle class for the goal model's Bortle term (see
     integration_goal.py) — `get_site_profile` is already allowlisted and
@@ -341,3 +407,112 @@ async def target_image(
             status_code=404,
         )
     return Response(content=image_bytes, media_type="image/jpeg")
+
+
+# --- live preview (slice 3) ------------------------------------------------
+#
+# Same "was this ever set on app.state at all" sentinel as
+# _archive_dir_and_tz above — main.py's create_app() always sets
+# app.state.live_share_dir, so this only guards a bare, non-create_app() app
+# (not reachable through any real entry point today, same defensive style).
+_LIVE_SHARE_DIR_UNSET = object()
+
+
+def _live_share_dir(request: Request) -> Path | None:
+    share_dir = getattr(request.app.state, "live_share_dir", _LIVE_SHARE_DIR_UNSET)
+    if share_dir is _LIVE_SHARE_DIR_UNSET:
+        share_dir = DEFAULT_LIVE_SHARE_DIR
+    return Path(share_dir) if share_dir is not None else None
+
+
+def _live_preview_absent(reason: str) -> dict:
+    return {
+        "ok": True,
+        "source": None,
+        "captured_at": None,
+        "stack_count": None,
+        "target": None,
+        "stale": False,
+        "reason": reason,
+        "url": "/api/live_preview/image",
+    }
+
+
+def _live_preview_frame(frame: LiveFrame, stack_count: int | None, stale: bool) -> dict:
+    """`frame.captured_at` was captured once at discovery time — see
+    live_preview.LiveFrame's docstring for why this must NOT re-`.stat()`
+    `frame.path` here: in the cache-fallback (`stale=True`) branch, `path`
+    lives on a share that was just found unreachable, and re-touching it here
+    would sneak the exact blocking network call
+    `discover_frame_within_timeout()`'s timeout exists to bound back in.
+    """
+    return {
+        "ok": True,
+        "source": frame.source,
+        "captured_at": frame.captured_at.isoformat(),
+        "stack_count": stack_count,
+        "target": frame.target,
+        "stale": stale,
+        "reason": None,
+        "url": "/api/live_preview/image",
+    }
+
+
+@router.get("/live_preview")
+async def live_preview(request: Request) -> JSONResponse:
+    """Metadata only — no image bytes; see live_preview.py's module docstring
+    and docs/superpowers/specs/2026-07-30-slice-3-live-session.md §0/D2.
+
+    Never touches SEESTAR_LIVE_SHARE_DIR at all unless get_view_state (an
+    already-allowlisted tool) confirms the scope is observing: "a timeout
+    means the scope is not observing; there is nothing to fetch and no reason
+    to touch the network" (the spec's D2). ProxyTransportError/
+    FileNotFoundError (the MCP call itself failing) and a valid
+    `{"ok": false, ...}` response (the scope answering "idle") are reported as
+    distinct reasons — REASON_BRIDGE_DOWN vs. REASON_IDLE — per CLAUDE.md's
+    "bridge-down and scope-idle are first-class UI states", not the same one.
+    """
+    try:
+        view = await _fetch(request, "get_view_state", {})
+    except (ProxyTransportError, FileNotFoundError):
+        return JSONResponse(_live_preview_absent(REASON_BRIDGE_DOWN))
+    if not view.get("ok"):
+        return JSONResponse(_live_preview_absent(REASON_IDLE))
+
+    stack_count = extract_stack_count(view)
+
+    share_dir = _live_share_dir(request)
+    if share_dir is None:
+        return JSONResponse(_live_preview_absent(REASON_NOT_CONFIGURED))
+
+    cache: LiveFrame | None = getattr(request.app.state, "live_preview_cache", None)
+    try:
+        frame = await discover_frame_within_timeout(share_dir)
+    except ShareUnreachableError:
+        if cache is not None:
+            return JSONResponse(_live_preview_frame(cache, stack_count, stale=True))
+        return JSONResponse(_live_preview_absent(REASON_SHARE_UNREACHABLE))
+
+    if frame is None:
+        if cache is not None:
+            return JSONResponse(_live_preview_frame(cache, stack_count, stale=True))
+        return JSONResponse(_live_preview_absent(REASON_NO_FRAME))
+
+    request.app.state.live_preview_cache = frame
+    return JSONResponse(_live_preview_frame(frame, stack_count, stale=False))
+
+
+@router.get("/live_preview/image")
+async def live_preview_image(request: Request) -> Response:
+    """The bytes /api/live_preview's `url` points at — always whatever the
+    metadata route most recently discovered (see app.state.live_preview_cache),
+    never a path built from anything the client sent. A cold cache (this hit
+    before /api/live_preview ever succeeded once) is an honest 404, same shape
+    as target_image's absent states.
+    """
+    cache: LiveFrame | None = getattr(request.app.state, "live_preview_cache", None)
+    if cache is None or not cache.path.is_file():
+        return JSONResponse(
+            {"ok": False, "error": "no live preview frame available yet"}, status_code=404
+        )
+    return FileResponse(cache.path, media_type="image/jpeg")

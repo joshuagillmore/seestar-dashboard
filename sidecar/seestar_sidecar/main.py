@@ -12,6 +12,7 @@ from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR
 from seestar_sidecar.catalog import DEFAULT_ALIASES_PATH, DEFAULT_CATALOG_PATH
 from seestar_sidecar.frontend import DEFAULT_WEB_DIST, mount_frontend
 from seestar_sidecar.imagery import DEFAULT_IMAGE_CACHE_DIR
+from seestar_sidecar.live_preview import DEFAULT_LIVE_SHARE_DIR
 from seestar_sidecar.mcp_proxy import McpConnection
 from seestar_sidecar.routes import replay_enabled, router
 
@@ -71,6 +72,7 @@ def create_app(
     catalog_path: Path | str | None = None,
     aliases_path: Path | str | None = None,
     image_cache_dir: Path | str | None = None,
+    live_share_dir: Path | str | None = None,
 ) -> FastAPI:
     """`web_dist` defaults to web/dist; `archive_dir` defaults to
     SEESTAR_ARCHIVE_DIR, or `None` — "not configured" — when that isn't set
@@ -93,6 +95,11 @@ def create_app(
     (`sidecar/.cache/target_images`, gitignored) and only needs overriding so
     a test can point at `tmp_path` instead of writing into the real cache —
     see imagery.fetch_survey_cutout().
+
+    `live_share_dir` defaults to `live_preview.DEFAULT_LIVE_SHARE_DIR`
+    (`SEESTAR_LIVE_SHARE_DIR`, or `None` if unset — see live_preview.py and
+    docs/configuration.md) and only needs overriding so a test can point at a
+    synthetic `tmp_path` tree instead of a real SMB share.
     """
     app = FastAPI(title="seestar-sidecar", version="0.1.0", lifespan=lifespan)
     # Safe default for callers that never run the lifespan — a bare
@@ -107,6 +114,15 @@ def create_app(
     app.state.image_cache_dir = (
         Path(image_cache_dir) if image_cache_dir is not None else DEFAULT_IMAGE_CACHE_DIR
     )
+    app.state.live_share_dir = (
+        Path(live_share_dir) if live_share_dir is not None else DEFAULT_LIVE_SHARE_DIR
+    )
+    # Holds the last successfully discovered LiveFrame (see live_preview.py),
+    # so a momentary share failure can degrade to "last known frame, marked
+    # stale" instead of "nothing" — see routes.py's live_preview handler.
+    # Lives on app.state for the same reason app.state.connection does: one
+    # per app instance, so two apps in one process don't share a cache.
+    app.state.live_preview_cache = None
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[VITE_DEV_ORIGIN],

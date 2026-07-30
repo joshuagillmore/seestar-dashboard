@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "target": {
+    "id": "M27",
+    "name": "Dumbbell Nebula",
+    "ra_deg": 299.901,
+    "dec_deg": 22.7211,
+    "type": "planetary_nebula",
+    "size_arcmin": 8.0,
+    "magnitude": 7.5
+  },
+  "observability": {
+    "target_id": "M27",
+    "max_alt_deg": 61.4,
+    "transit_utc": "2026-07-30T03:12:00",
+    "rise_utc": "2026-07-29T22:47:00",
+    "set_utc": "2026-07-30T07:38:00",
+    "dark_minutes_above_floor": 214.0,
+    "dark_minutes_in_sweet_band": 168.0,
+    "field_rotation_deg_per_hr_at_transit": 9.8,
+    "usable_sub_minutes": 3.2,
+    "transits_above_ceiling": false,
+    "moon_sep_deg": 112.4,
+    "moon_alt_deg": -8.6,
+    "moon_illum_frac": 0.22,
+    "best_window_utc": ["2026-07-30T02:15:00", "2026-07-30T03:58:00"]
+  }
+}

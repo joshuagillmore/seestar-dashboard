@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "view_state": {
+    "result": {
+      "View": {
+        "stage": "Stack",
+        "Stack": {
+          "stacked_frame": 211,
+          "dropped_frame": 0,
+          "Annotate": {
+            "state": "complete",
+            "pixelx": 219,
+            "pixely": 960,
+            "radius": 1200
+          }
+        }
+      }
+    }
+  }
+}

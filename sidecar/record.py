@@ -30,6 +30,20 @@ ARGUMENTS: dict[str, dict] = {
     "get_site_profile": {},
     "list_projects": {},
     "recommend_projects": {"limit": 12},
+    # --- slice 3 (Live session screen) ------------------------------------
+    "get_view_state": {},
+    "get_status": {},
+    "get_focuser_position": {},
+    "qa_tier1": {},
+    # M27 — an already-imaged real project (see fixtures/list_projects.json),
+    # so recording against it exercises the real catalogue lookup rather
+    # than an id chosen just for this script.
+    "get_target_observability": {"target": "M27"},
+    # session_start_utc is required (no tool-side default) — an arbitrary
+    # recent-looking instant is fine for a recording run, since the point is
+    # capturing the tool's real response *shape*, not a live guardrail
+    # verdict for an actual session.
+    "check_night_guardrails": {"session_start_utc": "2026-07-30T02:00:00+00:00"},
 }
 
 
