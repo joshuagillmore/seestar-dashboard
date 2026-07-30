@@ -67,11 +67,11 @@ describe('Sidebar', () => {
     // which guarantees data-dot. The Task 9 review found a guard querying that
     // attribute when nothing set it — it passed vacuously for a whole task.
     render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
-    // Four dots: the four nav rows. The site block's own GPS dot is gone —
-    // that row moved into the Tonight verdict banner (see the "no longer
-    // renders a GPS row" test below).
+    // Five dots: four nav rows, then the GPS/mask status row in the site
+    // block (see the GPS-row tests below — it's a short-form complement to
+    // the Tonight banner's own copy, not a duplicate of it).
     const dots = screen.getAllByTestId('dot')
-    expect(dots).toHaveLength(4)
+    expect(dots).toHaveLength(5)
     expect(dots[0]).toHaveAttribute('data-dot', 'reject')
     // Indices 1-2 are Live and Review — neither has a verdict-like signal to
     // report, so both stay idle. Index 3 (Projects) is asserted separately
@@ -111,28 +111,48 @@ describe('Sidebar', () => {
     expect(screen.getAllByTestId('dot')[3]).toHaveAttribute('data-dot', 'idle')
   })
 
-  it('no longer renders a GPS row, warning or confirmed — that copy moved into the Tonight verdict banner (VerdictBanner.tsx) to remove the duplicate', () => {
-    // Design-review item B4: the GPS pass-dot row now lives in the Tonight
-    // verdict banner (README.md:265-280 puts it there, not the sidebar's site
-    // block). Sidebar rendering it too was a deliberate interim double-render
-    // (see VerdictBanner.tsx's doc comment) — this pins its removal. The
-    // `gpsWarning` prop is still accepted (see SidebarProps's doc comment)
-    // but must have no visible effect any more, warning or not.
+  it('shows a short "GPS unverified" status combined with the mask state — not the full warning sentence, which is the banner\'s job', () => {
+    // Design-review item B4, resolved: the design has a GPS row in BOTH the
+    // sidebar (README.md:249-250, short form) and the Tonight verdict banner
+    // (README.md:273-274, the full sentence) — complementary, not
+    // duplicated. Printing the same long sentence in both places (briefly
+    // the case here) was the actual bug; deleting the sidebar's row entirely
+    // would have been the wrong fix, since the design specifies both.
     const warning = "GPS unverified — assuming saved site 'Example Observatory (scope GPS)'."
-    const { rerender } = render(
+    render(
       <Sidebar site={site} verdict="NO-GO" gpsWarning={warning} view="tonight" onNavigate={vi.fn()} />,
     )
+    expect(screen.getByText(/GPS unverified · mask/)).toBeInTheDocument()
+    // The full sentence belongs to VerdictBanner alone — the sidebar must
+    // never repeat it verbatim.
     expect(screen.queryByText(warning)).not.toBeInTheDocument()
-    expect(screen.queryByText('GPS matched')).not.toBeInTheDocument()
+    const dots = screen.getAllByTestId('dot')
+    expect(dots[dots.length - 1]).toHaveAttribute('data-dot', 'marginal')
+  })
 
-    rerender(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
-    expect(screen.queryByText('GPS matched')).not.toBeInTheDocument()
+  it('shows a confirmed "GPS matched" status combined with the mask state when there is no warning', () => {
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
+    expect(screen.getByText(/GPS matched · mask/)).toBeInTheDocument()
+    const dots = screen.getAllByTestId('dot')
+    expect(dots[dots.length - 1]).toHaveAttribute('data-dot', 'pass')
+  })
 
-    // No stray dot left behind either: still exactly the 4 nav dots.
-    expect(screen.getAllByTestId('dot')).toHaveLength(4)
+  it('folds the mask state into the GPS row rather than a separate line', () => {
+    // Regression guard for the smaller divergence the same fix corrects:
+    // "mask …" used to be its own siteMeta line: README.md:249-250 has it
+    // sharing the GPS row instead.
+    const withMask = SiteProfileSchema.parse({
+      ok: true,
+      profile: { ...site.profile, horizon_mask: [{}, {}, {}] },
+    })
+    render(<Sidebar site={withMask} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
+    expect(screen.getByText('GPS matched · mask on (3 arcs)')).toBeInTheDocument()
   })
 
   it('gives the Tonight nav dot a pass tone only on a GO', () => {
+    // Scoped to dots[0] deliberately: the GPS/mask row also renders a pass
+    // dot when the site is confirmed, so a whole-tree "no pass dot" assertion
+    // would be testing the wrong thing.
     const { rerender } = render(
       <Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />,
     )

@@ -25,17 +25,17 @@ export interface SidebarProps {
   verdict: Verdict | null
   /**
    * `location.warning` from assess_conditions, or null when the site is
-   * confirmed. **No longer rendered here** — the design puts the GPS row in
-   * the Tonight verdict banner (README.md:265-280), not the sidebar's site
-   * block, and VerdictBanner.tsx now renders it there. Sidebar showing its
-   * own copy too was a deliberate interim double-render (see
-   * VerdictBanner.tsx's doc comment) pending this removal.
-   *
-   * Kept in the type, still accepted and still threaded from TonightScreen
-   * (and passed as `null` from ProjectsScreen), purely so callers outside
-   * `web/src/shell/` don't need an edit for this fix — `TonightScreen.tsx`
-   * is out of scope for this change. A follow-up could drop this prop
-   * entirely once its one remaining caller stops passing it.
+   * confirmed. The design specifies a GPS row in **both** the sidebar
+   * (README.md:249-250: short form, `GPS matched · mask ON (3 arcs)`) and the
+   * Tonight verdict banner (README.md:273-274: the full sentence, e.g. `GPS
+   * matched site 'Backyard' (0.2 km) — horizon mask applied`) — complementary,
+   * not duplicated, since the two say different things. This prop drives only
+   * the *presence* of a caveat here (`gpsWarning !== null`), not its exact
+   * wording — the sidebar renders a fixed short label ("GPS unverified" /
+   * "GPS matched"), never the warning sentence itself, which is
+   * VerdictBanner's job. That split avoids both re-parsing the warning prose
+   * for a short form (which isn't available split out from it) and printing
+   * the same long sentence in two places.
    */
   gpsWarning: string | null
   /** Which screen is currently mounted — drives the active highlight. Owned
@@ -71,6 +71,7 @@ export interface SidebarProps {
 export function Sidebar({
   site,
   verdict,
+  gpsWarning,
   view,
   onNavigate,
   projectsHeadline = null,
@@ -133,10 +134,19 @@ export function Sidebar({
             Bortle {profile.bortle ?? '—'} · floor {profile.min_altitude_deg}° · ceiling{' '}
             {profile.field_rotation_ceiling_deg}°
           </div>
-          <div className={styles.siteMeta}>
-            mask {profile.horizon_mask.length > 0
-              ? `on (${profile.horizon_mask.length} arcs)`
-              : 'off'}
+          {/* Short form, one row: GPS state and mask state together, per
+              README.md:249-250. A fixed short label ("GPS unverified" /
+              "GPS matched"), not the full warning sentence — see
+              SidebarProps.gpsWarning's doc comment for why the sentence
+              itself belongs only to VerdictBanner. */}
+          <div className={gpsWarning ? styles.warnRow : styles.okRow}>
+            <Dot tone={gpsWarning ? 'marginal' : 'pass'} size="sm" />
+            <span>
+              {gpsWarning ? 'GPS unverified' : 'GPS matched'} · mask{' '}
+              {profile.horizon_mask.length > 0
+                ? `on (${profile.horizon_mask.length} arcs)`
+                : 'off'}
+            </span>
           </div>
         </div>
       )}
