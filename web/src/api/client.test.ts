@@ -47,6 +47,22 @@ describe('api client', () => {
     await expect(fetchConditions()).rejects.toThrow(/unreachable/)
   })
 
+  it('names the sidecar and what to do when a dead sidecar resolves as a bare 502', async () => {
+    // This is the case the reject-based test above does NOT cover, and the
+    // one that actually happens in the dev setup: Vite's proxy in front of a
+    // stopped sidecar makes fetch *resolve* with a 502 and an HTML body, not
+    // reject. .json() on that body fails, which used to fall through to the
+    // bare, useless "HTTP 502".
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: () => Promise.reject(new SyntaxError('Unexpected token < in JSON')),
+    }))
+    await expect(fetchConditions()).rejects.toThrow(/sidecar/i)
+    await expect(fetchConditions()).rejects.toThrow(/uv run seestar-dashboard/)
+    await expect(fetchConditions()).rejects.not.toThrow(/^HTTP 502$/)
+  })
+
   it('surfaces a tool-level failure message, not a schema complaint', async () => {
     // The sidecar forwards {ok: false} at HTTP 200 — the tool ran and reported
     // a problem. Blaming the payload shape would hide the real reason.

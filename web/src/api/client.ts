@@ -12,19 +12,32 @@ import {
 
 export class ApiError extends Error {}
 
+/** How to get the sidecar running, repeated in every message that means
+ * "the sidecar didn't answer" — this is the one line of the app most
+ * likely to be read by someone who has never seen the codebase. */
+const SIDECAR_HINT =
+  'make sure the sidecar is running (uv run seestar-dashboard) and reachable, by default at http://localhost:8000'
+
 async function get<T>(path: string, schema: ZodType<T>): Promise<T> {
   let response: Response
   try {
     response = await fetch(path)
   } catch (cause) {
-    throw new ApiError(`sidecar unreachable at ${path}`, { cause })
+    throw new ApiError(`sidecar unreachable at ${path} — ${SIDECAR_HINT}`, { cause })
   }
   const body = await response.json().catch(() => null)
   if (!response.ok) {
+    // A JSON {error} body means the sidecar formed the response itself and
+    // has something specific to say (see _serve() in routes.py) — surface
+    // that verbatim. Anything else — no body, or a body that isn't JSON —
+    // means the request never reached sidecar code at all. That is not a
+    // hypothetical: Vite's dev proxy resolves a dead sidecar as a *resolved*
+    // fetch carrying an HTML 502 page, not a rejected fetch, so `HTTP 502`
+    // used to be the only thing a stopped sidecar ever produced.
     const detail =
       body && typeof body === 'object' && 'error' in body
         ? String((body as { error: unknown }).error)
-        : `HTTP ${response.status}`
+        : `sidecar returned HTTP ${response.status} for ${path} — ${SIDECAR_HINT}`
     throw new ApiError(detail)
   }
   // A tool-level failure arrives as {ok: false, error} at HTTP 200 — the MCP

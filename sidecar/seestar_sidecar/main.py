@@ -1,10 +1,12 @@
 """FastAPI app factory. CORS is open to the Vite dev origin only."""
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from seestar_sidecar.frontend import DEFAULT_WEB_DIST, mount_frontend
 from seestar_sidecar.mcp_proxy import McpConnection
 from seestar_sidecar.routes import replay_enabled, router
 
@@ -32,7 +34,11 @@ async def lifespan(app: FastAPI):
         app.state.connection = None
 
 
-def create_app() -> FastAPI:
+def create_app(web_dist: Path | str | None = None) -> FastAPI:
+    """`web_dist` defaults to web/dist and only needs overriding in tests —
+    the `uv run seestar-dashboard` / `--factory` entry points both call this
+    with no arguments.
+    """
     app = FastAPI(title="seestar-sidecar", version="0.1.0", lifespan=lifespan)
     # Safe default for callers that never run the lifespan — a bare
     # TestClient(create_app()) does exactly that. Routes then report
@@ -45,4 +51,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(router)
+    # Must come after include_router(): mount_frontend()'s "/" mount
+    # technically matches every path, so anything registered after it would
+    # never be reached. See frontend.py's module docstring.
+    mount_frontend(app, Path(web_dist) if web_dist is not None else DEFAULT_WEB_DIST)
     return app
