@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TonightScreen } from './TonightScreen'
 import { ConditionsSchema, PlanTargetsSchema, SiteProfileSchema, type Health } from '../../api/schemas'
-import { goConditions, recordedConditions, recordedPlan, recordedSite } from '../../test/fixtures'
+import { goConditions, recordedConditions, recordedPlan, recordedProjectsCombined, recordedSite } from '../../test/fixtures'
 
 /** One card per ranked target — read from the fixture, not hardcoded. */
 const planTargetCount = PlanTargetsSchema.parse(recordedPlan()).targets.length
@@ -134,6 +134,31 @@ describe('TonightScreen', () => {
     const warning = recorded.location.warning
     if (!warning) throw new Error('recorded fixture must carry a GPS warning for this test to mean anything')
     expect(screen.getAllByText(warning)).toHaveLength(1)
+  })
+
+  it('shows a time-captured progress row on ranked cards that match a real projects_combined target', async () => {
+    stubApi({ '/api/projects_combined': recordedProjectsCombined() })
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    // M31 is both a plan_targets entry and a projects_combined entry with a
+    // real suggested goal (2.9 h, see projects.test.ts) — joined client-side
+    // by id (see TonightScreen.tsx), not recomputed.
+    await waitFor(() => expect(screen.getByText('of 2.9 h suggested')).toBeInTheDocument())
+  })
+
+  it('renders the ranked cards normally, with no progress row, when projects_combined fails — it is an enhancement, not core to Tonight', async () => {
+    stubApi() // projects_combined isn't stubbed here, so it 404s/fails schema validation and is soft-caught
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    expect(
+      screen.getAllByRole('button', { name: /Hand to run-session/ }),
+    ).toHaveLength(planTargetCount)
+    expect(screen.queryByText('TIME CAPTURED')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('threads view and onNavigate to the sidebar so switching screens actually works', async () => {

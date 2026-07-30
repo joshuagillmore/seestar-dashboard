@@ -9,7 +9,7 @@ import {
   summarizeSessions,
   type MergedProject,
 } from './projects'
-import type { Project, ProjectsCombinedEntry, SessionRecord } from '../../api/schemas'
+import type { IntegrationGoal, Project, ProjectsCombinedEntry, SessionRecord } from '../../api/schemas'
 import { ListProjectsSchema, ProjectsCombinedSchema } from '../../api/schemas'
 import { recordedListProjects, recordedProjectsCombined } from '../../test/fixtures'
 
@@ -36,6 +36,20 @@ const project = (overrides: Partial<Project> = {}): Project => ({
   ...overrides,
 })
 
+/** A normal (not coarse, not beyond-reach) numeric goal — the common case on
+ * the photometric track. Override individual fields for the other states. */
+const goal = (overrides: Partial<IntegrationGoal> = {}): IntegrationGoal => ({
+  track: 'photometric',
+  suggested_hours: 3.0,
+  coarse: false,
+  beyond_reach: false,
+  surface_brightness: 23.3,
+  bortle_multiplier: 1.0,
+  reason: null,
+  note: 'SB 23.30 mag/arcsec² → suggested 3.0 h.',
+  ...overrides,
+})
+
 const combinedEntry = (overrides: Partial<ProjectsCombinedEntry> = {}): ProjectsCombinedEntry => ({
   target_id: 'M1',
   target_name: 'Crab Nebula',
@@ -43,6 +57,7 @@ const combinedEntry = (overrides: Partial<ProjectsCombinedEntry> = {}): Projects
   archive_minutes: 0,
   sources: ['store'],
   total_minutes: 0,
+  goal: null,
   ...overrides,
 })
 
@@ -54,6 +69,7 @@ const merged = (overrides: Partial<MergedProject> = {}): MergedProject => ({
   archiveMinutes: 0,
   sources: ['store'],
   store: project(),
+  goal: null,
   ...overrides,
 })
 
@@ -69,6 +85,14 @@ describe('mergeProjects', () => {
     const combined = [combinedEntry({ target_id: 'IC405', sources: ['archive'] })]
     const [result] = mergeProjects(combined, [])
     expect(result.store).toBeNull()
+  })
+
+  it('carries the goal field through from the combined entry, independent of store', () => {
+    const g = goal({ reason: 'photometry_unreliable', track: 'none', suggested_hours: null })
+    const combined = [combinedEntry({ target_id: 'IC405', sources: ['archive'], goal: g })]
+    const [result] = mergeProjects(combined, [])
+    expect(result.store).toBeNull()
+    expect(result.goal).toEqual(g)
   })
 
   it('preserves the input order from `combined` rather than re-sorting', () => {
@@ -103,65 +127,99 @@ describe('mergeProjects', () => {
 })
 
 describe('projectStatus', () => {
-  it('tags an archive-only target (no store record) as archive-only', () => {
-    expect(projectStatus(merged({ store: null })).tag).toBe('archive-only')
+  it('tags an archive-only target (no store record) as archive-only, regardless of its goal', () => {
+    expect(projectStatus(merged({ store: null, goal: goal() }), false).tag).toBe('archive-only')
   })
 
-  it('tags a store project with no goal as no-goal', () => {
-    expect(projectStatus(merged({ store: project({ goal_minutes: 0 }) })).tag).toBe('no-goal')
+  it('tags a store project with no catalogue record as no-goal', () => {
+    expect(projectStatus(merged({ goal: null }), false).tag).toBe('no-goal')
   })
 
-  it('tags a store project short of its goal as needs-data', () => {
-    const p = merged({ totalMinutes: 30, store: project({ goal_minutes: 60 }) })
-    expect(projectStatus(p).tag).toBe('needs-data')
+  it('tags a store project with track "none" (no magnitude / unreliable photometry) as no-goal', () => {
+    const noMag = goal({ track: 'none', suggested_hours: null, reason: 'no_magnitude' })
+    expect(projectStatus(merged({ goal: noMag }), false).tag).toBe('no-goal')
   })
 
-  it('tags a store project past its goal as complete', () => {
-    const p = merged({ totalMinutes: 90, store: project({ goal_minutes: 60 }) })
-    expect(projectStatus(p).tag).toBe('complete')
+  it('tags a beyond-reach goal distinctly, not as no-goal', () => {
+    const beyond = goal({ beyond_reach: true, suggested_hours: null })
+    expect(projectStatus(merged({ goal: beyond }), false).tag).toBe('beyond-reach')
+  })
+
+  it('tags a store project short of its suggested goal as needs-data', () => {
+    const p = merged({ totalMinutes: 30, goal: goal({ suggested_hours: 1.0 }) }) // 60 min goal
+    expect(projectStatus(p, false).tag).toBe('needs-data')
+  })
+
+  it('tags a store project past its suggested goal as complete', () => {
+    const p = merged({ totalMinutes: 90, goal: goal({ suggested_hours: 1.0 }) })
+    expect(projectStatus(p, false).tag).toBe('complete')
   })
 
   it('treats hitting the goal exactly as complete, not needs-data', () => {
     // The likeliest off-by-one mutation (>= vs >) lands exactly here.
-    const p = merged({ totalMinutes: 60, store: project({ goal_minutes: 60 }) })
-    expect(projectStatus(p).tag).toBe('complete')
+    const p = merged({ totalMinutes: 60, goal: goal({ suggested_hours: 1.0 }) })
+    expect(projectStatus(p, false).tag).toBe('complete')
   })
 
-  it('every real project is archive-only or no-goal — none reach needs-data/complete', () => {
+  it('doubling the goal can turn a complete project back to needs-data', () => {
+    const p = merged({ totalMinutes: 90, goal: goal({ suggested_hours: 1.0 }) }) // 90 >= 60 undoubled
+    expect(projectStatus(p, false).tag).toBe('complete')
+    expect(projectStatus(p, true).tag).toBe('needs-data') // 90 < 120 doubled
+  })
+
+  it('matches the real fixture distribution among the 15 store-backed projects: 12 needs-data, 2 no-goal, 1 complete, 0 beyond-reach', () => {
     const combined = ProjectsCombinedSchema.parse(recordedProjectsCombined()).projects
     const listed = ListProjectsSchema.parse(recordedListProjects()).projects
-    const tags = new Set(mergeProjects(combined, listed).map((p) => projectStatus(p).tag))
-    expect(tags).toEqual(new Set(['archive-only', 'no-goal']))
+    const storeBacked = mergeProjects(combined, listed).filter((p) => p.store !== null)
+    expect(storeBacked).toHaveLength(15)
+    const counts: Record<string, number> = {}
+    for (const p of storeBacked) {
+      const tag = projectStatus(p, false).tag
+      counts[tag] = (counts[tag] ?? 0) + 1
+    }
+    expect(counts).toEqual({ 'needs-data': 12, 'no-goal': 2, complete: 1 })
   })
 })
 
 describe('progressPct', () => {
-  it('is null for an archive-only target', () => {
-    expect(progressPct(merged({ store: null }))).toBeNull()
+  it('is null for a target with no catalogue record at all', () => {
+    expect(progressPct(merged({ goal: null }), false)).toBeNull()
   })
 
-  it('is null when goal_minutes is 0', () => {
-    expect(progressPct(merged({ store: project({ goal_minutes: 0 }) }))).toBeNull()
+  it('is null for a track "none" goal (no magnitude / unreliable photometry)', () => {
+    const noMag = goal({ track: 'none', suggested_hours: null, reason: 'no_magnitude' })
+    expect(progressPct(merged({ goal: noMag }), false)).toBeNull()
   })
 
-  it('computes a rounded percentage against the goal', () => {
-    const p = merged({ totalMinutes: 20, store: project({ goal_minutes: 60 }) }) // 33.33%
-    expect(progressPct(p)).toBe(33)
-    const q = merged({ totalMinutes: 40, store: project({ goal_minutes: 60 }) }) // 66.67%
-    expect(progressPct(q)).toBe(67)
+  it('is null for a beyond-reach goal', () => {
+    expect(progressPct(merged({ goal: goal({ beyond_reach: true, suggested_hours: null }) }), false)).toBeNull()
+  })
+
+  it('computes a rounded percentage against the suggested hours', () => {
+    const p = merged({ totalMinutes: 20, goal: goal({ suggested_hours: 1.0 }) }) // 20/60 = 33.33%
+    expect(progressPct(p, false)).toBe(33)
+    const q = merged({ totalMinutes: 40, goal: goal({ suggested_hours: 1.0 }) }) // 40/60 = 66.67%
+    expect(progressPct(q, false)).toBe(67)
   })
 
   it('clamps at 100 rather than reporting over-completion', () => {
-    const p = merged({ totalMinutes: 150, store: project({ goal_minutes: 60 }) })
-    expect(progressPct(p)).toBe(100)
+    const p = merged({ totalMinutes: 150, goal: goal({ suggested_hours: 1.0 }) })
+    expect(progressPct(p, false)).toBe(100)
   })
 
-  it('no real project has a non-null progress percentage today', () => {
+  it('halves the percentage when the goal is doubled', () => {
+    const p = merged({ totalMinutes: 30, goal: goal({ suggested_hours: 1.0 }) }) // 30/60 = 50%
+    expect(progressPct(p, false)).toBe(50)
+    expect(progressPct(p, true)).toBe(25) // 30/120
+  })
+
+  it('matches the recorded M31 percentage against its real suggested goal', () => {
     const combined = ProjectsCombinedSchema.parse(recordedProjectsCombined()).projects
     const listed = ListProjectsSchema.parse(recordedListProjects()).projects
-    const result = mergeProjects(combined, listed)
-    expect(result.length).toBeGreaterThan(0)
-    expect(result.every((p) => progressPct(p) === null)).toBe(true)
+    const m31 = mergeProjects(combined, listed).find((p) => p.targetId === 'M31')
+    expect(m31?.goal?.suggested_hours).toBeCloseTo(2.9, 1)
+    // 122.5333 min / (2.9 h * 60) = ~70.4%
+    expect(progressPct(m31 as MergedProject, false)).toBe(70)
   })
 })
 

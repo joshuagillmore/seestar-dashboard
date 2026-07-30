@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { fetchConditions, fetchPlan } from '../../api/client'
-import type { Conditions, Health, PlanTargets, SiteProfile } from '../../api/schemas'
+import { fetchConditions, fetchPlan, fetchProjectsCombined } from '../../api/client'
+import type { Conditions, Health, PlanTargets, ProjectsCombinedEntry, SiteProfile } from '../../api/schemas'
 import { verdictFor } from '../../api/verdict'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
@@ -29,6 +29,13 @@ export interface TonightScreenProps {
 export function TonightScreen({ view, onNavigate, site, health }: TonightScreenProps) {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Keyed by target_id — the ranked cards' own "time captured" progress bar
+  // (see PlanCard's `progress` prop). Deliberately NOT part of `data`/the
+  // load-gating Promise.all below: integration-goal context is an
+  // enhancement to an already-useful screen (conditions + plan), not core to
+  // it, so a failure here degrades every card to "no progress bar" instead
+  // of taking down Tonight the way a conditions/plan failure does.
+  const [progressById, setProgressById] = useState<Map<string, ProjectsCombinedEntry>>(new Map())
 
   useEffect(() => {
     let cancelled = false
@@ -38,6 +45,21 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
       })
       .catch((cause: Error) => {
         if (!cancelled) setError(cause.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchProjectsCombined()
+      .then((combined) => {
+        if (cancelled) return
+        setProgressById(new Map(combined.projects.map((p) => [p.target_id, p])))
+      })
+      .catch(() => {
+        // Soft-fail by design — see the state's own doc comment above.
       })
     return () => {
       cancelled = true
@@ -56,8 +78,11 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
           gpsWarning={data?.conditions.location.warning ?? null}
           view={view}
           onNavigate={onNavigate}
-          // Tonight never fetches project data, so it has no honest headline
-          // to offer the Projects row — see Sidebar's projectsHeadline doc.
+          // Tonight now fetches projects_combined too (for the ranked cards'
+          // own progress bars, see progressById above), but deliberately
+          // doesn't reuse it to populate the nav row's headline: that
+          // aggregate is ProjectsScreen's own concern, and duplicating its
+          // computation here risks the two headlines drifting apart.
           projectsHeadline={null}
         />
       }
@@ -109,9 +134,16 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
                   </div>
                 )}
                 <div className={styles.grid}>
-                  {data.plan.targets.map((target) => (
-                    <PlanCard key={target.id} target={target} />
-                  ))}
+                  {data.plan.targets.map((target) => {
+                    const entry = progressById.get(target.id)
+                    return (
+                      <PlanCard
+                        key={target.id}
+                        target={target}
+                        progress={entry ? { totalMinutes: entry.total_minutes, goal: entry.goal } : null}
+                      />
+                    )
+                  })}
                 </div>
               </>
             ) : (

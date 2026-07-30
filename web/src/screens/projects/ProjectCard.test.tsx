@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectCard } from './ProjectCard'
 import type { MergedProject } from './projects'
-import type { Project } from '../../api/schemas'
+import type { IntegrationGoal, Project } from '../../api/schemas'
 
 const project = (overrides: Partial<Project> = {}): Project => ({
   target_id: 'M1',
@@ -17,6 +17,33 @@ const project = (overrides: Partial<Project> = {}): Project => ({
   ...overrides,
 })
 
+/** A normal (not coarse, not beyond-reach) numeric goal. Override individual
+ * fields to reach the other three states. */
+const goal = (overrides: Partial<IntegrationGoal> = {}): IntegrationGoal => ({
+  track: 'photometric',
+  suggested_hours: 3.0,
+  coarse: false,
+  beyond_reach: false,
+  surface_brightness: 23.3,
+  bortle_multiplier: 1.0,
+  reason: null,
+  note: "SB 23.30 mag/arcsec² → suggested 3.0 h — an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement.",
+  ...overrides,
+})
+
+const IC405_GOAL: IntegrationGoal = {
+  track: 'none',
+  suggested_hours: null,
+  coarse: false,
+  beyond_reach: false,
+  surface_brightness: 27.12,
+  bortle_multiplier: 1.0,
+  reason: 'photometry_unreliable',
+  note:
+    'SB 27.12 mag/arcsec² computes to ~158 h, which is not credible for this object class — ' +
+    'treating the catalogued magnitude as unreliable, not the target as unreachable.',
+}
+
 const merged = (overrides: Partial<MergedProject> = {}): MergedProject => ({
   targetId: 'M1',
   targetName: 'Crab Nebula',
@@ -25,8 +52,15 @@ const merged = (overrides: Partial<MergedProject> = {}): MergedProject => ({
   archiveMinutes: 0,
   sources: ['store'],
   store: project(),
+  goal: null,
   ...overrides,
 })
+
+// Every test starts with a clean slate — several tests reuse target id 'M1',
+// and the doubling toggle's state is real localStorage (see doubling.ts),
+// not a mock, so a flag left set by one test would otherwise leak into the
+// next.
+beforeEach(() => localStorage.clear())
 
 describe('ProjectCard', () => {
   it('renders the target id, common name, and hours collected', () => {
@@ -36,55 +70,92 @@ describe('ProjectCard', () => {
     expect(screen.getByText('1.4 h')).toBeInTheDocument()
   })
 
-  it('tags a store project with no goal as "no goal" and says so instead of a goal figure', () => {
-    render(<ProjectCard project={merged({ store: project({ goal_minutes: 0 }) })} selected={false} onSelect={vi.fn()} />)
-    expect(screen.getByText('no goal')).toBeInTheDocument()
-    expect(screen.getByText('no goal set')).toBeInTheDocument()
+  describe('the four honest states for a target with no numeric goal to show', () => {
+    it('a target with no catalogue record at all: "not in DSO catalogue", empty rail, no doubling toggle', () => {
+      render(<ProjectCard project={merged({ goal: null })} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByText('no goal')).toBeInTheDocument()
+      expect(screen.getByText('not in DSO catalogue')).toBeInTheDocument()
+      expect(screen.getByTestId('progress-track').firstElementChild).toBeNull()
+      expect(screen.queryByRole('button', { name: /Double/ })).not.toBeInTheDocument()
+    })
+
+    it('no catalogued magnitude: distinct wording from "not catalogued", same neutral tag', () => {
+      const g = goal({ track: 'none', suggested_hours: null, reason: 'no_magnitude', note: 'no mag note' })
+      render(<ProjectCard project={merged({ goal: g })} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByText('no goal')).toBeInTheDocument()
+      expect(screen.getByText('no catalogued magnitude')).toBeInTheDocument()
+      expect(screen.getByText('no catalogued magnitude').title).toBe('no mag note')
+    })
+
+    it('photometry not credible (IC 405, the real case): distinct wording, not blank', () => {
+      render(
+        <ProjectCard
+          project={merged({
+            targetId: 'IC405',
+            targetName: 'IC 405',
+            totalMinutes: 217.1667,
+            store: null,
+            sources: ['archive'],
+            archiveMinutes: 217.1667,
+            goal: IC405_GOAL,
+          })}
+          selected={false}
+          onSelect={vi.fn()}
+        />,
+      )
+      // Archive-only (no store record) still shows its own tag …
+      expect(screen.getByText('archive only')).toBeInTheDocument()
+      // … but the goal line is no longer omitted just because there's no
+      // store record — the goal is computed independently of tracking status,
+      // and IC 405 (the user's single largest archive investment) must not
+      // render as a bare blank.
+      expect(screen.getByText('photometry not credible')).toBeInTheDocument()
+      expect(screen.getByText('photometry not credible').title).toContain('not credible for this object class')
+      expect(screen.getByTestId('progress-track').firstElementChild).toBeNull()
+    })
+
+    it('beyond practical reach: its own distinct tag and wording, not lumped in with "no goal"', () => {
+      const g = goal({ beyond_reach: true, suggested_hours: null, surface_brightness: 27.0 })
+      render(<ProjectCard project={merged({ goal: g })} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByText('beyond reach')).toBeInTheDocument()
+      expect(screen.getByText('beyond practical reach')).toBeInTheDocument()
+      expect(screen.queryByText('no goal')).not.toBeInTheDocument()
+      expect(screen.getByTestId('progress-track').firstElementChild).toBeNull()
+    })
   })
 
-  it('tags an archive-only target distinctly and omits the goal figure entirely', () => {
-    render(
-      <ProjectCard
-        project={merged({ store: null, sources: ['archive'], storeMinutes: 0, archiveMinutes: 217.2, totalMinutes: 217.2 })}
-        selected={false}
-        onSelect={vi.fn()}
-      />,
+  it('marks a coarse goal (cluster/planetary-nebula) with a "~" prefix, a real one without', () => {
+    const { rerender } = render(
+      <ProjectCard project={merged({ goal: goal({ coarse: true, suggested_hours: 2.0 }) })} selected={false} onSelect={vi.fn()} />,
     )
-    expect(screen.getByText('archive only')).toBeInTheDocument()
-    // "no goal set" would misleadingly imply this is a tracked, goal-less
-    // project; an archive-only target isn't a project at all.
-    expect(screen.queryByText('no goal set')).not.toBeInTheDocument()
-    expect(screen.queryByText(/of .* goal/)).not.toBeInTheDocument()
-  })
+    expect(screen.getByText('of ~2.0 h suggested')).toBeInTheDocument()
 
-  it('shows an honest reason instead of session counts for an archive-only target', () => {
-    render(<ProjectCard project={merged({ store: null })} selected={false} onSelect={vi.fn()} />)
-    expect(screen.getByText(/archive only — no per-session detail/)).toBeInTheDocument()
-  })
-
-  it('renders no progress track while goal_minutes is 0 (every real project today)', () => {
-    render(<ProjectCard project={merged({ store: project({ goal_minutes: 0 }) })} selected={false} onSelect={vi.fn()} />)
-    expect(screen.queryByTestId('progress-track')).not.toBeInTheDocument()
-  })
-
-  it('renders no progress track for an archive-only target', () => {
-    render(<ProjectCard project={merged({ store: null })} selected={false} onSelect={vi.fn()} />)
-    expect(screen.queryByTestId('progress-track')).not.toBeInTheDocument()
-  })
-
-  it('renders a progress track at the right width once a goal exists (forward-compat path)', () => {
-    render(
-      <ProjectCard
-        project={merged({ totalMinutes: 30, store: project({ goal_minutes: 60 }) })}
-        selected={false}
-        onSelect={vi.fn()}
-      />,
+    rerender(
+      <ProjectCard project={merged({ goal: goal({ coarse: false, suggested_hours: 2.0 }) })} selected={false} onSelect={vi.fn()} />,
     )
+    expect(screen.getByText('of 2.0 h suggested')).toBeInTheDocument()
+  })
+
+  it('says "suggested", never "needed"/"required"/"remaining" — the number is not a requirement', () => {
+    render(<ProjectCard project={merged({ goal: goal({ suggested_hours: 6.0 }) })} selected={false} onSelect={vi.fn()} />)
+    const label = screen.getByText(/suggested/)
+    expect(label.textContent).toBe('of 6.0 h suggested')
+    expect(label.textContent).not.toMatch(/needed|required|remaining|short of/i)
+  })
+
+  it('renders a progress track at the exact width implied by the ratio, colored by completion', () => {
+    const p = merged({ totalMinutes: 30, goal: goal({ suggested_hours: 1.0 }) }) // 30/60 = 50%
+    render(<ProjectCard project={p} selected={false} onSelect={vi.fn()} />)
     const track = screen.getByTestId('progress-track')
     const fill = track.firstElementChild as HTMLElement
     expect(fill.style.width).toBe('50%')
     expect(screen.getByText('needs data')).toBeInTheDocument()
-    expect(screen.getByText('of 1.0 h goal')).toBeInTheDocument()
+
+    const complete = merged({ totalMinutes: 90, goal: goal({ suggested_hours: 1.0 }) }) // 150%, clamped
+    const { container } = render(<ProjectCard project={complete} selected={false} onSelect={vi.fn()} />)
+    const completeFill = container.querySelector('[data-testid="progress-track"]')?.firstElementChild as HTMLElement
+    expect(completeFill.style.width).toBe('100%')
+    expect(screen.getAllByText('complete').length).toBeGreaterThan(0)
   })
 
   it('shows the provenance split, not just the merged total', () => {
@@ -113,17 +184,106 @@ describe('ProjectCard', () => {
     expect(screen.getByText(/med FWHM —/).title).toMatch(/median_fwhm is null/)
   })
 
-  it('calls onSelect when clicked', () => {
+  it('calls onSelect when the card is clicked', () => {
     const onSelect = vi.fn()
     render(<ProjectCard project={merged()} selected={false} onSelect={onSelect} />)
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByTestId('project-card'))
     expect(onSelect).toHaveBeenCalledTimes(1)
   })
 
-  it('reflects the selected prop via aria-pressed', () => {
+  it('reflects the selected prop via aria-pressed on the card, not the doubling toggle', () => {
     const { rerender } = render(<ProjectCard project={merged()} selected={false} onSelect={vi.fn()} />)
-    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByTestId('project-card')).toHaveAttribute('aria-pressed', 'false')
     rerender(<ProjectCard project={merged()} selected onSelect={vi.fn()} />)
-    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('project-card')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  describe('the doubling control (view-only, localStorage-persisted)', () => {
+    it('only appears when there is a real number to double', () => {
+      const { rerender } = render(<ProjectCard project={merged({ goal: null })} selected={false} onSelect={vi.fn()} />)
+      expect(screen.queryByRole('button', { name: /Double/ })).not.toBeInTheDocument()
+
+      rerender(
+        <ProjectCard
+          project={merged({ goal: goal({ beyond_reach: true, suggested_hours: null }) })}
+          selected={false}
+          onSelect={vi.fn()}
+        />,
+      )
+      expect(screen.queryByRole('button', { name: /Double/ })).not.toBeInTheDocument()
+
+      rerender(<ProjectCard project={merged({ goal: goal() })} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByRole('button', { name: /Double/ })).toBeInTheDocument()
+    })
+
+    it('doubles the displayed hours and halves the fill width when toggled on', () => {
+      const p = merged({ totalMinutes: 30, goal: goal({ suggested_hours: 1.0 }) }) // 50% undoubled
+      render(<ProjectCard project={p} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByText('of 1.0 h suggested')).toBeInTheDocument()
+      const fillBefore = screen.getByTestId('progress-track').firstElementChild as HTMLElement
+      expect(fillBefore.style.width).toBe('50%')
+
+      fireEvent.click(screen.getByRole('button', { name: /Double/ }))
+
+      expect(screen.getByText('of 2.0 h suggested')).toBeInTheDocument()
+      const fillAfter = screen.getByTestId('progress-track').firstElementChild as HTMLElement
+      expect(fillAfter.style.width).toBe('25%') // 30 / 120
+    })
+
+    it('does not fire the card-select handler when the toggle is clicked', () => {
+      const onSelect = vi.fn()
+      render(<ProjectCard project={merged({ goal: goal() })} selected={false} onSelect={onSelect} />)
+      fireEvent.click(screen.getByRole('button', { name: /Double/ }))
+      expect(onSelect).not.toHaveBeenCalled()
+    })
+
+    it('persists the doubled state across a remount (localStorage, keyed by target id)', () => {
+      const p = merged({ targetId: 'M31', goal: goal() })
+      const { unmount } = render(<ProjectCard project={p} selected={false} onSelect={vi.fn()} />)
+      fireEvent.click(screen.getByRole('button', { name: /Double/ }))
+      expect(screen.getByRole('button', { name: /Double/ })).toHaveAttribute('aria-pressed', 'true')
+      unmount()
+
+      render(<ProjectCard project={p} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByRole('button', { name: /Double/ })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('does not let one target\'s doubled state leak onto a different target', () => {
+      const a = merged({ targetId: 'M31', goal: goal({ suggested_hours: 1.0 }) })
+      const b = merged({ targetId: 'M42', goal: goal({ suggested_hours: 1.0 }) })
+      const { unmount } = render(<ProjectCard project={a} selected={false} onSelect={vi.fn()} />)
+      fireEvent.click(screen.getByRole('button', { name: /Double/ }))
+      unmount()
+
+      render(<ProjectCard project={b} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByRole('button', { name: /Double/ })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('degrades to un-doubled, without crashing, when localStorage holds junk', () => {
+      localStorage.setItem('seestar-dashboard:doubled-goals:v1', '{not valid json')
+      render(<ProjectCard project={merged({ goal: goal() })} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByRole('button', { name: /Double/ })).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByText('of 3.0 h suggested')).toBeInTheDocument()
+    })
+
+    it('degrades to un-doubled, without crashing, when localStorage is unavailable', () => {
+      const original = Object.getOwnPropertyDescriptor(window, 'localStorage')
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new Error('localStorage blocked in this context')
+        },
+      })
+      try {
+        render(<ProjectCard project={merged({ goal: goal() })} selected={false} onSelect={vi.fn()} />)
+        expect(screen.getByText('of 3.0 h suggested')).toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: /Double/ }))
+        // The click still updates this render's own state even though it
+        // can't persist — a crash here would be worse than a lost toggle.
+        expect(screen.getByText('of 6.0 h suggested')).toBeInTheDocument()
+      } finally {
+        if (original) Object.defineProperty(window, 'localStorage', original)
+      }
+    })
   })
 })

@@ -1,6 +1,22 @@
-import type { PlanTarget } from '../../api/schemas'
+import { formatHours, goalLabel, goalProgressPct } from '../../api/integrationGoal'
+import type { IntegrationGoal, PlanTarget } from '../../api/schemas'
 import { localHhMm, parse } from './timeline'
 import styles from './PlanCard.module.css'
+
+/** Time captured and the suggested goal for this target, joined client-side
+ * from `/api/projects_combined` by id (see TonightScreen) — plan_targets
+ * itself carries no integration numbers, and the ranker's own "N min
+ * collected" reason string is prose for a human, not a value this component
+ * may parse back out. `null` when the id has no projects_combined entry at
+ * all (a target genuinely never observed, or a Caldwell/alias id — like
+ * "C14" vs the union's "C14_DoubleCluster" — the two sources don't yet
+ * agree on): renders no progress row at all rather than a fabricated zero.
+ * Never doubled here — the doubling control is a Projects-screen concept
+ * (see doubling.ts); Tonight shows the model's own number as-is. */
+export interface PlanCardProgress {
+  totalMinutes: number
+  goal: IntegrationGoal | null
+}
 
 /**
  * The reason tags are the point of the screen — a bare score is not trustworthy,
@@ -11,9 +27,17 @@ import styles from './PlanCard.module.css'
  * returns imagery, handback 8) and the LP filter chip (lp_fit is computed
  * server-side but not returned, handback 5). Neither is faked.
  */
-export function PlanCard({ target }: { target: PlanTarget }) {
+export function PlanCard({
+  target,
+  progress = null,
+}: {
+  target: PlanTarget
+  progress?: PlanCardProgress | null
+}) {
   const [from, to] = target.best_window_utc
   const reasons = target.reasons.filter((r) => !r.startsWith('best window '))
+  const goal = progress ? goalLabel(progress.goal, false) : null
+  const pct = progress ? goalProgressPct(progress.totalMinutes, progress.goal, false) : null
 
   return (
     <article className={styles.card}>
@@ -45,6 +69,31 @@ export function PlanCard({ target }: { target: PlanTarget }) {
           </div>
         </div>
       </div>
+
+      {progress && (
+        <div className={styles.progressSection}>
+          <div className={styles.statLabel}>TIME CAPTURED</div>
+          <div className={styles.progressRow}>
+            <span className={styles.progressHours}>{formatHours(progress.totalMinutes)}</span>
+            {goal && (
+              <span className={styles.progressGoal} title={goal.title}>
+                {goal.text}
+              </span>
+            )}
+          </div>
+          <div
+            className={`${styles.progressTrack} ${pct === null ? styles.progressTrackEmpty : ''}`}
+            data-testid="plan-progress-track"
+          >
+            {pct !== null && (
+              <div
+                className={`${styles.progressFill} ${pct >= 100 ? styles.progressFillComplete : ''}`}
+                style={{ width: `${pct}%` }}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       <div className={styles.reasons}>
         <div className={styles.statLabel}>WHY — REASON TAGS</div>

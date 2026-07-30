@@ -47,10 +47,13 @@ describe('ProjectsScreen', () => {
     const grid = screen.getByTestId('projects-grid')
     // 33 cards: 15 store-backed + 18 archive-only, read from the fixture,
     // not hardcoded — a join bug that dropped or duplicated a target would
-    // fail this without anyone updating a magic number here.
-    expect(within(grid).getAllByRole('button')).toHaveLength(combined.count)
+    // fail this without anyone updating a magic number here. Scoped by
+    // testid, not role=button: cards with a real numeric goal also render a
+    // doubling-toggle button (see ProjectCard.tsx), so "every button" is no
+    // longer one-per-card.
+    expect(within(grid).getAllByTestId('project-card')).toHaveLength(combined.count)
     expect(
-      screen.getByText(`${combined.count} projects · ${totalHoursText} collected`),
+      screen.getByText(`${combined.count} projects · ${totalHoursText} collected`, { exact: false }),
     ).toBeInTheDocument()
   })
 
@@ -96,16 +99,29 @@ describe('ProjectsScreen', () => {
     expect(screen.getByRole('button', { name: /^Unknown/ })).toBeInTheDocument()
   })
 
-  it('renders no progress track anywhere — every project has goal_minutes 0 today', async () => {
+  it('renders a progress track on every card — the sidecar now attaches a real goal per target', async () => {
     stubApi()
     await renderLoaded()
-    expect(screen.queryAllByTestId('progress-track')).toHaveLength(0)
+    // One track per card, real or empty-rail — see ProjectCard.tsx.
+    expect(screen.getAllByTestId('progress-track')).toHaveLength(combined.count)
   })
 
-  it('shows an honest note about goals instead of a recommend_projects shortfall line', async () => {
+  it('gives the real fixture its expected mix of goal states, not a single uniform one', async () => {
     stubApi()
     await renderLoaded()
-    expect(screen.getByText(/no goals set/)).toBeInTheDocument()
+    // 12 of the 15 store-backed projects are short of their suggested goal
+    // (see projects.test.ts's exact-distribution test for the full split).
+    expect(screen.getAllByText('needs data')).toHaveLength(12)
+    expect(screen.getAllByText('complete').length).toBeGreaterThanOrEqual(1)
+    // IC 405 — archive-only, and its photometry is flagged unreliable rather
+    // than blank (see CLAUDE.md's honesty requirements for this exact case).
+    expect(screen.getByText('photometry not credible')).toBeInTheDocument()
+  })
+
+  it('shows an honest note that goals are catalogue-suggested, not user-set, instead of a recommend_projects shortfall line', async () => {
+    stubApi()
+    await renderLoaded()
+    expect(screen.getByText(/catalogue-suggested, not user-set/)).toBeInTheDocument()
     expect(screen.queryByText(/short of goal/)).not.toBeInTheDocument()
   })
 
@@ -140,7 +156,9 @@ describe('ProjectsScreen', () => {
     render(<ProjectsScreen view="projects" onNavigate={vi.fn()} site={null} health={null} />)
     await waitFor(() => expect(screen.queryByTestId('projects-loading')).not.toBeInTheDocument())
     expect(screen.queryByText('Example Observatory (scope GPS)')).not.toBeInTheDocument()
-    expect(screen.getByText(`${combined.count} projects · ${totalHoursText} collected`)).toBeInTheDocument()
+    expect(
+      screen.getByText(`${combined.count} projects · ${totalHoursText} collected`, { exact: false }),
+    ).toBeInTheDocument()
   })
 
   it('shows an error banner when the sidecar is unreachable', async () => {

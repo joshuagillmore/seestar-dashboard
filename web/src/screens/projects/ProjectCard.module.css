@@ -1,3 +1,13 @@
+/* Wraps the card button plus the doubling-toggle overlay (see
+   ProjectCard.tsx). A sibling, not a nested button: two nested <button>s is
+   invalid content and would double-fire clicks (inner click bubbles to the
+   outer card-select handler) — the toggle is instead absolutely positioned
+   over this wrapper's top edge, outside the card button's own box. */
+.cardWrap {
+  position: relative;
+  width: 100%;
+}
+
 /* No 96px cover column: no tool or archive path returns per-target imagery
    yet (see docs/handback-to-seestar-ai.md item 8 / slice-2-backlog.md). The
    card is a plain vertical column rather than a horizontal flex with a
@@ -70,9 +80,42 @@
   overflow: hidden;
 }
 
+/* No numeric goal to divide the rail by (not catalogued / no catalogued
+   magnitude / photometry not credible / beyond practical reach) — the whole
+   rail reads as the design's "empty" bar rather than a coloured fill inside
+   a track, since there is nothing to be proportional to. */
+.trackEmpty { background: var(--chart-rail-empty); }
+
 .fill { height: 100%; border-radius: 3px; }
 .fillProgress { background: var(--accent); }
 .fillComplete { background: var(--pass); }
+
+/* Sits outside the card's own box (see .cardWrap) so it is never nested
+   inside the card-select button — a small corner affordance, not part of
+   the card's own information layout. */
+.doubleToggle {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-chip);
+  background: var(--bg-cell);
+  color: var(--text-dimmer);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9.5px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.doubleToggle:hover { border-color: var(--border-control-hover); color: var(--text-primary); }
+
+.doubleToggle[aria-pressed='true'] {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
 
 .provenance {
   margin-top: 9px;
