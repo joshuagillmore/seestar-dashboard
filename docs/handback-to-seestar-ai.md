@@ -7,11 +7,18 @@ mean re-implementing server logic in the client, which is exactly what the rule 
 **Found:** 2026-07-27 to 2026-07-28, by reading `src/seestar_mcp/` and calling the read-only tools live against
 the current installation (Example Observatory, Bortle 8).
 
-**The encouraging part:** eight of the nine values below are *already computed inside the
-server* — they are simply not in the returned payload. Most of these are a dataclass field and a
-line in a return dict, not new logic.
+**The encouraging part:** most of the values below are *already computed inside the server* — they
+are simply not in the returned payload. Several are a dataclass field and a line in a return dict,
+not new logic. (Deliberately not a count: this list has grown twice and the count went stale both
+times.)
 
-Line references are to `OrangeAgente/SeeStar-AI` @ `main` as of 2026-07-27.
+**A pattern worth noticing across items 3, 5 and 12:** in each, the server demonstrably knows a
+value and mentions it in a `reasons[]` entry or a session note, but does not return it as a field.
+Each one forces the dashboard to choose between an absent state and parsing English. A general
+convention — *if a tool names a quantity in prose, return it as a field too* — would be worth more
+than three separate fixes.
+
+Line references are to `OrangeAgente/SeeStar-AI` @ `main` as of 2026-07-30.
 
 ---
 
@@ -264,6 +271,46 @@ each call.
 
 ---
 
+## 12. `SessionRecord` has no filter field, though the filter is known
+
+**Affects:** the FILTER column of the Projects screen's session-history table
+(design README, Screen 4).
+
+`SessionRecord` (`planning/projects.py:30`) carries exactly six fields:
+`date_utc`, `integration_minutes`, `subs_total`, `subs_kept`, `median_fwhm`,
+`notes`. There is no filter. Not null — absent. Across all 20 session records in
+the live store, nothing states which filter a session used as data.
+
+**But the information exists, twice over.**
+
+It is in the notes as prose — *"Broadband/IRCUT, 0 dropped. Faint (Bortle 8
+low-SB galaxy)..."* — which the dashboard will not parse, for the same reason it
+does not parse precipitation out of `reasons[]` (item 3): that puts server
+knowledge in the client.
+
+And it is in every archive filename:
+
+```
+Light_M 31_10.0s_IRCUT_20240104-200144.fit
+Light_C 33_10.0s_LP_20240104-200144.fit
+```
+
+Counted across the user's archive: **5,953 frames LP, 1,800 IRCUT**. The
+telescope records the filter on every single frame it writes; only the session
+store drops it.
+
+**Asked for:** add `filter: str | None` to `SessionRecord`, populated at
+`log_session_result` from the same source that already names it in the notes.
+
+This is the third instance of one pattern — precipitation (item 3), the LP filter
+recommendation (item 5), and now this — where a value the server demonstrably
+knows reaches the client only as prose. Each forces the dashboard to either show
+an absent state or parse English. A general fix would be worth more than three
+specific ones: when a tool mentions a quantity in a reason or note, return it as
+a field as well.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
@@ -279,6 +326,7 @@ each call.
 | 9 | Only the longest sweet-band span returned | Fragmented-band rendering; ranker figure and chart disagree | Yes — the mask exists, `_longest_run` is one reduction over it |
 | 10 | Provenance cannot distinguish clients | Live operator panel (slice 5) | Partly — `log_call` already accepts the fields, the wrappers never pass them |
 | 11 | Catalogue covers 120 objects; half the user's targets are absent | Suggested integration targets; **and the ranker can never suggest IC 405, NGC 1499, SH2-142** | No — but a filtered OpenNGC extension is supplied, see below |
+| 12 | `SessionRecord` has no `filter` field | FILTER column of the session-history table | Yes — it is in the session notes as prose, and on every one of the 7,753 archive filenames |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
 explicit absent state for each rather than a plausible-looking placeholder, so nothing on screen is

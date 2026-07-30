@@ -1,7 +1,24 @@
 import type { SiteProfile } from '../api/schemas'
 import { verdictTone, type Verdict } from '../api/verdict'
-import { Dot } from '../ui/Dot'
+import type { View } from './view'
+import { Dot, type DotTone } from '../ui/Dot'
 import styles from './Sidebar.module.css'
+
+interface NavItem {
+  view: View
+  label: string
+  /** Present only for a screen not built yet — its literal text becomes the
+   * row's meta and the row is disabled. Absent means the row is live: it
+   * navigates on click and its meta comes from real data instead. */
+  disabledLabel?: string
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { view: 'tonight', label: "Tonight's plan" },
+  { view: 'live', label: 'Live session', disabledLabel: 'slice 3' },
+  { view: 'review', label: 'Review & QA', disabledLabel: 'slice 4' },
+  { view: 'projects', label: 'Projects' },
+]
 
 export interface SidebarProps {
   site: SiteProfile | null
@@ -12,32 +29,59 @@ export interface SidebarProps {
    * alongside the conditions payload — so TonightScreen threads it in.
    */
   gpsWarning: string | null
+  /** Which screen is currently mounted — drives the active highlight. Owned
+   * by App.tsx; Sidebar stays presentational. */
+  view: View
+  onNavigate: (view: View) => void
+  /**
+   * Headline number for the Projects nav row's meta slot, e.g. "30.6 h" —
+   * null renders an honest dash. Only the mounted ProjectsScreen actually has
+   * this figure (there is no shared data layer across screens yet), so every
+   * other screen's Sidebar instance passes null rather than a stale or
+   * fabricated number.
+   */
+  projectsHeadline?: string | null
 }
 
-export function Sidebar({ site, verdict, gpsWarning }: SidebarProps) {
+export function Sidebar({
+  site,
+  verdict,
+  gpsWarning,
+  view,
+  onNavigate,
+  projectsHeadline = null,
+}: SidebarProps) {
   const profile = site?.profile
 
   return (
     <nav className={styles.rail}>
       <div className={styles.eyebrow}>Session</div>
 
-      <button className={`${styles.nav} ${styles.navActive}`}>
-        <Dot tone={verdict ? verdictTone(verdict) : 'idle'} />
-        <span className={styles.label}>Tonight's plan</span>
-        <span className={styles.meta}>{verdict ?? '—'}</span>
-      </button>
+      {NAV_ITEMS.map((item) => {
+        const disabled = item.disabledLabel !== undefined
+        const active = view === item.view
+        const tone: DotTone =
+          item.view === 'tonight' ? (verdict ? verdictTone(verdict) : 'idle') : 'idle'
+        const meta = disabled
+          ? item.disabledLabel
+          : item.view === 'tonight'
+            ? (verdict ?? '—')
+            : (projectsHeadline ?? '—')
 
-      {[
-        ['Live session', 'slice 3'],
-        ['Review & QA', 'slice 4'],
-        ['Projects', 'slice 2'],
-      ].map(([label, meta]) => (
-        <button key={label} className={styles.nav} disabled>
-          <Dot tone="idle" />
-          <span className={styles.label}>{label}</span>
-          <span className={styles.meta}>{meta}</span>
-        </button>
-      ))}
+        return (
+          <button
+            key={item.view}
+            className={`${styles.nav} ${active ? styles.navActive : ''}`}
+            disabled={disabled}
+            aria-current={active ? 'page' : undefined}
+            onClick={disabled ? undefined : () => onNavigate(item.view)}
+          >
+            <Dot tone={tone} />
+            <span className={styles.label}>{item.label}</span>
+            <span className={styles.meta}>{meta}</span>
+          </button>
+        )
+      })}
 
       <div className={styles.spacer} />
 

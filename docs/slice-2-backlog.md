@@ -218,3 +218,24 @@ Those hold the console script (blocking `uv sync`) and keep MCP connections open
 against the telescope's data directory. Any task that starts a server should stop
 it in the same breath, and the check is `Get-CimInstance Win32_Process`, not
 "I ran Stop-Process once".
+
+## Fix in the sidecar: expose per-night archive records
+
+`/api/projects_combined` returns aggregate `store_minutes` / `archive_minutes`
+per target. For the four targets present in both sources, the Projects session
+table can therefore only itemise the store's sessions — M31's table sums to
+84.2 min while its card reads 122.5.
+
+The screen says so plainly rather than letting the arithmetic silently not
+close, but that is a stopgap. **The data already exists**: `archive.py`'s scan
+builds per-night records (`ArchiveNight`, carrying `night` and its frame count)
+and `projects_union.py` uses them for de-duplication before discarding the
+detail. Only the route's response shape drops it.
+
+Exposing `nights: [{night, frames, minutes}]` per target would let the session
+table show archive nights alongside store sessions, and would make the
+de-duplication visible rather than merely tested — you could see which night
+came from where.
+
+This is ours, not a hand-back: no server change is needed. Worth doing before
+the Review screen (slice 4), which will want per-session detail anyway.

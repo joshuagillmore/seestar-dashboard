@@ -1,19 +1,24 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TonightScreen } from './TonightScreen'
-import { ConditionsSchema, PlanTargetsSchema } from '../../api/schemas'
+import { ConditionsSchema, PlanTargetsSchema, SiteProfileSchema, type Health } from '../../api/schemas'
 import { goConditions, recordedConditions, recordedPlan, recordedSite } from '../../test/fixtures'
 
 /** One card per ranked target — read from the fixture, not hardcoded. */
 const planTargetCount = PlanTargetsSchema.parse(recordedPlan()).targets.length
 const recorded = ConditionsSchema.parse(recordedConditions())
 
+// site/health are shell-level data owned by App.tsx's useShellData() and
+// passed in as props (see TonightScreenProps) — TonightScreen no longer
+// fetches either itself, so tests supply them directly rather than stubbing
+// /api/get_site_profile or /api/health.
+const site = SiteProfileSchema.parse(recordedSite())
+const notReplaying: Health = { ok: true, replay: false }
+
 function stubApi(overrides: Record<string, unknown> = {}) {
   const bodies: Record<string, unknown> = {
     '/api/assess_conditions': recordedConditions(),
     '/api/plan_targets?limit=12': recordedPlan(),
-    '/api/get_site_profile': recordedSite(),
-    '/api/health': { ok: true, replay: false },
     ...overrides,
   }
   vi.stubGlobal(
@@ -27,13 +32,13 @@ afterEach(() => vi.unstubAllGlobals())
 describe('TonightScreen', () => {
   it('shows a loading state first', () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     expect(screen.getByTestId('tonight-loading')).toBeInTheDocument()
   })
 
   it('renders the verdict, timeline and cards once loaded', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     // Two collisions appear only once the components are assembled, and
     // neither is visible when each is tested in isolation:
     //   "NO-GO" renders twice — the sidebar's nav meta (a <span>) and the
@@ -55,14 +60,14 @@ describe('TonightScreen', () => {
 
   it('shows an error banner when the sidecar is unreachable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')))
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent(/unreachable/i)
   })
 
   it('captions the shortlist as ranked-for-reference on the recorded NO-GO night', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() =>
       expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
     )
@@ -71,7 +76,7 @@ describe('TonightScreen', () => {
 
   it('omits the ranked-for-reference caption on a GO night', async () => {
     stubApi({ '/api/assess_conditions': goConditions() })
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByText('GO', { selector: 'div' })).toBeInTheDocument())
     expect(screen.queryByText(/ranked for reference/i)).not.toBeInTheDocument()
   })
@@ -83,7 +88,7 @@ describe('TonightScreen', () => {
   // gpsWarning=null) that left every other test green.
   it('gives the sidebar Tonight dot the reject tone on the recorded NO-GO night', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() =>
       expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
     )
@@ -92,29 +97,54 @@ describe('TonightScreen', () => {
     expect(screen.getAllByTestId('dot')[0]).toHaveAttribute('data-dot', 'reject')
   })
 
-  it('does not show the replay badge when /api/health reports replay: false', async () => {
+  it('does not show the replay badge when passed a non-replaying health prop', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() =>
       expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
     )
     expect(screen.queryByText(/fixtures — not live/i)).not.toBeInTheDocument()
   })
 
-  it('shows the replay badge when /api/health reports replay: true', async () => {
-    stubApi({ '/api/health': { ok: true, replay: true } })
-    render(<TonightScreen />)
+  it('shows the replay badge when passed a replaying health prop', async () => {
+    stubApi()
+    render(
+      <TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={{ ok: true, replay: true }} />,
+    )
     await waitFor(() => expect(screen.getByText(/fixtures — not live/i)).toBeInTheDocument())
+  })
+
+  it('renders normally while site/health have not arrived yet (null props)', async () => {
+    // App.tsx's useShellData() starts both at null; TonightScreen's own data
+    // (conditions/plan) must not be gated on shell data that hasn't loaded.
+    stubApi()
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={null} health={null} />)
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    expect(screen.queryByText(/fixtures — not live/i)).not.toBeInTheDocument()
   })
 
   it('threads the GPS warning from assess_conditions to the sidebar, exactly once', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() =>
       expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
     )
     const warning = recorded.location.warning
     if (!warning) throw new Error('recorded fixture must carry a GPS warning for this test to mean anything')
     expect(screen.getAllByText(warning)).toHaveLength(1)
+  })
+
+  it('threads view and onNavigate to the sidebar so switching screens actually works', async () => {
+    stubApi()
+    const onNavigate = vi.fn()
+    render(<TonightScreen view="tonight" onNavigate={onNavigate} site={site} health={notReplaying} />)
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('button', { name: /Tonight/ })).toHaveAttribute('aria-current', 'page')
+    fireEvent.click(screen.getByRole('button', { name: /Projects/ }))
+    expect(onNavigate).toHaveBeenCalledWith('projects')
   })
 })

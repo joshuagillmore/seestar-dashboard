@@ -1,0 +1,345 @@
+{
+  "ok": true,
+  "projects": [
+    {
+      "target_id": "IC405",
+      "target_name": "IC 405",
+      "store_minutes": 0.0,
+      "archive_minutes": 217.1667,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 217.1667
+    },
+    {
+      "target_id": "M42",
+      "target_name": "M 42",
+      "store_minutes": 0.0,
+      "archive_minutes": 200.6667,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 200.6667
+    },
+    {
+      "target_id": "M31",
+      "target_name": "Andromeda Galaxy",
+      "store_minutes": 84.2,
+      "archive_minutes": 38.3333,
+      "sources": [
+        "store",
+        "archive"
+      ],
+      "total_minutes": 122.5333
+    },
+    {
+      "target_id": "NGC1499",
+      "target_name": "NGC 1499",
+      "store_minutes": 0.0,
+      "archive_minutes": 107.8333,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 107.8333
+    },
+    {
+      "target_id": "M81",
+      "target_name": "M 81",
+      "store_minutes": 0.0,
+      "archive_minutes": 97.8334,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 97.8334
+    },
+    {
+      "target_id": "SH2-142",
+      "target_name": "SH2-142",
+      "store_minutes": 0.0,
+      "archive_minutes": 93.0,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 93.0
+    },
+    {
+      "target_id": "M27",
+      "target_name": "Dumbbell Nebula",
+      "store_minutes": 71.2,
+      "archive_minutes": 19.6667,
+      "sources": [
+        "store",
+        "archive"
+      ],
+      "total_minutes": 90.8667
+    },
+    {
+      "target_id": "Unknown",
+      "target_name": "Unknown",
+      "store_minutes": 0.0,
+      "archive_minutes": 89.1667,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 89.1667
+    },
+    {
+      "target_id": "NGC2244",
+      "target_name": "NGC 2244 Satellite Cluster",
+      "store_minutes": 0.0,
+      "archive_minutes": 80.6667,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 80.6667
+    },
+    {
+      "target_id": "NGC281",
+      "target_name": "NGC281",
+      "store_minutes": 29.0,
+      "archive_minutes": 47.1666,
+      "sources": [
+        "store",
+        "archive"
+      ],
+      "total_minutes": 76.1666
+    },
+    {
+      "target_id": "M45",
+      "target_name": "M 45",
+      "store_minutes": 0.0,
+      "archive_minutes": 74.5,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 74.5
+    },
+    {
+      "target_id": "LDN1625",
+      "target_name": "LDN 1625",
+      "store_minutes": 0.0,
+      "archive_minutes": 69.6667,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 69.6667
+    },
+    {
+      "target_id": "M15",
+      "target_name": "Messier 15",
+      "store_minutes": 64.7,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 64.7
+    },
+    {
+      "target_id": "NGC7635",
+      "target_name": "Bubble Nebula",
+      "store_minutes": 62.0,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 62.0
+    },
+    {
+      "target_id": "M1",
+      "target_name": "M 1",
+      "store_minutes": 0.0,
+      "archive_minutes": 44.1667,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 44.1667
+    },
+    {
+      "target_id": "M13",
+      "target_name": "Hercules Globular Cluster",
+      "store_minutes": 35.2,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 35.2
+    },
+    {
+      "target_id": "M103",
+      "target_name": "Messier 103",
+      "store_minutes": 34.3,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 34.3
+    },
+    {
+      "target_id": "NGC2237",
+      "target_name": "NGC 2237",
+      "store_minutes": 0.0,
+      "archive_minutes": 33.1667,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 33.1667
+    },
+    {
+      "target_id": "M2",
+      "target_name": "Messier 2",
+      "store_minutes": 31.7,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 31.7
+    },
+    {
+      "target_id": "NGC7380",
+      "target_name": "Wizard Nebula",
+      "store_minutes": 28.0,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 28.0
+    },
+    {
+      "target_id": "C14_DoubleCluster",
+      "target_name": "C14_DoubleCluster",
+      "store_minutes": 28.0,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 28.0
+    },
+    {
+      "target_id": "IC5146",
+      "target_name": "IC5146",
+      "store_minutes": 25.0,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 25.0
+    },
+    {
+      "target_id": "M57",
+      "target_name": "Ring Nebula",
+      "store_minutes": 8.0,
+      "archive_minutes": 17.0,
+      "sources": [
+        "store",
+        "archive"
+      ],
+      "total_minutes": 25.0
+    },
+    {
+      "target_id": "M101",
+      "target_name": "Pinwheel Galaxy",
+      "store_minutes": 22.0,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 22.0
+    },
+    {
+      "target_id": "NGC7000",
+      "target_name": "NGC 7000",
+      "store_minutes": 0.0,
+      "archive_minutes": 20.5,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 20.5
+    },
+    {
+      "target_id": "C33",
+      "target_name": "C 33",
+      "store_minutes": 0.0,
+      "archive_minutes": 14.3333,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 14.3333
+    },
+    {
+      "target_id": "M76",
+      "target_name": "Little Dumbbell Nebula",
+      "store_minutes": 14.0,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 14.0
+    },
+    {
+      "target_id": "NGC2175",
+      "target_name": "NGC 2175",
+      "store_minutes": 0.0,
+      "archive_minutes": 10.6667,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 10.6667
+    },
+    {
+      "target_id": "NGC1579",
+      "target_name": "NGC 1579",
+      "store_minutes": 0.0,
+      "archive_minutes": 10.1667,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 10.1667
+    },
+    {
+      "target_id": "M92",
+      "target_name": "Messier 92",
+      "store_minutes": 8.0,
+      "archive_minutes": 0.0,
+      "sources": [
+        "store"
+      ],
+      "total_minutes": 8.0
+    },
+    {
+      "target_id": "M106",
+      "target_name": "M 106",
+      "store_minutes": 0.0,
+      "archive_minutes": 4.3333,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 4.3333
+    },
+    {
+      "target_id": "NGC1501",
+      "target_name": "NGC 1501",
+      "store_minutes": 0.0,
+      "archive_minutes": 1.3333,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 1.3333
+    },
+    {
+      "target_id": "M74",
+      "target_name": "M 74",
+      "store_minutes": 0.0,
+      "archive_minutes": 0.8333,
+      "sources": [
+        "archive"
+      ],
+      "total_minutes": 0.8333
+    }
+  ],
+  "count": 33,
+  "totals": {
+    "store_minutes": 545.3,
+    "archive_minutes": 1292.1668,
+    "total_minutes": 1837.4668
+  }
+}

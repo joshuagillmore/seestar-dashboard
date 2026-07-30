@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { Sidebar } from './Sidebar'
 import { SiteProfileSchema } from '../api/schemas'
 import { recordedSite } from '../test/fixtures'
@@ -8,7 +8,7 @@ const site = SiteProfileSchema.parse(recordedSite())
 
 describe('Sidebar', () => {
   it('reads floor and ceiling from the profile, not constants', () => {
-    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     // Recorded profile is floor 20, ceiling 60 — the design's 25 must not appear.
     expect(screen.getByText(/floor 20°/)).toBeInTheDocument()
     expect(screen.getByText(/ceiling 60°/)).toBeInTheDocument()
@@ -23,7 +23,9 @@ describe('Sidebar', () => {
       ok: true,
       profile: { ...site.profile, lat_deg: -33.868, lon_deg: 151.209 },
     })
-    render(<Sidebar site={southernEastern} verdict="NO-GO" gpsWarning={null} />)
+    render(
+      <Sidebar site={southernEastern} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />,
+    )
     expect(screen.getByText(/33\.868 S/)).toBeInTheDocument()
     expect(screen.getByText(/151\.209 E/)).toBeInTheDocument()
     expect(screen.queryByText(/33\.868 N/)).not.toBeInTheDocument()
@@ -33,25 +35,30 @@ describe('Sidebar', () => {
   })
 
   it('renders an empty horizon mask as off', () => {
-    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     expect(screen.getByText(/mask off/)).toBeInTheDocument()
     expect(screen.queryByText(/3 arcs/)).not.toBeInTheDocument()
   })
 
   it('shows the site name and Bortle from the profile', () => {
-    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     expect(screen.getByText('Example Observatory (scope GPS)')).toBeInTheDocument()
     expect(screen.getByText(/Bortle 8/)).toBeInTheDocument()
   })
 
-  it('marks screens that are not in slice 1 as unavailable', () => {
-    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+  it('marks Live and Review as unavailable, and Tonight and Projects as available', () => {
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     expect(screen.getByRole('button', { name: /Tonight/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /Live session/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review & QA/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Projects/ })).toBeEnabled()
+    // The disabled rows keep their slice-N labels verbatim.
+    expect(screen.getByText('slice 3')).toBeInTheDocument()
+    expect(screen.getByText('slice 4')).toBeInTheDocument()
   })
 
   it('renders without a profile', () => {
-    render(<Sidebar site={null} verdict={null} gpsWarning={null} />)
+    render(<Sidebar site={null} verdict={null} gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     expect(screen.getByText('Session')).toBeInTheDocument()
   })
 
@@ -59,11 +66,14 @@ describe('Sidebar', () => {
     // This assertion is only possible because every dot routes through <Dot>,
     // which guarantees data-dot. The Task 9 review found a guard querying that
     // attribute when nothing set it — it passed vacuously for a whole task.
-    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     // Five dots: four nav rows, then the GPS status row in the site block.
     const dots = screen.getAllByTestId('dot')
     expect(dots).toHaveLength(5)
     expect(dots[0]).toHaveAttribute('data-dot', 'reject')
+    // Indices 1-3 are Live, Review and Projects — none has a verdict-like
+    // signal to report, Projects included, so all three stay idle even
+    // though Projects (unlike the other two) is clickable.
     expect(dots.slice(1, 4).every((d) => d.getAttribute('data-dot') === 'idle')).toBe(true)
   })
 
@@ -71,7 +81,9 @@ describe('Sidebar', () => {
     // The real installation has never GPS-matched. Rendering the design's
     // confident "GPS matched" row would assert something nobody verified.
     const warning = "GPS unverified — assuming saved site 'Example Observatory (scope GPS)'."
-    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={warning} />)
+    render(
+      <Sidebar site={site} verdict="NO-GO" gpsWarning={warning} view="tonight" onNavigate={vi.fn()} />,
+    )
     expect(screen.getByText(warning)).toBeInTheDocument()
     expect(screen.queryByText('GPS matched')).not.toBeInTheDocument()
     const dots = screen.getAllByTestId('dot')
@@ -79,7 +91,7 @@ describe('Sidebar', () => {
   })
 
   it('shows a confirmed GPS row when there is no warning', () => {
-    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     expect(screen.getByText('GPS matched')).toBeInTheDocument()
     const dots = screen.getAllByTestId('dot')
     expect(dots[dots.length - 1]).toHaveAttribute('data-dot', 'pass')
@@ -89,9 +101,51 @@ describe('Sidebar', () => {
     // Scoped to dots[0] deliberately: the GPS row also renders a pass dot when
     // the site is confirmed, so a whole-tree "no pass dot" assertion would be
     // testing the wrong thing.
-    const { rerender } = render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} />)
+    const { rerender } = render(
+      <Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />,
+    )
     expect(screen.getAllByTestId('dot')[0]).toHaveAttribute('data-dot', 'reject')
-    rerender(<Sidebar site={site} verdict="GO" gpsWarning={null} />)
+    rerender(<Sidebar site={site} verdict="GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     expect(screen.getAllByTestId('dot')[0]).toHaveAttribute('data-dot', 'pass')
+  })
+
+  it('marks the currently active view with aria-current, and only that one', () => {
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="projects" onNavigate={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /Projects/ })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: /Tonight/ })).not.toHaveAttribute('aria-current')
+  })
+
+  it('calls onNavigate with the target view when an enabled nav button is clicked', () => {
+    const onNavigate = vi.fn()
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={onNavigate} />)
+    fireEvent.click(screen.getByRole('button', { name: /Projects/ }))
+    expect(onNavigate).toHaveBeenCalledTimes(1)
+    expect(onNavigate).toHaveBeenCalledWith('projects')
+  })
+
+  it('never calls onNavigate for a disabled nav button', () => {
+    const onNavigate = vi.fn()
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={onNavigate} />)
+    fireEvent.click(screen.getByRole('button', { name: /Live session/ }))
+    expect(onNavigate).not.toHaveBeenCalled()
+  })
+
+  it('shows a dash for the Projects meta when no headline is supplied', () => {
+    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /Projects/ })).toHaveTextContent('—')
+  })
+
+  it('shows the real headline once the Projects screen supplies one', () => {
+    render(
+      <Sidebar
+        site={site}
+        verdict="NO-GO"
+        gpsWarning={null}
+        view="projects"
+        onNavigate={vi.fn()}
+        projectsHeadline="30.6 h"
+      />,
+    )
+    expect(screen.getByRole('button', { name: /Projects/ })).toHaveTextContent('30.6 h')
   })
 })
