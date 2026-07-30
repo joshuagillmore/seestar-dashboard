@@ -36,8 +36,8 @@ export const SESSION_ACTIVITY_LIMIT = 30
 
 export type LiveSessionState =
   | { phase: 'loading' }
-  | { phase: 'bridge-down'; error: string }
-  | { phase: 'idle' }
+  | { phase: 'bridge-down'; error: string; sessionActivity: SessionActivity | null }
+  | { phase: 'idle'; sessionActivity: SessionActivity | null }
   | {
       phase: 'active'
       viewState: ViewState
@@ -50,11 +50,16 @@ export type LiveSessionState =
       focuser: FocuserPosition | null
       observability: TargetObservability | null
       preview: LivePreview | null
-      /** Not gated on `viewState` the way the rest of this active state is —
-       * `session_activity` reads a local file unrelated to whether the
-       * scope is observing, so its own absent state (route not deployed
-       * yet, or a fetch hiccup) is independent of everything else here. See
-       * SessionActivityCard. */
+      /** Not gated on `viewState`/`status` the way the rest of this state is
+       * — `session_activity` reads a local file on the sidecar's own disk,
+       * unrelated to whether the MCP bridge is up or the scope is
+       * observing. It is fetched every poll regardless of phase (see
+       * `poll()` below) and carried on `idle`/`bridge-down` too, at the
+       * user's explicit request: most of the time this screen is open
+       * nothing is running, and "what did the agent do while I wasn't
+       * watching" is a real question worth answering even then. Its own
+       * absent state (route not deployed yet, or a fetch hiccup) is
+       * independent of everything else here. See SessionActivityCard. */
       sessionActivity: SessionActivity | null
       log: TelemetryEntry[]
       /** Every distinct `stage` value observed this mount, in order,
@@ -102,6 +107,11 @@ export type LiveSessionState =
  * max-duration/dawn-margin figures `check_night_guardrails` returns. Real
  * limitation, not silently papered over — see the report this task hands
  * back with.
+ *
+ * `session_activity` is kicked off once per poll, before the status/
+ * view_state branching below, and awaited on whichever exit path the poll
+ * actually takes — it is the one fetch in this hook that does not care what
+ * phase the scope is in.
  */
 export function useLiveSession(): LiveSessionState {
   const [state, setState] = useState<LiveSessionState>({ phase: 'loading' })
@@ -116,14 +126,20 @@ export function useLiveSession(): LiveSessionState {
     let cancelled = false
 
     async function poll() {
+      // Kicked off immediately, independent of everything below — see this
+      // hook's own doc comment.
+      const sessionActivityPromise = fetchSessionActivity(SESSION_ACTIVITY_LIMIT).catch(() => null)
+
       let status: Status
       try {
         status = await fetchStatus()
       } catch (cause) {
+        const sessionActivity = await sessionActivityPromise
         if (!cancelled) {
           setState({
             phase: 'bridge-down',
             error: cause instanceof Error ? cause.message : String(cause),
+            sessionActivity,
           })
         }
         return
@@ -133,7 +149,8 @@ export function useLiveSession(): LiveSessionState {
       try {
         viewState = await fetchViewState()
       } catch {
-        if (!cancelled) setState({ phase: 'idle' })
+        const sessionActivity = await sessionActivityPromise
+        if (!cancelled) setState({ phase: 'idle', sessionActivity })
         return
       }
 
@@ -146,7 +163,7 @@ export function useLiveSession(): LiveSessionState {
         fetchTier1().catch(() => null),
         fetchFocuserPosition().catch(() => null),
         fetchLivePreview().catch(() => null),
-        fetchSessionActivity(SESSION_ACTIVITY_LIMIT).catch(() => null),
+        sessionActivityPromise,
       ])
 
       // Observability needs a target id, which only live_preview's own

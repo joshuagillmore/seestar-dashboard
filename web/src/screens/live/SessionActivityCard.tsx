@@ -9,6 +9,23 @@ export interface SessionActivityCardProps {
    * the rest of the centre column is; provenance.jsonl is a local file this
    * sidecar can read regardless of whether the scope is observing. */
   activity: SessionActivity | null
+  /** Whether a telescope session is actually running right now — `true`
+   * only in the `active` phase. Required, not defaulted: this is the field
+   * that keeps the feed from misrepresenting itself. The log refreshes on
+   * every poll regardless of phase, so a busy-looking list of timestamped
+   * entries from three nights ago could otherwise read as "something is
+   * happening now" — the one thing this card must never imply when nothing
+   * is. `false` adds a visible note; it never hides or reorders the feed. */
+  sessionRunning: boolean
+  /** Widens the card to `flex: 1` instead of its default fixed `336px` —
+   * used in the idle/bridge-down layout, where this feed is the main
+   * content rather than a sidebar beside the preview/telemetry (see
+   * LiveScreen.tsx). A dedicated boolean rather than an open `className`
+   * passthrough: a generic class merged in from the caller would depend on
+   * CSS source order between two different modules to win the cascade
+   * against this component's own `.card` width — fragile in a way a prop
+   * this component applies itself is not. */
+  wide?: boolean
 }
 
 const ORIGIN_LABEL: Record<SessionActivityRecord['origin'], string> = {
@@ -37,14 +54,27 @@ const ORIGIN_LABEL: Record<SessionActivityRecord['origin'], string> = {
  * is headed "Session activity", never "Claude" — an `ambiguous` record is
  * never presented as the agent's, and every record carries its own origin
  * tag rather than the column carrying one implied tone for all of them.
+ *
+ * Shown during idle/bridge-down as well as an active session (the user's
+ * own call: most of the time this screen is open nothing is running, and
+ * "what did the agent do while I wasn't watching" is the more useful
+ * question then, not less). `sessionRunning` is what keeps that honest —
+ * the feed itself doesn't change shape, but a visible note makes clear
+ * that recent-looking entries are history, not a session in progress.
  */
-export function SessionActivityCard({ activity }: SessionActivityCardProps) {
+export function SessionActivityCard({ activity, sessionRunning, wide = false }: SessionActivityCardProps) {
   return (
-    <section className={styles.card}>
+    <section className={`${styles.card}${wide ? ` ${styles.wide}` : ''}`}>
       <div className={styles.head}>
         <span className={styles.eyebrow}>Session activity</span>
         <span className={styles.source}>session_activity</span>
       </div>
+
+      {!sessionRunning && (
+        <div className={styles.notRunning} data-testid="session-activity-not-running">
+          No session is running right now — this is recent history, not live activity.
+        </div>
+      )}
 
       {activity === null ? (
         <div className={styles.empty} data-testid="session-activity-unavailable">
@@ -55,7 +85,9 @@ export function SessionActivityCard({ activity }: SessionActivityCardProps) {
           Provenance logging is not configured on this installation.
         </div>
       ) : activity.records.length === 0 ? (
-        <div className={styles.empty}>No recorded activity yet.</div>
+        <div className={styles.empty} data-testid="session-activity-empty">
+          No recorded activity yet.
+        </div>
       ) : (
         <>
           <ul className={styles.list} data-testid="session-activity-list">

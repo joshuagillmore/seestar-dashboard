@@ -57,8 +57,15 @@ function stubApi(overrides: Record<string, Body | (() => Body)> = {}) {
 }
 
 /** `get_status` succeeds but `get_view_state` fails/times out — the
- * documented idle-scope case (slice-3 spec §4), not a bridge problem. */
-function stubIdle() {
+ * documented idle-scope case (slice-3 spec §4), not a bridge problem.
+ * `session_activity` is served with real data by default (overridable) —
+ * it reads a local file unrelated to either of the calls above, and the
+ * user asked for it to render during idle too. */
+function stubIdle(overrides: Record<string, Body | (() => Body)> = {}) {
+  const bodies: Record<string, Body | (() => Body)> = {
+    '/api/session_activity': sessionActivity(),
+    ...overrides,
+  }
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
@@ -71,13 +78,28 @@ function stubIdle() {
           json: async () => ({ ok: false, error: 'get_view_state timed out — scope not observing' }),
         }
       }
-      return { ok: true, status: 200, json: async () => ({ ok: false, error: 'unused' }) }
+      // `undefined` in an override map means "no stub for this path" (used
+      // to simulate a route that 404s, e.g. session_activity not deployed
+      // yet) — checked explicitly, since `in` alone is true for a key set
+      // to `undefined` too.
+      if (path in bodies && bodies[path] !== undefined) {
+        const entry = bodies[path]
+        return { ok: true, status: 200, json: async () => (typeof entry === 'function' ? entry() : entry) }
+      }
+      return { ok: false, status: 404, json: async () => ({ ok: false, error: `no stub for ${url}` }) }
     }),
   )
 }
 
-/** `get_status` itself fails — the connection is gone, not merely idle. */
-function stubBridgeDown() {
+/** `get_status` itself fails — the connection is gone, not merely idle.
+ * `session_activity` still succeeds by default: it's a local file read on
+ * the sidecar's own disk, not gated behind the MCP connection the bridge
+ * check above is testing. */
+function stubBridgeDown(overrides: Record<string, Body | (() => Body)> = {}) {
+  const bodies: Record<string, Body | (() => Body)> = {
+    '/api/session_activity': sessionActivity(),
+    ...overrides,
+  }
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
@@ -88,6 +110,12 @@ function stubBridgeDown() {
           status: 502,
           json: async () => ({ ok: false, error: 'bridge unreachable: connection refused' }),
         }
+      }
+      // See stubIdle's matching comment on why `undefined` is checked
+      // explicitly, not just key presence.
+      if (path in bodies && bodies[path] !== undefined) {
+        const entry = bodies[path]
+        return { ok: true, status: 200, json: async () => (typeof entry === 'function' ? entry() : entry) }
       }
       return { ok: false, status: 502, json: async () => ({ ok: false, error: 'unreachable' }) }
     }),
@@ -121,6 +149,49 @@ describe('LiveScreen', () => {
     // with an unscoped match.
     expect(screen.getByText('Bridge unreachable', { selector: 'div' })).toBeInTheDocument()
     expect(screen.queryByTestId('live-idle')).not.toBeInTheDocument()
+  })
+
+  it('shows the session activity feed alongside the idle state — the user\'s explicit call: it is not gated on the telescope', async () => {
+    stubIdle()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
+    // The framing that keeps a busy-looking historical feed from implying a
+    // session is running.
+    expect(screen.getByTestId('session-activity-not-running')).toBeInTheDocument()
+  })
+
+  it('shows the session activity feed alongside bridge-down too — it reads a local file, not the MCP connection the bridge check exercises', async () => {
+    stubBridgeDown()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-bridge-down')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
+    expect(screen.getByTestId('session-activity-not-running')).toBeInTheDocument()
+  })
+
+  it('does not show the "not running" note during an active session — a session genuinely is running', async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+
+  it('renders an honest empty activity feed during idle, distinct from an error, when nothing has been logged yet', async () => {
+    stubIdle({
+      '/api/session_activity': { ok: true, records: [], truncated: false, source_configured: true },
+    })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('session-activity-empty')).toBeInTheDocument())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('session-activity-unavailable')).not.toBeInTheDocument()
+  })
+
+  it('renders the not-available placeholder during idle, not a blank hole, when session_activity 404s', async () => {
+    stubIdle({ '/api/session_activity': undefined })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('session-activity-unavailable')).toBeInTheDocument())
   })
 
   it('renders idle and bridge-down with different sidebar dot tones', async () => {

@@ -14,7 +14,15 @@
 .center { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .row { display: flex; gap: 14px; align-items: stretch; }
 
+/* Idle/bridge-down: the state card is a narrow companion, not the main
+   content — the activity feed (SessionActivityCard, `wide`) takes the rest
+   of the width instead, since it's the more useful thing to look at when
+   there's no live camera. See LiveScreen.tsx's own doc comment. */
+.idleColumns { display: flex; align-items: flex-start; gap: 16px; }
+
 .stateCard {
+  width: 380px;
+  flex: 0 0 auto;
   display: flex;
   gap: 12px;
   padding: 16px 18px;

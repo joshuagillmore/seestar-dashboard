@@ -63,6 +63,16 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
  * `list_subs`) are documented to time out exactly then — see
  * useLiveSession's own doc comment for how that is told apart from the
  * bridge actually being down, without parsing any error text.
+ *
+ * Idle and bridge-down both pair their state card with the activity feed,
+ * widened (`wide`) since it is the main content then rather than a fixed
+ * sidebar — the user's own reasoning: "most of the time this screen is
+ * open, no session is running," and the feed answers what actually happened
+ * while nobody was watching, which is the more useful question exactly
+ * when there's no live camera to show. `sessionRunning={false}` on the card
+ * is what keeps that honest — the feed's own timestamps already say when
+ * each entry is from, but the card adds a plain-language note too, so a
+ * three-nights-old entry can't read as something happening right now.
  */
 export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) {
   const state = useLiveSession()
@@ -96,26 +106,32 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
         )}
 
         {state.phase === 'bridge-down' && (
-          <div className={styles.stateCard} data-testid="live-bridge-down">
-            <Dot tone="reject" />
-            <div>
-              <div className={styles.stateTitle}>Bridge unreachable</div>
-              <p className={styles.stateBody}>{state.error}</p>
+          <div className={styles.idleColumns}>
+            <div className={styles.stateCard} data-testid="live-bridge-down">
+              <Dot tone="reject" />
+              <div>
+                <div className={styles.stateTitle}>Bridge unreachable</div>
+                <p className={styles.stateBody}>{state.error}</p>
+              </div>
             </div>
+            <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
           </div>
         )}
 
         {state.phase === 'idle' && (
-          <div className={styles.stateCard} data-testid="live-idle">
-            <Dot tone="idle" />
-            <div>
-              <div className={styles.stateTitle}>Scope idle — not observing</div>
-              <p className={styles.stateBody}>
-                The bridge answered, but `get_view_state` timed out, which means there is no
-                active session right now rather than a fault. This is the normal state for most of
-                the day, and most of the night.
-              </p>
+          <div className={styles.idleColumns}>
+            <div className={styles.stateCard} data-testid="live-idle">
+              <Dot tone="idle" />
+              <div>
+                <div className={styles.stateTitle}>Scope idle — not observing</div>
+                <p className={styles.stateBody}>
+                  The bridge answered, but `get_view_state` timed out, which means there is no
+                  active session right now rather than a fault. This is the normal state for most of
+                  the day, and most of the night.
+                </p>
+              </div>
             </div>
+            <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
           </div>
         )}
 
@@ -158,7 +174,7 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
                 <TelemetryLogCard log={state.log} />
               </div>
 
-              <SessionActivityCard activity={state.sessionActivity} />
+              <SessionActivityCard activity={state.sessionActivity} sessionRunning={true} />
             </div>
           )
         })()}
