@@ -8,6 +8,8 @@ it to the live store payload and `archive.scan_archive()`.
 from datetime import datetime
 
 from seestar_sidecar.archive import ArchiveTarget, observing_night
+from seestar_sidecar.catalog import resolve as resolve_catalog_entry
+from seestar_sidecar.integration_goal import suggest_integration_goal
 
 
 def _store_nights(sessions: list[dict]) -> set[str]:
@@ -93,4 +95,29 @@ def combine_projects(
     for entry in projects:
         entry["total_minutes"] = round(entry["store_minutes"] + entry["archive_minutes"], 4)
     projects.sort(key=lambda p: p["total_minutes"], reverse=True)
+    return projects
+
+
+def attach_integration_goals(
+    projects: list[dict],
+    catalog: dict[str, dict],
+    aliases: dict[str, str | None],
+    bortle: int | None = None,
+) -> list[dict]:
+    """Add a `goal` field (see `integration_goal.suggest_integration_goal`)
+    to each of `combine_projects()`'s entries, in place, and return the same
+    list. `target_id` is resolved through the catalogue's alias index first
+    (`catalog.resolve` — an id like "NGC2244" or "C33" is not itself a
+    catalogue id, see `data/README.md`), so this must run after
+    `combine_projects()` has already settled on one target_id per entry, not
+    before.
+
+    A target neither the catalogue nor the alias index can place (the
+    archive's own "Unknown" bucket; a Caldwell id with no single canonical
+    object, e.g. the Double Cluster) gets `goal: None`, not a missing key —
+    the caller can then treat "no bar" uniformly regardless of why.
+    """
+    for project in projects:
+        entry = resolve_catalog_entry(project["target_id"], catalog, aliases)
+        project["goal"] = suggest_integration_goal(entry, bortle)
     return projects

@@ -11,8 +11,14 @@ from fastapi.responses import JSONResponse
 
 from seestar_sidecar.allowlist import ALLOWED_TOOLS
 from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR, scan_archive
+from seestar_sidecar.catalog import (
+    DEFAULT_ALIASES_PATH,
+    DEFAULT_CATALOG_PATH,
+    load_aliases,
+    load_catalog,
+)
 from seestar_sidecar.mcp_proxy import ProxyTransportError
-from seestar_sidecar.projects_union import combine_projects
+from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar.replay import load_fixture
 
 router = APIRouter(prefix="/api")
@@ -116,13 +122,34 @@ async def recommend_projects(
     return await _serve(request, "recommend_projects", {"limit": limit})
 
 
+async def _fetch_bortle(request: Request) -> int | None:
+    """Best-effort site Bortle class for the goal model's Bortle term (see
+    integration_goal.py) — `get_site_profile` is already allowlisted and
+    already fetched elsewhere in the app, so this adds no new route. A
+    hiccup fetching it (transport failure, or a valid `{ok: false}`) degrades
+    to `None` — `suggest_integration_goal` then falls back to its own
+    Bortle-8 default — rather than failing the whole projects listing over a
+    term that is a no-op at Bortle 8 anyway, which is the only site in use.
+    """
+    try:
+        profile = await _fetch(request, "get_site_profile", {})
+    except (ProxyTransportError, FileNotFoundError):
+        return None
+    if not profile.get("ok"):
+        return None
+    return profile.get("profile", {}).get("bortle")
+
+
 @router.get("/projects_combined")
 async def projects_combined(request: Request) -> JSONResponse:
-    """Union of the store's list_projects with the on-disk archive scan.
+    """Union of the store's list_projects with the on-disk archive scan,
+    each target's suggested integration-time goal attached (see
+    projects_union.attach_integration_goals / integration_goal.py).
 
     Not a tool call itself — see allowlist.SIDECAR_ROUTES — but it never
-    reads or computes anything list_projects and a filesystem scan couldn't
-    already give it: no side effects, nothing written.
+    reads or computes anything list_projects, a filesystem scan, the
+    checked-in DSO catalogue and get_site_profile (already allowlisted)
+    couldn't already give it: no side effects, nothing written.
     """
     try:
         store = await _fetch(request, "list_projects", {})
@@ -138,6 +165,14 @@ async def projects_combined(request: Request) -> JSONResponse:
     local_tz = getattr(request.app.state, "local_tz", None)
     scan = scan_archive(Path(archive_dir), local_tz=local_tz)
     projects = combine_projects(store["projects"], scan.targets)
+
+    catalog_path = getattr(request.app.state, "catalog_path", None) or DEFAULT_CATALOG_PATH
+    aliases_path = getattr(request.app.state, "aliases_path", None) or DEFAULT_ALIASES_PATH
+    catalog = load_catalog(Path(catalog_path))
+    aliases = load_aliases(Path(aliases_path))
+    bortle = await _fetch_bortle(request)
+    projects = attach_integration_goals(projects, catalog, aliases, bortle)
+
     totals = {
         "store_minutes": round(sum(p["store_minutes"] for p in projects), 4),
         "archive_minutes": round(sum(p["archive_minutes"] for p in projects), 4),

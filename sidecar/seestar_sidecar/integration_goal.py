@@ -1,0 +1,330 @@
+"""Suggested integration-time goal for a catalogue target — the denominator
+`projects_union.py`'s `total_minutes` (the numerator, hours already captured)
+gets measured against on the Projects screen and the Tonight ranked cards.
+
+Every constant here has a cited source and a stated confidence. The evidence
+base is `.superpowers/integration-constants-research.md` (gitignored working
+notes; the load-bearing citations are duplicated below so they survive with
+the code). Read that file before touching a constant in this module.
+
+## The headline finding, and why it constrains everything below
+
+Published total-integration reports for one object at fixed Bortle span
+roughly **2 h 10 m to 100 h** (M101: 2 h 10 m "healthy SNR", 6 h 18 m, 56.5 h,
+100 h for a deep project). That ~50x spread on a *single object* is wider
+than the surface-brightness range across the whole catalogue. So the number
+this module returns is **a choice of quality tier — the "solid / presentable"
+result, not the deep-project one — never a physical requirement.** Nothing
+that calls this module may render it, or word it, as "needed". "Suggested"
+only.
+
+There is also **no published amateur formula for total integration time vs
+surface brightness** — the closest citable framework (Glover / SharpCap)
+answers *optimal sub-exposure length*, a different question. The curve below
+is an empirical fit to observed practice, labelled as one, not physics.
+
+## Surface brightness
+
+    SB = magnitude + 2.5 * log10(pi * (size_arcmin * 60 / 2) ** 2)   mag/arcsec^2
+
+The standard mean-SB definition. Reproduces the catalogue's own M31 (mag 3.4,
+177.8') at 23.28, M42 (mag 4.0, 90.0') at 22.40, M101 (mag 7.9, 24.0') at
+23.43 and M45 (mag 1.2, 150.0') at 20.71 — all within a few tenths of the
+independently published 23.3 / 22.3 / 23.8 / 20.4. The residual is the
+catalogue's own size/magnitude values disagreeing slightly with whichever
+isophote or aperture the published figures used, not a units error — a units
+error would be off by orders of magnitude, not tenths. (M45's number is not
+used for anything below regardless — see "Track: cluster".)
+
+## Track 1 — photometric
+
+Galaxies, planetary nebulae, emission/reflection nebulae and supernova
+remnants that have both a magnitude and a size in the catalogue.
+
+    hours = T_REF * 10 ** (K * (SB - SB_REF))
+
+- `SB_REF = 23.3` (M31) and `T_REF = 3.0` h: published Bortle-8 Seestar/smart-
+  scope reports for M31 run 2-4 h; 3.0 h anchors the curve at its midpoint.
+- `K = 0.45` is an **empirical fit to observed practice, not physics**. The
+  background-limited SNR law derives cleanly to K = 0.8 (SNR ~ S*sqrt(t)/sqrt(B),
+  S ~ 10^(-0.4*SB_target), B ~ 10^(-0.4*SB_sky) => t ~ 10^(0.8*SB_target)),
+  consistent with STScI's WFPC2 handbook, ESO's and Hamamatsu's CCD SNR
+  treatments — but K = 0.8 implies ~4800x across the catalogue's real SB
+  range, where practice runs 10-15x. Three compounding, independent reasons
+  the physical exponent does not survive contact with practice (see the
+  research file for the full argument): the amateur quality bar itself varies
+  by an order of magnitude across target types (dominant effect, bigger than
+  any choice of K); mean SB is a poor difficulty proxy for objects with
+  concentrated rather than spread light (structural, not fixable by K — see
+  "Track: cluster" below); and the highest-SB targets are exactly the ones
+  normally shot dual-band, which compresses the apparent slope further.
+- **K = 0.45 deliberately overrides the research file's recommended K = 0.25.**
+  That value was fitted including M45 as the bright anchor — the same object
+  the research identifies as misrepresented by the SB formula (its 20.4/20.7
+  comes from smearing bright pinpoint starlight over a 110'-150' disk, not
+  from genuinely faint extended emission). Removing clusters from the fit,
+  which this module does anyway (see below), removes the pull toward 0.25.
+  Refit against the four non-cluster anchors: 0.45 lands inside every
+  published range below, 0.25 falls below two of them (M101 and NGC 7000).
+  If this override turns out to be wrong, it is wrong in a specific,
+  falsifiable way — the anchor test below is the real specification of K, not
+  this paragraph, and should fail first.
+
+  Anchor table (Bortle 8, f/5 — the only site/instrument this module
+  currently serves; SB values are the published/idealised figures the
+  constants were fit to, not necessarily what this specific catalogue's
+  mag/size pair computes for that named object):
+
+  | Target      | SB   | Published range | Model at K=0.45 |
+  |-------------|------|------------------|------------------|
+  | M42         | 22.3 | 1-3 h            | 1.1 h            |
+  | M31         | 23.3 | 2-4 h            | 3.0 h            |
+  | M101        | 23.8 | 3-8 h            | 5.0 h            |
+  | NGC 7000    | 24.0 | 6-15 h           | 6.2 h            |
+  | faint SH2   | 25.0 | 15-30+ h         | 17.4 h           |
+
+## Track 2 — cluster (coarse)
+
+Open and globular clusters **never go through the SB curve at all** — mean
+surface brightness over the catalogued area is a bad predictor of imaging
+difficulty when the light is concentrated in stars rather than spread. M45's
+SB (20.4-20.7 depending on source) comes from smearing integrated starlight
+over a 110'-150' disk; what is actually imaged is bright pinpoint stars, and
+the same formula would confidently tell a magnitude-1.6 cluster it needs
+serious integration time, which is wrong. This is a structural property of
+the input, not something a different K can fix.
+
+Instead: a **flat CLUSTER_HOURS = 2.0 h band, marked coarse.** A magnitude-
+driven curve was considered — integrated magnitude is arguably the right
+measure for a concentrated object — but there are published anchors only for
+a handful of *bright* clusters; inventing a curve for faint ones would be
+fabrication. Flat and honestly labelled beats precise and unfounded.
+
+The flat band is still scaled by the broadband Bortle curve (see below):
+2.0 h is itself a Bortle-8 figure, not a site-independent constant.
+
+## Track 3 — none
+
+No magnitude (dark nebulae; diffuse HII regions SIMBAD carries with no
+integrated magnitude, e.g. SH2-142, NGC 281, NGC 2237, NGC 1579; any
+catalogue record missing magnitude or a usable size), or no catalogue record
+at all. **No target is returned** — the caller shows hours captured with no
+progress bar, rather than a fabricated denominator. There is no published
+linkage from Sharpless brightness class or Lynds opacity class to exposure
+time in any source found — those schemes predate digital SNR calculation —
+so nothing tries to derive one.
+
+## Bortle adjustment
+
+The observing site is Bortle 8 and every anchor above is a Bortle-8 figure,
+so `bortle_multiplier(8, band) == 1.0` **exactly**, by construction (any
+base ** ((8 - SITE_BORTLE_REF) / 7) is base ** 0), not by a tuned
+coincidence — this is what makes the term inert for the only site currently
+in use, and lets it stay simple.
+
+Two curves, not one, because broadband and narrowband skyglow penalties
+behave very differently:
+
+- **Broadband** (galaxy, cluster, reflection nebula, and this catalogue's
+  untyped "other" bucket — see below): `BROADBAND_BORTLE_RATIO = 70` across
+  Bortle 1 -> 8, the geometric mean of the researched 50-100x range
+  (Bortle/Unihedron SQM table: Class 1 ~21.76-22.0, Class 8 <18.0 => ~4.4 mag
+  => ~55x; cross-checked against a published calculator's worked 9.8x for
+  Bortle 1->5). Moderate confidence.
+- **Narrowband / dual-band** (emission nebula, planetary nebula, supernova
+  remnant): `NARROWBAND_BORTLE_RATIO = 2` across Bortle 1 -> 8, inside the
+  researched ~1.5-3x range. **This is an extrapolation, not a measurement —
+  no source publishes a number**, only a strong, repeated qualitative
+  consensus that narrowband flattens the Bortle penalty. Low-to-medium
+  confidence, and should not be trusted beyond "materially flatter than
+  broadband".
+
+This catalogue's `type` field has an "other" bucket (583 entries) that
+includes several real emission/reflection nebulae the OpenNGC import
+couldn't classify unambiguously (M42, IC405, NGC1499, NGC2237, NGC1579 all
+land here — see `data/build_catalogue.py`'s TYPE_MAP). Lacking a reliable
+per-object imaging-mode signal, "other" defaults to the **broadband** curve.
+This is a known simplification, not a finding — flag it if the model ever
+generalises to a non-Bortle-8 site, where it would start to matter. It has
+zero effect today: the multiplier is 1.0 at Bortle 8 regardless of which
+curve it resolves to.
+
+## Bounds
+
+- **Floor: `FLOOR_HOURS = 1.0` h.** Below this the ~50x real-world spread on
+  a single object swamps any distinction the curve could be claiming to
+  make — a computed 0.03 h is not a meaningfully different suggestion from
+  1 h, it is noise dressed up as precision.
+- **Beyond practical reach: `BEYOND_REACH_HOURS = 50` h.** A faint galaxy at
+  SB 27 computes to ~140 h, which is an honest extrapolation of the curve but
+  a useless progress-bar denominator. Past this bound, no hours figure is
+  returned at all (`beyond_reach: True`, `suggested_hours: None`) — flagging
+  it as beyond what this instrument and site can reasonably reach is more
+  informative than a number nobody will complete.
+
+## f-ratio
+
+`t ~ f-ratio**2` for extended objects at fixed aperture is standard and
+confirmed (explicit in SharpCap's Glover-derived light-pollution-rate model),
+but the Seestar S50 is a fixed f/5 — there is no live f-ratio term here, it is
+baked into `T_REF`. Would need to become a real parameter if this model ever
+generalises across Seestar/Dwarf/Vaonis bodies with different f-ratios.
+"""
+import math
+
+#: M31 — the SB the whole curve is anchored to (see module docstring).
+SB_REF = 23.3
+#: Hours at SB_REF, Bortle 8: mid-point of published 2-4 h Bortle-8 M31 reports.
+T_REF = 3.0
+#: Empirical fit to amateur practice — deliberately overrides the research
+#: file's recommended 0.25; see the module docstring for the full reasoning.
+K = 0.45
+
+#: Flat, coarse hours for open/globular clusters (Track 2) — a Bortle-8
+#: figure, scaled by the broadband Bortle curve like everything else here.
+CLUSTER_HOURS = 2.0
+
+#: Below this, the ~50x real-world spread on a single object makes the
+#: curve's output noise rather than a meaningful suggestion.
+FLOOR_HOURS = 1.0
+#: Above this, don't show a number — flag the target as beyond what this
+#: instrument/site combination can reasonably reach.
+BEYOND_REACH_HOURS = 50.0
+
+#: Every anchor above is measured at this Bortle class — the multiplier is
+#: exactly 1.0 here by construction, not tuning.
+SITE_BORTLE_REF = 8
+#: Broadband Bortle 1->8 ratio: geometric mean of the researched 50-100x
+#: range (SQM-derived). Moderate confidence.
+BROADBAND_BORTLE_RATIO = 70.0
+#: Narrowband/dual-band Bortle 1->8 ratio: inside the researched ~1.5-3x
+#: range. Extrapolated — no source publishes a number. Low-to-medium confidence.
+NARROWBAND_BORTLE_RATIO = 2.0
+
+#: Track 2 — never goes through the SB curve (see module docstring).
+_CLUSTER_TYPES = frozenset({"open_cluster", "globular_cluster"})
+#: Imaged narrowband/dual-band in practice, so the flatter Bortle curve
+#: applies. Everything else (including this catalogue's untyped "other"
+#: bucket) defaults to broadband — see module docstring.
+_NARROWBAND_TYPES = frozenset({"emission_nebula", "planetary_nebula", "supernova_remnant"})
+
+_BORTLE_RATIO = {
+    "broadband": BROADBAND_BORTLE_RATIO,
+    "narrowband": NARROWBAND_BORTLE_RATIO,
+}
+
+
+def surface_brightness(magnitude: float, size_arcmin: float) -> float:
+    """Mean surface brightness in mag/arcsec^2 — the standard definition,
+    spreading the integrated magnitude over the object's catalogued disk
+    area. See the module docstring for why this is a poor proxy for
+    concentrated light (clusters) even though the arithmetic is correct.
+    """
+    radius_arcsec = size_arcmin * 60 / 2
+    area_arcsec2 = math.pi * radius_arcsec**2
+    return magnitude + 2.5 * math.log10(area_arcsec2)
+
+
+def bortle_multiplier(bortle: int | None, band: str) -> float:
+    """Scale factor relative to the Bortle-8 anchors, exactly 1.0 at Bortle 8
+    by construction (see module docstring). `bortle=None` (site profile
+    unavailable) falls back to SITE_BORTLE_REF — the only site this model has
+    ever been calibrated against — rather than guessing a number.
+    """
+    if bortle is None:
+        bortle = SITE_BORTLE_REF
+    ratio = _BORTLE_RATIO[band]
+    return ratio ** ((bortle - SITE_BORTLE_REF) / 7)
+
+
+def _band_for_type(target_type: str | None) -> str:
+    return "narrowband" if target_type in _NARROWBAND_TYPES else "broadband"
+
+
+def _select_track(entry: dict) -> str:
+    if entry.get("type") in _CLUSTER_TYPES:
+        return "cluster"
+    magnitude = entry.get("magnitude")
+    size_arcmin = entry.get("size_arcmin")
+    if magnitude is None or not size_arcmin or size_arcmin <= 0:
+        return "none"
+    return "photometric"
+
+
+def suggest_integration_goal(entry: dict | None, bortle: int | None = None) -> dict | None:
+    """Suggested integration-time goal for one catalogue record, or `None`
+    when Track 3 applies (see module docstring) — including when `entry`
+    itself is `None` (the target isn't in the catalogue at all, e.g. an
+    unresolved alias or a target like "Unknown").
+
+    Never raises on a malformed/missing `entry` field — a target this
+    model can't say anything honest about degrades to no target, the same
+    as a target genuinely lacking photometry.
+
+    Returned dict (always the same shape when not `None`), never phrased as
+    a requirement — "suggested_hours", never "goal_minutes" or "needed":
+
+        track:               "photometric" | "cluster"
+        suggested_hours:     float, or None when beyond_reach is True
+        coarse:              True only for the cluster track
+        beyond_reach:        True when the curve computes past BEYOND_REACH_HOURS
+        surface_brightness:  mag/arcsec^2, or None for the cluster track
+        bortle_multiplier:   the scale factor actually applied
+        note:                a one-line, auditable explanation for the UI
+    """
+    if entry is None:
+        return None
+    track = _select_track(entry)
+    if track == "none":
+        return None
+
+    band = _band_for_type(entry.get("type"))
+    multiplier = bortle_multiplier(bortle, band)
+
+    if track == "cluster":
+        hours = round(CLUSTER_HOURS * multiplier, 1)
+        return {
+            "track": "cluster",
+            "suggested_hours": hours,
+            "coarse": True,
+            "beyond_reach": False,
+            "surface_brightness": None,
+            "bortle_multiplier": round(multiplier, 3),
+            "note": (
+                f"Flat {CLUSTER_HOURS:.1f} h band for open/globular clusters — "
+                "mean surface brightness misrepresents concentrated starlight, so "
+                "this is a coarse, not computed, estimate."
+            ),
+        }
+
+    sb = surface_brightness(entry["magnitude"], entry["size_arcmin"])
+    raw_hours = T_REF * (10 ** (K * (sb - SB_REF))) * multiplier
+
+    if raw_hours > BEYOND_REACH_HOURS:
+        return {
+            "track": "photometric",
+            "suggested_hours": None,
+            "coarse": False,
+            "beyond_reach": True,
+            "surface_brightness": round(sb, 2),
+            "bortle_multiplier": round(multiplier, 3),
+            "note": (
+                f"SB {sb:.2f} mag/arcsec² computes to ~{raw_hours:.0f} h — "
+                "beyond practical reach for this instrument and site."
+            ),
+        }
+
+    hours = max(raw_hours, FLOOR_HOURS)
+    return {
+        "track": "photometric",
+        "suggested_hours": round(hours, 1),
+        "coarse": False,
+        "beyond_reach": False,
+        "surface_brightness": round(sb, 2),
+        "bortle_multiplier": round(multiplier, 3),
+        "note": (
+            f"SB {sb:.2f} mag/arcsec² → suggested {hours:.1f} h — an "
+            "empirical fit to amateur practice at the 'solid/presentable' tier, "
+            "not a physical requirement."
+        ),
+    }

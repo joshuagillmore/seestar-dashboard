@@ -8,7 +8,7 @@ UTC-past-local-midnight case that the naive `date_utc[:10]` keying this
 module used to use would have missed silently.
 """
 from seestar_sidecar.archive import ArchiveNight, ArchiveTarget
-from seestar_sidecar.projects_union import combine_projects
+from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 
 
 def _store_project(target_id, name, minutes, session_dates):
@@ -179,3 +179,78 @@ def test_results_are_sorted_by_total_minutes_descending():
     result = combine_projects(store, archive)
 
     assert [p["target_id"] for p in result] == ["BIG", "MEDIUM", "SMALL"]
+
+
+class TestAttachIntegrationGoals:
+    """attach_integration_goals is a separate step from combine_projects
+    (see projects_union.py) so every test above — including the exact
+    whole-dict equality checks — keeps working unchanged with no `goal` key.
+    These exercise the enrichment step on its own, with a tiny synthetic
+    catalogue rather than the real 12,517-object file.
+    """
+
+    CATALOG = {
+        "M31": {
+            "id": "M31",
+            "type": "galaxy",
+            "magnitude": 3.4,
+            "size_arcmin": 177.8,
+        },
+        "M45": {
+            "id": "M45",
+            "type": "open_cluster",
+            "magnitude": 1.2,
+            "size_arcmin": 150.0,
+        },
+    }
+    ALIASES = {"ANDROMEDA": "M31"}
+
+    def test_known_target_gets_a_photometric_goal(self):
+        projects = combine_projects([_store_project("M31", "Andromeda Galaxy", 84.2, [])], {})
+
+        result = attach_integration_goals(projects, self.CATALOG, self.ALIASES, bortle=8)
+
+        assert result[0]["goal"]["track"] == "photometric"
+        assert result[0]["goal"]["suggested_hours"] is not None
+
+    def test_target_resolved_only_through_an_alias_still_gets_a_goal(self):
+        """combine_projects reports whatever target_id the store/archive use
+        ("ANDROMEDA" here, standing in for a real case like "NGC2244") —
+        attach_integration_goals must resolve it through the alias index,
+        not require it to already be a catalogue id.
+        """
+        projects = combine_projects([_store_project("ANDROMEDA", "Andromeda Galaxy", 10.0, [])], {})
+
+        result = attach_integration_goals(projects, self.CATALOG, self.ALIASES, bortle=8)
+
+        assert result[0]["goal"]["track"] == "photometric"
+
+    def test_target_absent_from_catalog_and_aliases_gets_goal_none(self):
+        projects = combine_projects([_store_project("Unknown", "Unknown", 89.2, [])], {})
+
+        result = attach_integration_goals(projects, self.CATALOG, self.ALIASES, bortle=8)
+
+        assert result[0]["goal"] is None
+
+    def test_cluster_target_gets_the_flat_coarse_band(self):
+        projects = combine_projects([_store_project("M45", "Pleiades", 74.5, [])], {})
+
+        result = attach_integration_goals(projects, self.CATALOG, self.ALIASES, bortle=8)
+
+        assert result[0]["goal"]["track"] == "cluster"
+        assert result[0]["goal"]["coarse"] is True
+
+    def test_every_entry_gets_a_goal_key_even_when_none(self):
+        """Proves the "no missing key" guarantee, not just that one target
+        happens to get None: a mutation that only set `goal` on a match and
+        left it off entirely for a miss would still pass a test that checked
+        only the matched target.
+        """
+        store = [
+            _store_project("M31", "Andromeda Galaxy", 10.0, []),
+            _store_project("Unknown", "Unknown", 5.0, []),
+        ]
+
+        result = attach_integration_goals(combine_projects(store, {}), self.CATALOG, self.ALIASES, bortle=8)
+
+        assert all("goal" in entry for entry in result)
