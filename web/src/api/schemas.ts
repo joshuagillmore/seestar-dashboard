@@ -28,6 +28,16 @@ export const ConditionsSchema = z.object({
   dark_window_utc: z.tuple([z.string(), z.string()]),
   source: z.string(),
   reasons: z.array(z.string()),
+  /** Hand-back item 13: `assess_conditions` does not yet return a one-line
+   * verdict summary, only `reasons[]` — five equally-weighted lines with no
+   * stated headline even when one factor (e.g. 86% cloud) decided the
+   * verdict alone. `.optional()` alongside `.nullable()` matches
+   * `TargetImageSchema`'s convention above: this field hasn't shipped on any
+   * recorded payload yet, so a fixture or live response missing the key
+   * entirely must parse exactly like an explicit `null`. VerdictBanner
+   * renders it as the headline when present and renders nothing — never a
+   * composed sentence — when it is not. */
+  summary: z.string().nullable().optional(),
 })
 
 /** Per-target imagery — the user's own stacked capture when one exists, a

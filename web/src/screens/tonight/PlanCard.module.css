@@ -33,5 +33,7 @@
 
 .actions { display: flex; gap: 8px; padding: 12px 15px; }
 .primary { flex: 1; padding: 9px 13px; border: 0; border-radius: var(--radius-control); background: var(--accent); color: var(--accent-on-accent); font-family: var(--font-sans); font-weight: 500; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.primary:hover:not(:disabled) { background: var(--accent-hover); }
 .primary:disabled { opacity: 0.45; cursor: default; }
 .secondary { padding: 9px 13px; border: 1px solid var(--border-control); border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-family: var(--font-sans); font-weight: 500; font-size: 12px; cursor: pointer; }
+.secondary:hover { border-color: var(--border-control-hover); color: var(--text-primary); }
