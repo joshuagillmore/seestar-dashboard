@@ -70,6 +70,7 @@ const merged = (overrides: Partial<MergedProject> = {}): MergedProject => ({
   sources: ['store'],
   store: project(),
   goal: null,
+  image: null,
   ...overrides,
 })
 
@@ -93,6 +94,19 @@ describe('mergeProjects', () => {
     const [result] = mergeProjects(combined, [])
     expect(result.store).toBeNull()
     expect(result.goal).toEqual(g)
+  })
+
+  it('carries the image field through from the combined entry', () => {
+    const image = { url: '/api/target_image/M31', source: 'own' as const, credit: null }
+    const combined = [combinedEntry({ target_id: 'M31', image })]
+    const [result] = mergeProjects(combined, [])
+    expect(result.image).toEqual(image)
+  })
+
+  it('normalizes a missing image field to null, not undefined', () => {
+    const combined = [combinedEntry({ target_id: 'IC405' })]
+    const [result] = mergeProjects(combined, [])
+    expect(result.image).toBeNull()
   })
 
   it('preserves the input order from `combined` rather than re-sorting', () => {

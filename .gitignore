@@ -36,3 +36,7 @@ CLAUDE.local.md
 # Regenerate via data/build_catalogue.py; see data/README.md for the download
 # URLs and the SHA-256 of the snapshot the committed catalogue was built from.
 data/openngc/
+
+# Fetched DSS2 cutouts — see sidecar/seestar_sidecar/imagery.py. Re-fetchable
+# from CDS hips2fits at any time; never the only copy of anything.
+sidecar/.cache/

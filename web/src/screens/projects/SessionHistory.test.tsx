@@ -36,6 +36,7 @@ const merged = (overrides: Partial<MergedProject> = {}): MergedProject => ({
   sources: ['store'],
   store: project(),
   goal: null,
+  image: null,
   ...overrides,
 })
 

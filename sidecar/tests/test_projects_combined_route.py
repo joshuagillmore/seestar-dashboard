@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from seestar_sidecar.imagery import SURVEY_CREDIT
 from seestar_sidecar.main import create_app
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
@@ -43,7 +44,16 @@ def synthetic_archive(tmp_path):
     subs.mkdir()
     for i in range(3):
         _write_light_fit(subs, "M 31", "20240104", f"10000{i}")
-    # An archive-only target the store has never heard of.
+    # A stacked master alongside the subs — proves the plain "M 31" directory
+    # is what scan_stacked_images() reads for imagery, while the "-sub" one
+    # above stays what scan_archive() reads for integration time; adding this
+    # must not change any of the minutes assertions below.
+    plain = root / "M 31"
+    plain.mkdir()
+    (plain / "Stacked_M 31_10.0s_IRCUT_20240104-230352.jpg").write_bytes(b"m31-stack")
+    # An archive-only target the store has never heard of. Deliberately no
+    # plain "IC 405" directory — this target's `image` must fall through to
+    # the survey source, not "own".
     ic405 = root / "IC 405-sub"
     ic405.mkdir()
     _write_light_fit(ic405, "IC 405", "20240102", "200000")
@@ -94,6 +104,20 @@ def test_unions_store_and_archive(client):
     assert ic405["goal"]["track"] == "none"
     assert ic405["goal"]["reason"] == "photometry_unreliable"
 
+    # M31 has a stacked master on disk (see the fixture) — its image must be
+    # the user's own, never the survey fallback, even though M31 also
+    # resolves in the real catalogue and could otherwise take that path.
+    assert m31["image"] == {"url": "/api/target_image/M31", "source": "own", "credit": None}
+    # IC405 has no stacked master in this fixture but does resolve in the
+    # real, committed catalogue (a data file, not a machine-specific path —
+    # unlike the archive, this is safe to depend on in a test) — falls
+    # through to the survey source with its attribution string attached.
+    assert ic405["image"] == {
+        "url": "/api/target_image/IC405",
+        "source": "survey",
+        "credit": SURVEY_CREDIT,
+    }
+
 
 def test_reports_totals_split_by_source(client):
     body = client.get("/api/projects_combined").json()
@@ -123,6 +147,10 @@ def test_missing_archive_directory_degrades_to_store_only(monkeypatch, tmp_path)
     }
     assert all(p["archive_minutes"] == 0.0 for p in body["projects"])
     assert body["totals"]["archive_minutes"] == 0.0
+    # No archive at all means "own" is structurally impossible — every image
+    # is either the survey fallback (real, committed catalogue resolves it)
+    # or None, never "own".
+    assert all(p["image"] is None or p["image"]["source"] == "survey" for p in body["projects"])
 
 
 def test_transport_failure_uses_the_same_error_shape(monkeypatch, synthetic_archive):
@@ -268,6 +296,10 @@ def test_goal_resolves_through_a_catalog_alias_end_to_end(monkeypatch, tmp_path,
     # than raising.
     ic405 = next(p for p in body["projects"] if p["target_id"] == "IC405")
     assert ic405["goal"] is None
+    # Same reasoning applies to imagery: this tiny catalogue doesn't carry
+    # IC405 either, and it has no stacked master in the fixture, so its image
+    # must degrade to None rather than raising on the missing entry.
+    assert ic405["image"] is None
 
 
 def test_missing_catalog_files_degrade_to_goal_none_everywhere(monkeypatch, tmp_path, synthetic_archive):
@@ -285,3 +317,11 @@ def test_missing_catalog_files_degrade_to_goal_none_everywhere(monkeypatch, tmp_
 
     assert body["ok"] is True
     assert all(p["goal"] is None for p in body["projects"])
+    # A missing catalogue takes the survey source off the table for every
+    # target that isn't already "own" — M31 still resolves to its own stack
+    # (found on disk, independent of the catalogue), everything else than
+    # M31 that isn't in the archive must fall to None.
+    m31 = next(p for p in body["projects"] if p["target_id"] == "M31")
+    assert m31["image"]["source"] == "own"
+    others = [p for p in body["projects"] if p["target_id"] != "M31"]
+    assert all(p["image"] is None for p in others)

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { goalLabel as describeGoalLabel, hasNumericGoal } from '../../api/integrationGoal'
+import { TargetThumb } from '../../ui/TargetThumb'
 import { isGoalDoubled, toggleGoalDoubled } from './doubling'
 import {
   formatHours,
@@ -53,6 +54,11 @@ export interface ProjectCardProps {
  * button: two nested `<button>`s is invalid content and would double-fire
  * clicks, so the toggle is a separate button stacked visually on the card
  * instead, and only rendered when there is a real number to double.
+ *
+ * The 96px cover image (`project.image`, never absent-by-design any more —
+ * see projects.ts's MergedProject.image doc comment) renders through the
+ * same shared TargetThumb as PlanCard's thumbnail, so both surfaces share
+ * one own-vs-survey honesty guarantee instead of two implementations of it.
  */
 export function ProjectCard({ project, selected, onSelect }: ProjectCardProps) {
   const [doubled, setDoubled] = useState(() => isGoalDoubled(project.targetId))
@@ -71,41 +77,44 @@ export function ProjectCard({ project, selected, onSelect }: ProjectCardProps) {
         onClick={onSelect}
         data-testid="project-card"
       >
-        <div className={styles.titleRow}>
-          <span className={styles.id}>{project.targetId}</span>
-          <span className={`${styles.tag} ${TAG_CLASS[status.tag]}`}>{status.label}</span>
-        </div>
-        <div className={styles.name}>{project.targetName}</div>
-        <div className={styles.spacer} />
-        <div className={styles.hoursRow}>
-          <span className={styles.hours}>{formatHours(project.totalMinutes)}</span>
-          <span className={styles.goal} title={goal.title}>
-            {goal.text}
-          </span>
-        </div>
-        <div
-          className={`${styles.track} ${pct === null ? styles.trackEmpty : ''}`}
-          data-testid="progress-track"
-        >
-          {pct !== null && (
-            // Keyed off `pct` itself, not `status.tag`: an archive-only
-            // target (tag stays 'archive-only' regardless — see
-            // projectStatus's doc comment) can still fully clear its own
-            // suggested goal, e.g. the real M42 at 279% — its fill must read
-            // as met (pass), not as still-in-progress (accent), even though
-            // its badge says "archive only" for an unrelated reason.
-            <div
-              className={`${styles.fill} ${pct >= 100 ? styles.fillComplete : styles.fillProgress}`}
-              style={{ width: `${pct}%` }}
-            />
-          )}
-        </div>
-        <div className={styles.provenance}>{provenanceLabel(project)}</div>
-        <div
-          className={styles.meta}
-          title={summary?.fwhmAbsent ? FWHM_ABSENT_TITLE : undefined}
-        >
-          {summary ? summary.text : 'archive only — no per-session detail (aggregate minutes only)'}
+        <TargetThumb image={project.image} alt={project.targetName} className={styles.cover} />
+        <div className={styles.body}>
+          <div className={styles.titleRow}>
+            <span className={styles.id}>{project.targetId}</span>
+            <span className={`${styles.tag} ${TAG_CLASS[status.tag]}`}>{status.label}</span>
+          </div>
+          <div className={styles.name}>{project.targetName}</div>
+          <div className={styles.spacer} />
+          <div className={styles.hoursRow}>
+            <span className={styles.hours}>{formatHours(project.totalMinutes)}</span>
+            <span className={styles.goal} title={goal.title}>
+              {goal.text}
+            </span>
+          </div>
+          <div
+            className={`${styles.track} ${pct === null ? styles.trackEmpty : ''}`}
+            data-testid="progress-track"
+          >
+            {pct !== null && (
+              // Keyed off `pct` itself, not `status.tag`: an archive-only
+              // target (tag stays 'archive-only' regardless — see
+              // projectStatus's doc comment) can still fully clear its own
+              // suggested goal, e.g. the real M42 at 279% — its fill must read
+              // as met (pass), not as still-in-progress (accent), even though
+              // its badge says "archive only" for an unrelated reason.
+              <div
+                className={`${styles.fill} ${pct >= 100 ? styles.fillComplete : styles.fillProgress}`}
+                style={{ width: `${pct}%` }}
+              />
+            )}
+          </div>
+          <div className={styles.provenance}>{provenanceLabel(project)}</div>
+          <div
+            className={styles.meta}
+            title={summary?.fwhmAbsent ? FWHM_ABSENT_TITLE : undefined}
+          >
+            {summary ? summary.text : 'archive only — no per-session detail (aggregate minutes only)'}
+          </div>
         </div>
       </button>
       {canDouble && (

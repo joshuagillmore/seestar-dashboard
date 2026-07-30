@@ -27,7 +27,18 @@ ALLOWED_TOOLS = frozenset(
 #: doesn't correspond to a tool. Same read-only discipline applies: a route
 #: here must only ever compose calls to ALLOWED_TOOLS plus local read-only
 #: computation (e.g. the archive scan), never a write.
-SIDECAR_ROUTES = frozenset({"projects_combined"})
+#:
+#: "target_image/{target_id}" carries its FastAPI path template literally
+#: (matching `route.path`, not the URL a client actually requests) because
+#: the invariant test below builds `{f"/api/{name}" for name in
+#: SIDECAR_ROUTES}` and compares it against registered route paths, which
+#: keep `{target_id}` unsubstituted. It is still read-only and
+#: path-constrained, not a general static mount: see imagery.py's
+#: `is_plausible_target_id()` and routes.py's target_image handler — the
+#: bytes served always come from either an archive path scan_stacked_images()
+#: itself found, or this sidecar's own image cache, never an arbitrary path
+#: built from client input.
+SIDECAR_ROUTES = frozenset({"projects_combined", "target_image/{target_id}"})
 
 #: Tools that must NEVER be routable over HTTP. qa_session_report in particular
 #: writes a JSON+MD report and a manifest and winds down the session — a

@@ -30,6 +30,21 @@ export const ConditionsSchema = z.object({
   reasons: z.array(z.string()),
 })
 
+/** Per-target imagery — the user's own stacked capture when one exists, a
+ * sky-survey cutout when they have never imaged the object, or absent when
+ * neither resolves (no stack and no catalogue position to fetch a cutout
+ * for). `credit` is the survey attribution string and is `null` only when
+ * `source` is `'own'`. `.optional()` alongside `.nullable()` is deliberate:
+ * this field has not shipped on either payload yet (the sidecar route is
+ * built in parallel), so a fixture or a live response missing the key
+ * entirely must parse exactly like an explicit `null` — see TargetThumb,
+ * which is the one place both call sites render it. */
+export const TargetImageSchema = z.object({
+  url: z.string(),
+  source: z.enum(['own', 'survey']),
+  credit: z.string().nullable(),
+})
+
 export const PlanTargetSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -44,6 +59,7 @@ export const PlanTargetSchema = z.object({
   transit_utc: z.string().nullable(),
   sweet_band_min: z.number(),
   moon_sep_deg: z.number(),
+  image: TargetImageSchema.nullable().optional(),
 })
 
 export const PlanTargetsSchema = z.object({
@@ -148,6 +164,7 @@ export const ProjectsCombinedEntrySchema = z.object({
   sources: z.array(z.enum(['store', 'archive'])),
   total_minutes: z.number(),
   goal: IntegrationGoalSchema.nullable(),
+  image: TargetImageSchema.nullable().optional(),
 })
 
 export const ProjectsCombinedSchema = z.object({
@@ -164,6 +181,7 @@ export const ProjectsCombinedSchema = z.object({
 export type Conditions = z.infer<typeof ConditionsSchema>
 export type PlanTargets = z.infer<typeof PlanTargetsSchema>
 export type PlanTarget = z.infer<typeof PlanTargetSchema>
+export type TargetImage = z.infer<typeof TargetImageSchema>
 export type SiteProfile = z.infer<typeof SiteProfileSchema>
 export type Health = z.infer<typeof HealthSchema>
 export type SessionRecord = z.infer<typeof SessionRecordSchema>
