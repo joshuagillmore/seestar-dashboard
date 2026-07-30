@@ -79,8 +79,70 @@ export const HealthSchema = z.object({
   replay: z.boolean(),
 })
 
+/** From `list_projects`. `median_fwhm` is nullable because the real store
+ * sends null on every session recorded so far — see
+ * docs/handback-to-seestar-ai.md item 7. There is no `filter` field: the
+ * design's session-history table has a FILTER column with no source in this
+ * shape at all, not merely a null one. */
+export const SessionRecordSchema = z.object({
+  date_utc: z.string(),
+  integration_minutes: z.number(),
+  subs_total: z.number(),
+  subs_kept: z.number(),
+  median_fwhm: z.number().nullable(),
+  notes: z.string(),
+})
+
+export const ProjectSchema = z.object({
+  target_id: z.string(),
+  target_name: z.string(),
+  goal_minutes: z.number(),
+  collected_minutes: z.number(),
+  status: z.string(),
+  created_utc: z.string(),
+  updated_utc: z.string(),
+  sessions: z.array(SessionRecordSchema),
+  notes: z.string(),
+})
+
+export const ListProjectsSchema = z.object({
+  ok: z.boolean(),
+  projects: z.array(ProjectSchema),
+  count: z.number(),
+})
+
+/** From the sidecar-computed `/api/projects_combined` — not an MCP tool
+ * response, so it has no `goal_minutes`/`status`/`sessions`: those live only
+ * on the matching `list_projects` entry, joined by `target_id` client-side
+ * (see screens/projects/projects.ts). `sources` says which of the two the
+ * minutes came from, so a merged total is never shown unexplained. */
+export const ProjectsCombinedEntrySchema = z.object({
+  target_id: z.string(),
+  target_name: z.string(),
+  store_minutes: z.number(),
+  archive_minutes: z.number(),
+  sources: z.array(z.enum(['store', 'archive'])),
+  total_minutes: z.number(),
+})
+
+export const ProjectsCombinedSchema = z.object({
+  ok: z.boolean(),
+  projects: z.array(ProjectsCombinedEntrySchema),
+  count: z.number(),
+  totals: z.object({
+    store_minutes: z.number(),
+    archive_minutes: z.number(),
+    total_minutes: z.number(),
+  }),
+})
+
 export type Conditions = z.infer<typeof ConditionsSchema>
 export type PlanTargets = z.infer<typeof PlanTargetsSchema>
 export type PlanTarget = z.infer<typeof PlanTargetSchema>
 export type SiteProfile = z.infer<typeof SiteProfileSchema>
 export type Health = z.infer<typeof HealthSchema>
+export type SessionRecord = z.infer<typeof SessionRecordSchema>
+export type Project = z.infer<typeof ProjectSchema>
+export type ListProjects = z.infer<typeof ListProjectsSchema>
+export type ProjectsCombinedEntry = z.infer<typeof ProjectsCombinedEntrySchema>
+export type ProjectsCombined = z.infer<typeof ProjectsCombinedSchema>

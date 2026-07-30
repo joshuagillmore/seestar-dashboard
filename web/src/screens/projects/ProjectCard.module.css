@@ -1,0 +1,91 @@
+/* No 96px cover column: no tool or archive path returns per-target imagery
+   yet (see docs/handback-to-seestar-ai.md item 8 / slice-2-backlog.md). The
+   card is a plain vertical column rather than a horizontal flex with a
+   collapsed first child — the same "omit it, don't render an empty box"
+   treatment PlanCard gives its own missing thumbnail. */
+.card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 15px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.card:hover { border-color: var(--border-control-hover); }
+
+.selected { border-color: var(--accent-border); background: var(--accent-bg); }
+
+.titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+
+.id {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.1;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.tag {
+  padding: 3px 7px;
+  border-radius: var(--radius-chip);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 9.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.tagNoGoal { background: var(--neutral-tag-bg); color: var(--text-dimmer); }
+.tagArchiveOnly { background: var(--neutral-tag-bg); color: var(--text-faint); }
+.tagNeedsData { background: var(--marginal-bg); color: var(--marginal); }
+.tagComplete { background: var(--pass-bg); color: var(--pass); }
+
+.name {
+  margin-top: 3px;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-dimmer);
+}
+
+.spacer { flex: 1; min-height: 14px; }
+
+.hoursRow { display: flex; align-items: baseline; gap: 6px; }
+
+.hours { font-family: var(--font-mono); font-weight: 500; font-size: 14px; color: var(--text-primary); }
+.goal { font-family: var(--font-mono); font-weight: 400; font-size: 11px; color: var(--text-dimmer); }
+
+.track {
+  margin-top: 8px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-track);
+  overflow: hidden;
+}
+
+.fill { height: 100%; border-radius: 3px; }
+.fillProgress { background: var(--accent); }
+.fillComplete { background: var(--pass); }
+
+.provenance {
+  margin-top: 9px;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--text-dimmer);
+}
+
+.meta {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}

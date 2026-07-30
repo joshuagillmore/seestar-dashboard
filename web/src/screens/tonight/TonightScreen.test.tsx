@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TonightScreen } from './TonightScreen'
 import { ConditionsSchema, PlanTargetsSchema } from '../../api/schemas'
@@ -27,13 +27,13 @@ afterEach(() => vi.unstubAllGlobals())
 describe('TonightScreen', () => {
   it('shows a loading state first', () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} />)
     expect(screen.getByTestId('tonight-loading')).toBeInTheDocument()
   })
 
   it('renders the verdict, timeline and cards once loaded', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} />)
     // Two collisions appear only once the components are assembled, and
     // neither is visible when each is tested in isolation:
     //   "NO-GO" renders twice — the sidebar's nav meta (a <span>) and the
@@ -55,14 +55,14 @@ describe('TonightScreen', () => {
 
   it('shows an error banner when the sidecar is unreachable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')))
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent(/unreachable/i)
   })
 
   it('captions the shortlist as ranked-for-reference on the recorded NO-GO night', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} />)
     await waitFor(() =>
       expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
     )
@@ -71,7 +71,7 @@ describe('TonightScreen', () => {
 
   it('omits the ranked-for-reference caption on a GO night', async () => {
     stubApi({ '/api/assess_conditions': goConditions() })
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('GO', { selector: 'div' })).toBeInTheDocument())
     expect(screen.queryByText(/ranked for reference/i)).not.toBeInTheDocument()
   })
@@ -83,7 +83,7 @@ describe('TonightScreen', () => {
   // gpsWarning=null) that left every other test green.
   it('gives the sidebar Tonight dot the reject tone on the recorded NO-GO night', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} />)
     await waitFor(() =>
       expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
     )
@@ -94,7 +94,7 @@ describe('TonightScreen', () => {
 
   it('does not show the replay badge when /api/health reports replay: false', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} />)
     await waitFor(() =>
       expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
     )
@@ -103,18 +103,30 @@ describe('TonightScreen', () => {
 
   it('shows the replay badge when /api/health reports replay: true', async () => {
     stubApi({ '/api/health': { ok: true, replay: true } })
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/fixtures — not live/i)).toBeInTheDocument())
   })
 
   it('threads the GPS warning from assess_conditions to the sidebar, exactly once', async () => {
     stubApi()
-    render(<TonightScreen />)
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} />)
     await waitFor(() =>
       expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
     )
     const warning = recorded.location.warning
     if (!warning) throw new Error('recorded fixture must carry a GPS warning for this test to mean anything')
     expect(screen.getAllByText(warning)).toHaveLength(1)
+  })
+
+  it('threads view and onNavigate to the sidebar so switching screens actually works', async () => {
+    stubApi()
+    const onNavigate = vi.fn()
+    render(<TonightScreen view="tonight" onNavigate={onNavigate} />)
+    await waitFor(() =>
+      expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('button', { name: /Tonight/ })).toHaveAttribute('aria-current', 'page')
+    fireEvent.click(screen.getByRole('button', { name: /Projects/ }))
+    expect(onNavigate).toHaveBeenCalledWith('projects')
   })
 })

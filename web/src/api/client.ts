@@ -2,11 +2,15 @@ import type { ZodType } from 'zod'
 import {
   ConditionsSchema,
   HealthSchema,
+  ListProjectsSchema,
   PlanTargetsSchema,
+  ProjectsCombinedSchema,
   SiteProfileSchema,
   type Conditions,
   type Health,
+  type ListProjects,
   type PlanTargets,
+  type ProjectsCombined,
   type SiteProfile,
 } from './schemas'
 
@@ -76,3 +80,15 @@ export const fetchSite = (): Promise<SiteProfile> =>
 
 /** Drives the top bar's "fixtures — not live" indicator. */
 export const fetchHealth = (): Promise<Health> => get('/api/health', HealthSchema)
+
+/** The store's own project records — goals, status, and per-session history.
+ * Joined client-side with fetchProjectsCombined() by target_id; see
+ * screens/projects/projects.ts. */
+export const fetchProjects = (): Promise<ListProjects> =>
+  get('/api/list_projects', ListProjectsSchema)
+
+/** Totals unioned across the store and the on-disk archive scan, with
+ * per-source provenance. Sidecar-computed, not an MCP tool call — see
+ * routes.py's projects_combined. */
+export const fetchProjectsCombined = (): Promise<ProjectsCombined> =>
+  get('/api/projects_combined', ProjectsCombinedSchema)

@@ -5,6 +5,7 @@ import { verdictFor } from '../../api/verdict'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
 import { AppShell } from '../../shell/AppShell'
+import type { View } from '../../shell/view'
 import { PlanCard } from './PlanCard'
 import { SweetBandTimeline } from './SweetBandTimeline'
 import { VerdictBanner } from './VerdictBanner'
@@ -17,7 +18,12 @@ interface Data {
   health: Health
 }
 
-export function TonightScreen() {
+export interface TonightScreenProps {
+  view: View
+  onNavigate: (view: View) => void
+}
+
+export function TonightScreen({ view, onNavigate }: TonightScreenProps) {
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -45,6 +51,11 @@ export function TonightScreen() {
           site={data?.site ?? null}
           verdict={verdict}
           gpsWarning={data?.conditions.location.warning ?? null}
+          view={view}
+          onNavigate={onNavigate}
+          // Tonight never fetches project data, so it has no honest headline
+          // to offer the Projects row — see Sidebar's projectsHeadline doc.
+          projectsHeadline={null}
         />
       }
     >

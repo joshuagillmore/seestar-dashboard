@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { ConditionsSchema, PlanTargetsSchema, SiteProfileSchema } from './schemas'
+import {
+  ConditionsSchema,
+  ListProjectsSchema,
+  PlanTargetsSchema,
+  ProjectsCombinedSchema,
+  SiteProfileSchema,
+} from './schemas'
 import {
   goConditions,
   recordedConditions,
+  recordedListProjects,
   recordedPlan,
+  recordedProjectsCombined,
   recordedSite,
   unknownConditions,
 } from '../test/fixtures'
@@ -40,5 +48,35 @@ describe('fixture contract', () => {
   it('keeps go as a tri-state and never coerces null to false', () => {
     expect(ConditionsSchema.parse(unknownConditions()).go).toBeNull()
     expect(ConditionsSchema.parse(recordedConditions()).go).toBe(false)
+  })
+
+  it('parses the recorded list_projects payload', () => {
+    expect(() => ListProjectsSchema.parse(recordedListProjects())).not.toThrow()
+  })
+
+  it('parses the recorded projects_combined payload', () => {
+    expect(() => ProjectsCombinedSchema.parse(recordedProjectsCombined())).not.toThrow()
+  })
+
+  it('tolerates the null median_fwhm every real session record actually has', () => {
+    const parsed = ListProjectsSchema.parse(recordedListProjects())
+    const sessions = parsed.projects.flatMap((p) => p.sessions)
+    // Non-vacuous only if there are real sessions to check — guard against a
+    // future empty fixture making the .every() below trivially true.
+    expect(sessions.length).toBeGreaterThan(0)
+    expect(sessions.every((s) => s.median_fwhm === null)).toBe(true)
+  })
+
+  it('confirms every recorded project has goal_minutes 0 — the fact this screen is built around', () => {
+    const parsed = ListProjectsSchema.parse(recordedListProjects())
+    expect(parsed.projects.length).toBeGreaterThan(0)
+    expect(parsed.projects.every((p) => p.goal_minutes === 0)).toBe(true)
+  })
+
+  it('accepts both source tags projects_combined actually sends', () => {
+    const parsed = ProjectsCombinedSchema.parse(recordedProjectsCombined())
+    const seen = new Set(parsed.projects.flatMap((p) => p.sources))
+    expect(seen.has('store')).toBe(true)
+    expect(seen.has('archive')).toBe(true)
   })
 })
