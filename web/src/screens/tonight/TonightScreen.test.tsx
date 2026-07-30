@@ -159,13 +159,12 @@ describe('TonightScreen', () => {
   })
 
   it('threads the GPS warning from assess_conditions to both the sidebar and the banner', async () => {
-    // This used to assert exactly once: VerdictBanner deliberately didn't
-    // render location.warning, specifically to avoid double-printing it
-    // alongside Sidebar's copy. The design puts the GPS row in the banner
-    // (README.md:265-280), so VerdictBanner now renders it too — a real,
-    // acknowledged interim double-render, not a regression. Removing
-    // Sidebar's copy is a shell/ change outside this fix's scope; see the
-    // hand-off note for the change that collapses this back to one.
+    // This briefly asserted exactly twice: the design puts the GPS row in
+    // the banner (README.md:265-280), and Sidebar kept its own copy for an
+    // interim period as an acknowledged double-render, not a regression
+    // (see VerdictBanner.tsx's doc comment). Sidebar's copy has since been
+    // removed (shell/), collapsing this back to the single render the design
+    // always specified.
     stubApi()
     render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() =>
@@ -173,7 +172,7 @@ describe('TonightScreen', () => {
     )
     const warning = recorded.location.warning
     if (!warning) throw new Error('recorded fixture must carry a GPS warning for this test to mean anything')
-    expect(screen.getAllByText(warning)).toHaveLength(2)
+    expect(screen.getAllByText(warning)).toHaveLength(1)
   })
 
   it('shows a time-captured progress row on ranked cards that match a real projects_combined target', async () => {

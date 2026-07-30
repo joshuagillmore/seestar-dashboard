@@ -67,14 +67,16 @@ describe('Sidebar', () => {
     // which guarantees data-dot. The Task 9 review found a guard querying that
     // attribute when nothing set it — it passed vacuously for a whole task.
     render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
-    // Five dots: four nav rows, then the GPS status row in the site block.
+    // Four dots: the four nav rows. The site block's own GPS dot is gone —
+    // that row moved into the Tonight verdict banner (see the "no longer
+    // renders a GPS row" test below).
     const dots = screen.getAllByTestId('dot')
-    expect(dots).toHaveLength(5)
+    expect(dots).toHaveLength(4)
     expect(dots[0]).toHaveAttribute('data-dot', 'reject')
-    // Indices 1-3 are Live, Review and Projects — none has a verdict-like
-    // signal to report, Projects included, so all three stay idle even
-    // though Projects (unlike the other two) is clickable.
-    expect(dots.slice(1, 4).every((d) => d.getAttribute('data-dot') === 'idle')).toBe(true)
+    // Indices 1-2 are Live and Review — neither has a verdict-like signal to
+    // report, so both stay idle. Index 3 (Projects) is asserted separately
+    // below, since its tone now depends on `projectsNeedsData`.
+    expect(dots.slice(1, 3).every((d) => d.getAttribute('data-dot') === 'idle')).toBe(true)
   })
 
   it('gives the Projects nav dot a marginal tone when projects need data, and pass when none do', () => {
@@ -109,30 +111,28 @@ describe('Sidebar', () => {
     expect(screen.getAllByTestId('dot')[3]).toHaveAttribute('data-dot', 'idle')
   })
 
-  it('carries the GPS warning verbatim instead of claiming a match', () => {
-    // The real installation has never GPS-matched. Rendering the design's
-    // confident "GPS matched" row would assert something nobody verified.
+  it('no longer renders a GPS row, warning or confirmed — that copy moved into the Tonight verdict banner (VerdictBanner.tsx) to remove the duplicate', () => {
+    // Design-review item B4: the GPS pass-dot row now lives in the Tonight
+    // verdict banner (README.md:265-280 puts it there, not the sidebar's site
+    // block). Sidebar rendering it too was a deliberate interim double-render
+    // (see VerdictBanner.tsx's doc comment) — this pins its removal. The
+    // `gpsWarning` prop is still accepted (see SidebarProps's doc comment)
+    // but must have no visible effect any more, warning or not.
     const warning = "GPS unverified — assuming saved site 'Example Observatory (scope GPS)'."
-    render(
+    const { rerender } = render(
       <Sidebar site={site} verdict="NO-GO" gpsWarning={warning} view="tonight" onNavigate={vi.fn()} />,
     )
-    expect(screen.getByText(warning)).toBeInTheDocument()
+    expect(screen.queryByText(warning)).not.toBeInTheDocument()
     expect(screen.queryByText('GPS matched')).not.toBeInTheDocument()
-    const dots = screen.getAllByTestId('dot')
-    expect(dots[dots.length - 1]).toHaveAttribute('data-dot', 'marginal')
-  })
 
-  it('shows a confirmed GPS row when there is no warning', () => {
-    render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
-    expect(screen.getByText('GPS matched')).toBeInTheDocument()
-    const dots = screen.getAllByTestId('dot')
-    expect(dots[dots.length - 1]).toHaveAttribute('data-dot', 'pass')
+    rerender(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
+    expect(screen.queryByText('GPS matched')).not.toBeInTheDocument()
+
+    // No stray dot left behind either: still exactly the 4 nav dots.
+    expect(screen.getAllByTestId('dot')).toHaveLength(4)
   })
 
   it('gives the Tonight nav dot a pass tone only on a GO', () => {
-    // Scoped to dots[0] deliberately: the GPS row also renders a pass dot when
-    // the site is confirmed, so a whole-tree "no pass dot" assertion would be
-    // testing the wrong thing.
     const { rerender } = render(
       <Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />,
     )

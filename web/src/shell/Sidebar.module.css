@@ -70,25 +70,3 @@
   line-height: 1.6;
   color: var(--text-dimmer);
 }
-
-.warnRow {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  line-height: 1.4;
-  color: var(--marginal);
-}
-
-.okRow {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin-top: 6px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  line-height: 1.4;
-  color: var(--pass);
-}

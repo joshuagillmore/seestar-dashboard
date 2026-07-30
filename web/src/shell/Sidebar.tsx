@@ -25,8 +25,17 @@ export interface SidebarProps {
   verdict: Verdict | null
   /**
    * `location.warning` from assess_conditions, or null when the site is
-   * confirmed. It does NOT live on SiteProfile — `location` is returned
-   * alongside the conditions payload — so TonightScreen threads it in.
+   * confirmed. **No longer rendered here** — the design puts the GPS row in
+   * the Tonight verdict banner (README.md:265-280), not the sidebar's site
+   * block, and VerdictBanner.tsx now renders it there. Sidebar showing its
+   * own copy too was a deliberate interim double-render (see
+   * VerdictBanner.tsx's doc comment) pending this removal.
+   *
+   * Kept in the type, still accepted and still threaded from TonightScreen
+   * (and passed as `null` from ProjectsScreen), purely so callers outside
+   * `web/src/shell/` don't need an edit for this fix — `TonightScreen.tsx`
+   * is out of scope for this change. A follow-up could drop this prop
+   * entirely once its one remaining caller stops passing it.
    */
   gpsWarning: string | null
   /** Which screen is currently mounted — drives the active highlight. Owned
@@ -62,7 +71,6 @@ export interface SidebarProps {
 export function Sidebar({
   site,
   verdict,
-  gpsWarning,
   view,
   onNavigate,
   projectsHeadline = null,
@@ -129,14 +137,6 @@ export function Sidebar({
             mask {profile.horizon_mask.length > 0
               ? `on (${profile.horizon_mask.length} arcs)`
               : 'off'}
-          </div>
-          {/* The design shows a confident `GPS matched` row here. This
-              installation has never matched — location.matched is null and the
-              server sends a warning — so the row carries that warning verbatim
-              in the marginal tone instead of asserting a match nobody made. */}
-          <div className={gpsWarning ? styles.warnRow : styles.okRow}>
-            <Dot tone={gpsWarning ? 'marginal' : 'pass'} size="sm" />
-            <span>{gpsWarning ?? 'GPS matched'}</span>
           </div>
         </div>
       )}
