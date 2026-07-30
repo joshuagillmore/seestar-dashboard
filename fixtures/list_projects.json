@@ -1,0 +1,346 @@
+{
+  "ok": true,
+  "projects": [
+    {
+      "target_id": "M101",
+      "target_name": "Pinwheel Galaxy",
+      "goal_minutes": 0.0,
+      "collected_minutes": 22.0,
+      "status": "active",
+      "created_utc": "2026-07-12T06:07:08.691862+00:00",
+      "updated_utc": "2026-07-12T06:07:08.691862+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-12T06:07:08.691862+00:00",
+          "integration_minutes": 22.0,
+          "subs_total": 132,
+          "subs_kept": 132,
+          "median_fwhm": null,
+          "notes": "Broadband/IRCUT, 0 dropped. Faint (Bortle 8 low-SB galaxy) but framed + focused, no clouds. Autonomous night 2026-07-12."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "NGC7635",
+      "target_name": "Bubble Nebula",
+      "goal_minutes": 0.0,
+      "collected_minutes": 62.0,
+      "status": "active",
+      "created_utc": "2026-07-12T07:26:00.411681+00:00",
+      "updated_utc": "2026-07-13T04:52:26.512093+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-12T07:26:00.411681+00:00",
+          "integration_minutes": 34.0,
+          "subs_total": 204,
+          "subs_kept": 204,
+          "median_fwhm": null,
+          "notes": "Bubble Nebula, LP dual-band, 0 dropped. Centered framing (post power-cycle re-alignment), focus tight, no clouds. Autonomous night 2026-07-12."
+        },
+        {
+          "date_utc": "2026-07-13T04:52:26.512093+00:00",
+          "integration_minutes": 28.0,
+          "subs_total": 167,
+          "subs_kept": 167,
+          "median_fwhm": null,
+          "notes": "Bubble Nebula (2nd night), LP dual-band, 0 dropped. Adds to last night's 204 subs. Run 2026-07-13."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "NGC7380",
+      "target_name": "Wizard Nebula",
+      "goal_minutes": 0.0,
+      "collected_minutes": 28.0,
+      "status": "active",
+      "created_utc": "2026-07-12T08:07:07.125715+00:00",
+      "updated_utc": "2026-07-12T08:07:07.125715+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-12T08:07:07.125715+00:00",
+          "integration_minutes": 28.0,
+          "subs_total": 176,
+          "subs_kept": 169,
+          "median_fwhm": null,
+          "notes": "Wizard Nebula, LP dual-band, 7 dropped. Centered/solved, focus tight. Faint target. Autonomous night 2026-07-12."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "M76",
+      "target_name": "Little Dumbbell Nebula",
+      "goal_minutes": 0.0,
+      "collected_minutes": 14.0,
+      "status": "active",
+      "created_utc": "2026-07-12T08:46:58.215523+00:00",
+      "updated_utc": "2026-07-12T08:46:58.215523+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-12T08:46:58.215523+00:00",
+          "integration_minutes": 14.0,
+          "subs_total": 158,
+          "subs_kept": 82,
+          "median_fwhm": null,
+          "notes": "Little Dumbbell planetary, LP dual-band. Heavy drops (76); 82 kept. On-target/solved. Autonomous night 2026-07-12."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "M92",
+      "target_name": "Messier 92",
+      "goal_minutes": 0.0,
+      "collected_minutes": 8.0,
+      "status": "active",
+      "created_utc": "2026-07-13T02:37:25.889549+00:00",
+      "updated_utc": "2026-07-13T02:37:25.889549+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-13T02:37:25.889549+00:00",
+          "integration_minutes": 8.0,
+          "subs_total": 82,
+          "subs_kept": 48,
+          "median_fwhm": null,
+          "notes": "Globular, broadband. Centered/solved (RA-hours + 3PPA fixes verified). High 41% drop rate. 2026-07-12."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "M27",
+      "target_name": "Dumbbell Nebula",
+      "goal_minutes": 0.0,
+      "collected_minutes": 71.2,
+      "status": "active",
+      "created_utc": "2026-07-13T03:32:26.463078+00:00",
+      "updated_utc": "2026-07-16T03:50:34.428388+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-13T03:32:26.463078+00:00",
+          "integration_minutes": 36.0,
+          "subs_total": 217,
+          "subs_kept": 217,
+          "median_fwhm": null,
+          "notes": "Dumbbell, LP dual-band, 0 dropped. Framing far-left (persistent 3PPA offset) but fully captured w/ good bipolar detail. Run 2026-07-12/13."
+        },
+        {
+          "date_utc": "2026-07-16T03:50:34.428388+00:00",
+          "integration_minutes": 35.2,
+          "subs_total": 211,
+          "subs_kept": 211,
+          "median_fwhm": null,
+          "notes": "Dumbbell, LP dual-band, 0 dropped. Fresh 3PPA this run. Framing still ~30% frame-left (plate-solve center pixelx 219/1080) \u2014 systematic offset, survived power-cycle+relevel+fresh align. Run 2026-07-15/16."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "IC5146",
+      "target_name": "IC5146",
+      "goal_minutes": 0.0,
+      "collected_minutes": 25.0,
+      "status": "active",
+      "created_utc": "2026-07-13T04:12:46.171950+00:00",
+      "updated_utc": "2026-07-13T04:12:46.171950+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-13T04:12:46.171950+00:00",
+          "integration_minutes": 25.0,
+          "subs_total": 172,
+          "subs_kept": 148,
+          "median_fwhm": null,
+          "notes": "Cocoon Nebula, LP dual-band. 24 dropped in an early ~10-min transient (cloud/plane), clean after. Run 2026-07-13."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "M15",
+      "target_name": "Messier 15",
+      "goal_minutes": 0.0,
+      "collected_minutes": 64.7,
+      "status": "active",
+      "created_utc": "2026-07-13T05:32:03.194972+00:00",
+      "updated_utc": "2026-07-16T04:40:14.025451+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-13T05:32:03.194972+00:00",
+          "integration_minutes": 28.0,
+          "subs_total": 168,
+          "subs_kept": 168,
+          "median_fwhm": null,
+          "notes": "Globular, broadband, 0 dropped. Proper deep M15 at last. Run 2026-07-13."
+        },
+        {
+          "date_utc": "2026-07-16T04:40:14.025451+00:00",
+          "integration_minutes": 36.7,
+          "subs_total": 220,
+          "subs_kept": 220,
+          "median_fwhm": null,
+          "notes": "Globular, broadband, 0 dropped. Tight focus. Systematic left-offset worse at this sky angle \u2014 plate-solve center pixelx 63/1080, outer halo clips left edge; core + most of cluster captured. Run 2026-07-15/16."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "NGC281",
+      "target_name": "NGC281",
+      "goal_minutes": 0.0,
+      "collected_minutes": 29.0,
+      "status": "active",
+      "created_utc": "2026-07-13T06:11:48.131679+00:00",
+      "updated_utc": "2026-07-13T06:11:48.131679+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-13T06:11:48.131679+00:00",
+          "integration_minutes": 29.0,
+          "subs_total": 173,
+          "subs_kept": 173,
+          "median_fwhm": null,
+          "notes": "Pacman, LP dual-band, 0 dropped. Adds to last night's 571. Run 2026-07-13."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "M31",
+      "target_name": "Andromeda Galaxy",
+      "goal_minutes": 0.0,
+      "collected_minutes": 84.2,
+      "status": "active",
+      "created_utc": "2026-07-13T06:51:27.421952+00:00",
+      "updated_utc": "2026-07-16T07:10:12.734124+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-13T06:51:27.421952+00:00",
+          "integration_minutes": 28.0,
+          "subs_total": 175,
+          "subs_kept": 170,
+          "median_fwhm": null,
+          "notes": "Andromeda core, broadband, 5 dropped. Fresh centered capture this run. Run 2026-07-13."
+        },
+        {
+          "date_utc": "2026-07-16T06:23:31.010658+00:00",
+          "integration_minutes": 34.2,
+          "subs_total": 236,
+          "subs_kept": 205,
+          "median_fwhm": null,
+          "notes": "Andromeda core + M32 companion in frame, broadband. Clean first ~32 min (0 drops), then a tail of 31 drops + a plate-solve fail (code 251) \u2014 thin cloud/transparency dip drifting through. 205 kept. Run 2026-07-15/16."
+        },
+        {
+          "date_utc": "2026-07-16T07:10:12.734124+00:00",
+          "integration_minutes": 22.0,
+          "subs_total": 158,
+          "subs_kept": 132,
+          "median_fwhm": null,
+          "notes": "M31 2nd slot. First ~8 min caught the drifting cloud bank (stuck at 6, 26 drops), then it cleared \u2014 132 kept clean after. Plate-solve fail. Broadband. Run 2026-07-15/16."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "C14_DoubleCluster",
+      "target_name": "C14_DoubleCluster",
+      "goal_minutes": 0.0,
+      "collected_minutes": 28.0,
+      "status": "active",
+      "created_utc": "2026-07-13T07:31:30.287431+00:00",
+      "updated_utc": "2026-07-13T07:31:30.287431+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-13T07:31:30.287431+00:00",
+          "integration_minutes": 28.0,
+          "subs_total": 169,
+          "subs_kept": 169,
+          "median_fwhm": null,
+          "notes": "Double Cluster (NGC869/884), broadband, 0 dropped. Fresh. Run 2026-07-13."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "M57",
+      "target_name": "Ring Nebula",
+      "goal_minutes": 0.0,
+      "collected_minutes": 8.0,
+      "status": "active",
+      "created_utc": "2026-07-13T08:14:02.102421+00:00",
+      "updated_utc": "2026-07-13T08:14:02.102421+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-13T08:14:02.102421+00:00",
+          "integration_minutes": 8.0,
+          "subs_total": 154,
+          "subs_kept": 47,
+          "median_fwhm": null,
+          "notes": "Ring, LP dual-band. 107 dropped. 47 kept add to last night's 83. Run 2026-07-13."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "M13",
+      "target_name": "Hercules Globular Cluster",
+      "goal_minutes": 0.0,
+      "collected_minutes": 35.2,
+      "status": "active",
+      "created_utc": "2026-07-16T05:29:13.135310+00:00",
+      "updated_utc": "2026-07-16T05:29:13.135310+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-16T05:29:13.135310+00:00",
+          "integration_minutes": 35.2,
+          "subs_total": 211,
+          "subs_kept": 211,
+          "median_fwhm": null,
+          "notes": "Hercules globular, broadband, 0 dropped. Well-framed at this sky angle (offset benign) \u2014 M13 core + companion galaxy NGC6207 both in frame. Run 2026-07-15/16."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "M2",
+      "target_name": "Messier 2",
+      "goal_minutes": 0.0,
+      "collected_minutes": 31.7,
+      "status": "active",
+      "created_utc": "2026-07-24T05:31:52.308594+00:00",
+      "updated_utc": "2026-07-24T05:31:52.308594+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-24T05:31:52.308594+00:00",
+          "integration_minutes": 31.7,
+          "subs_total": 223,
+          "subs_kept": 190,
+          "median_fwhm": null,
+          "notes": "Globular, broadband. Clean first ~15 min (0 drops), then scattered thin-cloud/transparency drops \u2014 33 total of 223 (~15%). Autonomous night 2026-07-24 (M11 + M14 skipped)."
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "target_id": "M103",
+      "target_name": "Messier 103",
+      "goal_minutes": 0.0,
+      "collected_minutes": 34.3,
+      "status": "active",
+      "created_utc": "2026-07-24T06:24:25.249536+00:00",
+      "updated_utc": "2026-07-24T06:24:25.249536+00:00",
+      "sessions": [
+        {
+          "date_utc": "2026-07-24T06:24:25.249536+00:00",
+          "integration_minutes": 34.3,
+          "subs_total": 206,
+          "subs_kept": 206,
+          "median_fwhm": null,
+          "notes": "Open cluster, broadband, 0 dropped \u2014 flawless. Autonomous night 2026-07-24. Slot ended by a weather/precip hard-stop guardrail before wind-down."
+        }
+      ],
+      "notes": ""
+    }
+  ],
+  "count": 15
+}

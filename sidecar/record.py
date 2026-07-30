@@ -20,7 +20,29 @@ ARGUMENTS: dict[str, dict] = {
     "assess_conditions": {},
     "plan_targets": {"limit": 12},
     "get_site_profile": {},
+    "list_projects": {},
+    "recommend_projects": {"limit": 12},
 }
+
+
+def _assert_arguments_complete(arguments: dict, allowed: frozenset) -> None:
+    """`main()` used to index ARGUMENTS[tool] while iterating ALLOWED_TOOLS —
+    a newly allowlisted tool with no arguments entry raised KeyError mid-loop,
+    after already overwriting some fixtures on disk. Checking both directions
+    (not just "nothing missing") turns that into a pre-flight failure instead:
+    a stale entry left behind after a tool is removed from the allowlist
+    should fail loudly too, not silently keep recording a fixture nobody
+    routes to anymore.
+    """
+    missing = allowed - set(arguments)
+    stale = set(arguments) - allowed
+    assert not missing and not stale, (
+        f"record.py's ARGUMENTS is out of sync with ALLOWED_TOOLS: "
+        f"missing={sorted(missing)} stale={sorted(stale)}"
+    )
+
+
+_assert_arguments_complete(ARGUMENTS, ALLOWED_TOOLS)
 
 
 async def main() -> None:

@@ -6,7 +6,7 @@ still confirm the endpoint exists. These tests fail loudly if anyone adds one.
 import pytest
 from fastapi.testclient import TestClient
 
-from seestar_sidecar.allowlist import ALLOWED_TOOLS, FORBIDDEN_TOOLS
+from seestar_sidecar.allowlist import ALLOWED_TOOLS, FORBIDDEN_TOOLS, SIDECAR_ROUTES
 from seestar_sidecar.main import create_app
 
 
@@ -31,13 +31,29 @@ def test_allowlist_and_forbidden_list_are_disjoint():
     assert not (ALLOWED_TOOLS & FORBIDDEN_TOOLS)
 
 
-def test_slice_one_allowlist_is_exactly_three_tools():
+def test_sidecar_routes_are_disjoint_from_the_tool_lists():
+    """SIDECAR_ROUTES names a sidecar-computed view, never a tool — if a name
+    ever appeared in both ALLOWED_TOOLS and SIDECAR_ROUTES, the route-set
+    invariant below would stop being an equality check on two disjoint ideas
+    and start silently tolerating an overlap.
+    """
+    assert not (SIDECAR_ROUTES & ALLOWED_TOOLS)
+    assert not (SIDECAR_ROUTES & FORBIDDEN_TOOLS)
+
+
+def test_allowlist_is_exactly_the_expected_tools():
     assert ALLOWED_TOOLS == frozenset(
-        {"assess_conditions", "plan_targets", "get_site_profile"}
+        {
+            "assess_conditions",
+            "plan_targets",
+            "get_site_profile",
+            "list_projects",
+            "recommend_projects",
+        }
     )
 
 
-def test_registered_routes_are_exactly_health_plus_the_allowlist():
+def test_registered_routes_are_exactly_health_plus_the_allowlist_plus_sidecar_routes():
     """The parametrised FORBIDDEN_TOOLS test above only fails for a listed
     tool. A route for a side-effecting tool nobody thought to list — the live
     server already has several ALLOWED_TOOLS and FORBIDDEN_TOOLS both miss
@@ -45,8 +61,19 @@ def test_registered_routes_are_exactly_health_plus_the_allowlist():
     qa_tier2) — sails straight through it. This does not enumerate tools at
     all: it demands the registered /api/* route set equal exactly what the
     allowlist permits, so ANY unlisted route fails it, named or not.
+
+    SIDECAR_ROUTES is folded into the same equality rather than the
+    invariant being loosened to "registered routes are a superset of the
+    allowlist" — projects_combined is not a tool (see allowlist.py), but it
+    is still part of this app's declared read surface, and an equality check
+    that quietly ignored it would stop catching an undeclared third route
+    the same way it already catches an undeclared tool route.
     """
     app = create_app()
     registered = {route.path for route in app.routes if route.path.startswith("/api")}
-    expected = {"/api/health"} | {f"/api/{tool}" for tool in ALLOWED_TOOLS}
+    expected = (
+        {"/api/health"}
+        | {f"/api/{tool}" for tool in ALLOWED_TOOLS}
+        | {f"/api/{name}" for name in SIDECAR_ROUTES}
+    )
     assert registered == expected
