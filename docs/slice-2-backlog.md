@@ -18,11 +18,32 @@ There are **two disjoint records of what has been imaged**, and neither is compl
 | Source | Span | Targets | Integration |
 |---|---|---|---|
 | `list_projects` store | Jul 2026 | 15 | 9.1 h |
-| `C:\Users\<user>\OneDrive\Documents\SeeStar` | Dec 2023 – Mar 2024 | 20 | **20.9 h** |
+| `C:\Users\<user>\OneDrive\Documents\SeeStar` | Dec 2023 – **Jul 2026** | **22** | **21.5 h** |
 
-They overlap on **two** targets: `NGC 281` and `M 31`. A Projects screen reading
-`list_projects` alone would report 9.1 hours and be blind to 20.9 hours sitting
-on disk.
+They overlap on **four** targets: `NGC 281`, `M 31`, `M 27` and `M 57`. A Projects
+screen reading `list_projects` alone would report 9.1 hours and be blind to 21.5
+hours sitting on disk.
+
+> **Corrected 2026-07-30.** This originally read 20 targets / 20.9 h spanning
+> Dec 2023 – Mar 2024, and concluded that copying to OneDrive had stopped. All
+> three were wrong. My scan filtered on `endswith("-sub")`, and **the archive
+> uses two naming conventions**:
+>
+> ```
+> M 31-sub                    hyphen, catalogue id only
+> M27 Dumbbell Nebula_sub     underscore, id + common name
+> ```
+>
+> Two folders use the second form and were silently skipped: `M27` (118 subs,
+> nights 2026-07-05 and 07-06) and `M57` (102 subs, 2026-07-06). Those are
+> **July 2026** — copying is ongoing, and the two sources are live and
+> converging rather than historically separate.
+>
+> Consequences: any scanner must handle both suffixes **and** strip the common
+> name when deriving a target id, or it undercounts silently. And
+> de-duplication is not the theoretical safeguard the next paragraph implies —
+> the sources now record the same targets in the same month, and will collide
+> on a night as soon as one session is copied that the store also logged.
 
 The M 31 case shows why this matters: the store holds 84.2 min from July 2026,
 the archive holds a further 38.3 min from January 2024, and **neither source
