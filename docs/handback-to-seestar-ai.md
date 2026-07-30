@@ -90,6 +90,14 @@ Parsing that string client-side to fill a stat tile would be exactly the wrong t
 
 **Asked for:** add `max_precip_pct: float | None` to `ConditionsAssessment`.
 
+> **Confirmed and authorised 2026-07-30.** The user confirms the skill sources this from a
+> **meteoblue** feed, so the value is fetched, parsed and scored on before being dropped on the
+> way out — this is a discarded field, not a missing capability. They have asked that the
+> dashboard **not** work around it: *"no use having you trying to code around a simple fix."*
+>
+> The dashboard side is therefore doing nothing here. The PRECIP tile stays absent, and the
+> banner keeps stating the figure only in prose, until the field exists.
+
 ---
 
 ## 4. Excluded targets are dropped silently by the ranker
@@ -400,6 +408,67 @@ a field as well.
 
 ---
 
+## 13. No one-line summary of the verdict, only the reason list
+
+**Affects:** the Tonight verdict banner (design README, Screen 1, ~line 268).
+
+**Raised 2026-07-30**, after the user chose the hybrid banner treatment.
+
+The design's banner leads with a single composed sentence:
+
+> *"Clear (6% cloud) through the dark window, 5.8 h of astronomical dark, 12%-lit moon 96° from
+> the plan."*
+
+`assess_conditions` returns `reasons[]` — a list of individual findings — but nothing that reads
+as a headline. Tonight's real payload gives five separate lines (cloud, dew, wind, precipitation,
+moon), all weighted equally, when only the 86% cloud actually decided the verdict.
+
+**The dashboard must not compose this itself.** The verdict and its justification are server-owned
+policy in this project, the same as QA verdicts and thresholds — a client that writes its own
+summary sentence is deciding which factor mattered most, which is a judgement about the night, not
+a rendering choice. The server already composes the prose in `reasons[]`, so this is the same class
+of work it is doing anyway.
+
+**Asked for:** a `summary: str` on `ConditionsAssessment` — one sentence naming the decisive
+factors, in the same voice as the existing reasons. `reasons[]` stays exactly as it is; the banner
+will show the summary as the headline and the reasons as supporting detail.
+
+Until it exists the banner renders the reason list alone, with no invented headline.
+
+---
+
+## 14. `plan_targets` does not say whether a target is narrowband or broadband
+
+**Affects:** the ranked-card subtitle on Tonight (design README, ~line 348).
+
+**Raised 2026-07-30.**
+
+The design's card subtitle pairs the common name with an imaging descriptor:
+
+| Design | Ours today |
+|---|---|
+| `Wizard Nebula · emission` | `Wizard Nebula` |
+| `Andromeda Galaxy · broadband` | `Andromeda Galaxy` |
+| `Pleiades · reflection cluster` | `Pleiades` |
+
+That descriptor is not decoration — it is the single most useful thing on the card for deciding
+whether tonight's moon or skyglow matters for this target, and it is **already computed**.
+`planning/lightpollution.py`'s `LP_MODEL` classifies every target type as `narrowband`,
+`broadband`, `robust` or `neutral`, and `lp_suitability()` uses exactly that classification for 20%
+of the ranker's score. It simply is not returned.
+
+The dashboard could re-derive it from `type`, but that would mean copying `LP_MODEL`'s mapping into
+the client — the same hardcoding-the-server's-policy problem as QA thresholds, and it would drift
+silently the moment the model changes.
+
+**Asked for:** return the classification already used for scoring — e.g. `lp_class: str` on each
+ranked target — so the subtitle can name it instead of the UI guessing.
+
+**Related:** this is the same field that would answer item 5 (the `LP on`/`LP off` filter chip),
+so the two are likely one change.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
@@ -416,6 +485,8 @@ a field as well.
 | 10 | Provenance cannot distinguish clients | Live operator panel (slice 5) | Partly — `log_call` already accepts the fields, the wrappers never pass them |
 | 11 | Catalogue covers 120 objects; half the user's targets are absent | Suggested integration targets; **and the ranker can never suggest IC 405, NGC 1499, SH2-142** | No — a 12,517-object OpenNGC extension plus alias index is supplied, but **must not be merged without the two paired ranker changes** (vectorise observability, add a feasibility term) |
 | 12 | `SessionRecord` has no `filter` field | FILTER column of the session-history table | Yes — it is in the session notes as prose, and on every one of the 7,753 archive filenames |
+| 13 | No one-line verdict summary, only `reasons[]` | Headline sentence of the Tonight banner | Partly — the server already composes the reason prose |
+| 14 | `plan_targets` does not return the narrowband/broadband class | Ranked-card subtitle descriptor; likely also item 5's filter chip | Yes — `LP_MODEL` already classifies it and the ranker scores on it |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
 explicit absent state for each rather than a plausible-looking placeholder, so nothing on screen is

@@ -67,9 +67,28 @@ specifies primary hover `accent/hover` and secondary hover brightening border an
 renders `… · SESSION HISTORY — list_projects`; the design says `log_session_result`
 (`README.md:669`). No comment records the substitution.
 
-**A8. Timeline legend has one entry, should have two.** Only `sweet band` renders; the
-design also has `above floor, outside band` for the grey rail. The grey rails *are*
-drawn — it is the key for them that is missing.
+**~~A8. Timeline legend has one entry, should have two.~~ Withdrawn — this finding was
+wrong.** It claimed the grey above-floor rails were drawn and only the legend key was
+missing. They are not drawn, and correctly so:
+
+- no rail element exists in `SweetBandTimeline.tsx` or its CSS;
+- `schemas.ts` has no `above_floor` field to derive a span from — the server returns
+  only `dark_minutes_above_floor`, an integrated duration with no start or end
+  (hand-back item 2);
+- `SweetBandTimeline.test.tsx:40` deliberately asserts the legend does **not** match
+  `/above floor/i`, and the component docstring explains why.
+
+Adding the legend entry would key a label to a bar that does not exist, and drawing the
+bar would mean fabricating a span the server does not return.
+
+**Why the review got it wrong, since it affects how much to trust the rest:** this came
+from the rendered comparison, not the code reviews. Grey sits either side of the accent
+band in our build — but it is the lane's own track background, not a rail, and the
+prototype's real rails occupy roughly the same space. A screenshot comparison is good at
+catching missing copy, wrong alignment and absent sections; it is specifically bad at
+telling "this element is present" from "something grey occupies that area". The three
+code reviews did not make this mistake. Treat visual-only findings here as weaker
+evidence than the file:line ones.
 
 **A9. Card subtitle drops the descriptor suffix.** Design: `Wizard Nebula · emission`,
 `Andromeda Galaxy · broadband`. Ours shows the common name only. The narrowband /
@@ -139,3 +158,25 @@ inset (already ruled on); Live and Review screens (slices 3–4).
 A1 → A2 → A3 are the three a person would notice first. A4 through A9 are small and
 mechanical. Section B needs your decisions before anything is built — B2 in particular,
 since mobile is a slice-sized question rather than a fix.
+
+---
+
+## Outcome — 2026-07-30
+
+Decisions taken, same day:
+
+| Item | Decision |
+|---|---|
+| A8 | **Withdrawn — the finding was wrong.** See above. |
+| A9 (subtitle descriptor) | Blocked on the server; raised as **hand-back item 14** rather than re-derived client-side |
+| B1 (PRECIP) | **Hand back.** Confirmed a discarded meteoblue field; hand-back item 3 sharpened. User: *"no use having you trying to code around a simple fix."* |
+| B2 (mobile) | **Build as designed** — toggle plus mobile layouts. Its own slice; not started |
+| B3 (verdict banner) | **Hybrid** chosen from three rendered options. Headline sentence is server-owned — **hand-back item 13** — and renders empty until it exists |
+| B5 (`recommend_projects`) | **Restore** to the header, keep the provenance line |
+| B6 (`archive only` tag) | Tag shows **completion**; provenance moves to the meta line |
+| B7 (selection) | **Persist** across navigation |
+| B4, B8, B9 | Accepted as built; the point was that the reasoning lived only in code comments |
+
+A1–A7 are being fixed on `design-fixes`. Three new server asks came out of this review —
+hand-back items 3 (sharpened), 13 and 14 — all of them quantities the server already
+computes and then flattens into prose on the way out.
