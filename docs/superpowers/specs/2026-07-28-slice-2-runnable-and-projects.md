@@ -194,10 +194,30 @@ anyone has to maintain.
 
 **Scaled by f-ratio and sky.** The S50 is f/5; the site is Bortle 8. The user's
 starting heuristic — hours equal to f-stop, ×3 for Bortle 7–8 — gives 15 h.
-Published guidance for Bortle 8–9 runs 24–36 h for faint targets, and one widely
-cited figure has 2 h of dark-sky signal needing ~4.5 h at Bortle 5 (already
-2.25×). The constants should be calibrated toward the literature rather than
-taken as given, and must be **named constants in one place**, not scattered.
+Published guidance for Bortle 8–9 runs 24–36 h for faint targets. The constants
+should be calibrated toward the literature rather than taken as given, and must
+be **named constants in one place**, not scattered.
+
+> **Corrected 2026-07-30.** This paragraph previously cited "one widely cited
+> figure has 2 h of dark-sky signal needing ~4.5 h at Bortle 5 (already 2.25×)".
+> **That figure could not be traced to any source**, and two independent
+> estimates for the same span — the Bortle/Unihedron SQM table (~7×) and a
+> published calculator's worked example (9.8×) — disagree with it by a factor of
+> 3–4. It has been struck rather than cited. See
+> `.superpowers/integration-constants-research.md`.
+>
+> Two further findings from that research change this section:
+>
+> 1. **The f-ratio term is not live.** `t ∝ f-ratio²` for extended objects is
+>    standard and confirmed, but the S50's f/5 is fixed, so it belongs baked into
+>    the reference constant, not expressed as a separate term. It only becomes a
+>    real variable if the model generalises across other smart-scope bodies.
+> 2. **The Bortle penalty must be two curves, not one.** Broadband runs ~50–100×
+>    from Bortle 1→8 (SQM-derived, moderate confidence); narrowband/dual-band is
+>    far flatter, tentatively ~1.5–3×. The qualitative consensus for the
+>    narrowband flattening is strong across many sources but **no source
+>    publishes a number** — ours is an extrapolation and must be labelled as one
+>    in the code.
 
 **The rule of doubling is exactly right and has the maths behind it.** SNR
 improves with √t, so a doubling buys ~41% and anything smaller is invisible.
@@ -213,13 +233,58 @@ measure.
 
 | Track | Applies to | Input | Shown as |
 |---|---|---|---|
-| **Photometric** | galaxies, clusters, planetary nebulae | computed surface brightness | a target with a figure |
-| **Classified** | diffuse HII, dark nebulae | type + angular size + Sharpless brightness / Lynds opacity class | a target, marked coarse |
-| **None** | no photometry and no class | — | no target; hours only |
+| **Photometric** | galaxies, planetary nebulae, nebulae with photometry | computed surface brightness | a target with a figure |
+| **Cluster** | open and globular clusters | type + angular size, flat band | a target, marked coarse |
+| **None** | no photometry, diffuse HII, dark nebulae | — | no target; hours only |
+
+> **Corrected 2026-07-30**, on two research findings.
+>
+> **The "classified" track as originally drafted does not exist.** It proposed
+> deriving a target from Sharpless brightness class or Lynds opacity class.
+> There is **no published linkage from either class to exposure time, in any
+> source found** — these schemes come from 1950s–60s photographic surveys and
+> predate digital SNR calculation entirely; nobody has published a bridge.
+> Diffuse HII and dark nebulae therefore fall to **None**, which is what the
+> section below already argues for on separate grounds.
+>
+> **Clusters have moved off the photometric track.** The surface-brightness
+> formula is the standard mean-SB definition and is correct as written, but mean
+> SB over the catalogued area is a poor predictor of imaging difficulty when the
+> signal is *concentrated rather than spread*. M45's SB of 20.4 comes from
+> smearing integrated starlight across a 110′ disk, while what is actually
+> imaged is bright pinpoint stars. This is a structural property of the input,
+> **not something a different exponent can fix** — so clusters get their own
+> flat band, marked coarse. The same effect applies mildly to bright galaxy
+> cores such as M31's and is accepted there.
 
 Forcing everything down one path would put a confident wrong number on M45 —
 a magnitude 1.6 cluster that reads 8% complete against a flat 15 h baseline and
 is, by the user's own rule, essentially finished.
+
+### The target is a quality tier, not a constant
+
+**Added 2026-07-30.** The single most consequential research finding is not a
+number. Published totals for one object at roughly fixed Bortle span **2 h 10 m
+to 100 h** — M101 appears at 2 h 10 m described as "healthy SNR", at 6 h 18 m, at
+56.5 h, and at 100 h for a deep project. **That ~50× spread on a single object is
+wider than the surface-brightness range across the entire catalogue.**
+
+So the hours figure is a choice of quality percentile, not a physical
+requirement, and no calibration of `k` can make it otherwise. Two consequences:
+
+- The model targets the **"solid / presentable"** tier deliberately, and that
+  choice is recorded in the constants module rather than left implicit.
+- **The copy must not imply the number is required.** "Suggested" or "typical
+  for a presentable result", never "needed". A progress bar reading 40% must not
+  be read as the image being unfinished — under the user's own doubling rule,
+  anything past a doubling is a judgement call, which is exactly why the
+  doubling control exists.
+
+There is also **no canonical amateur formula** for total integration vs surface
+brightness — the closest citable framework (Glover / SharpCap) answers *optimal
+sub-exposure length*, a different question. The curve we ship is an empirical fit
+to observed practice and is labelled as such in the code, not dressed up as
+physics.
 
 ### Catalogue extension
 

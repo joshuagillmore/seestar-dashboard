@@ -1,0 +1,36 @@
+{
+  "_readme": "Objects the user tracks that fall outside OpenNGC's NGC/IC scope entirely (Sharpless HII regions, Lynds dark nebulae). build_catalogue.py merges these into the generated catalogue after the OpenNGC pass. Every field must trace to a citable source recorded in '_source' below it — do not add an entry here without one. '_source' keys are stripped before the object is written to dso_catalog_extended.json.",
+  "objects": [
+    {
+      "id": "SH2-142",
+      "name": "Sharpless 2-142",
+      "ra_deg": 341.883,
+      "dec_deg": 58.048,
+      "type": "emission_nebula",
+      "size_arcmin": 30.0,
+      "magnitude": null,
+      "_source": {
+        "position": "SIMBAD (simbad.u-strasbg.fr), object 'SH 2-142', Coordinates(ICRS,ep=J2000,eq=2000) = 22 47 32.0 +58 02 54, retrieved 2026-07-30.",
+        "size": "VizieR VII/20 (Sharpless, S. 1959, ApJS 4, 257, 'Catalogue of HII Regions'), row Sh2=142, Diam(arcmin)=30, retrieved 2026-07-30.",
+        "type": "SIMBAD object type for SH 2-142 is 'HII' (an HII region is by definition an emitter) -> emission_nebula. Unambiguous, unlike OpenNGC's generic 'Neb' rows.",
+        "magnitude": "No value in any SIMBAD flux band (Flux/Angular-size rows blank for this object). Integrated magnitude is not well-defined for a diffuse HII region — not an omission.",
+        "note": "SIMBAD lists 'NAME Wizard Nebula' as an identifier of this same SH 2-142 record, i.e. it treats Sh2-142 as the surrounding HII region of the NGC7380 cluster/nebula already in the base catalogue. The two ids are kept as separate catalogue rows (matching the user's target list, which tracks them separately) but their positions are ~8' apart, not identical — this is not a duplicate entry."
+      }
+    },
+    {
+      "id": "LDN1625",
+      "name": "LDN 1625",
+      "ra_deg": 96.925,
+      "dec_deg": 5.967,
+      "type": "other",
+      "size_arcmin": 264.0,
+      "magnitude": null,
+      "_source": {
+        "position": "SIMBAD (simbad.u-strasbg.fr), object 'LDN 1625', Coordinates(ICRS,ep=J2000,eq=2000) = 06 27 42.0 +05 58 00, retrieved 2026-07-30. Cross-checked against VizieR VII/7A (Lynds, B.T. 1962, ApJS 7, 1, 'Catalogue of Dark Nebulae'), row LDN=1625, computed columns _RA.icrs/_DE.icrs = 06 27 40.7 +05 58 05 (agrees to ~2 arcsec).",
+        "size": "SIMBAD measured angular size 264' (source 2002A&A...383..631D, Dutra & Bica 2002), retrieved 2026-07-30. Consistent with VizieR VII/7A's cataloged Area = 19.400 deg2, whose circular-equivalent diameter (2*sqrt(area/pi)) is ~298' — same order, non-circular cloud shape accounts for the difference.",
+        "type": "SIMBAD object type 'DNe' (dark nebula) -> mapped to 'other'. The vocabulary has no dark-nebula equivalent and it is an absorption feature, not an emitter — same reasoning applied to OpenNGC's own 'DrkN' rows (see build_catalogue.py TYPE_MAP).",
+        "magnitude": "No value in any SIMBAD flux band. Integrated magnitude is not defined for an absorption (dark) nebula — not an omission."
+      }
+    }
+  ]
+}

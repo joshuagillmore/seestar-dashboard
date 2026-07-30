@@ -1,0 +1,11 @@
+{
+  "_readme": "Extra aliases for objects that already exist correctly in the OpenNGC-derived catalogue -- NOT new objects (see manual_additions.json for that). Used when a real designation exists but the alias-harvesting mechanism can't reach it: either it's a bare form that would require substring matching (this system only does exact normalised-token matching), or it's a cross-catalogue designation OpenNGC's own Identifiers column doesn't carry. Every entry needs a citation. Applied by build_catalogue.py's Builder.apply_alias_overrides, after the normal alias harvesting, and only to an id that already exists as a real object -- it errors if the target id isn't found, so this can't silently create a dangling alias.",
+  "overrides": [
+    {
+      "id": "NGC2238",
+      "aliases": ["Rosette", "Sh2-275", "SH2-275"],
+      "reason": "NGC2238 is already the correct, unambiguous emission_nebula entry for the Rosette Nebula (OpenNGC Type=HII from the first pass, Common name 'Rosette Nebula', Identifiers already include 'C 049' so 'C49' already resolves via the normal harvesting -- no override needed for that one). Two more designations don't reach it automatically: 'Rosette' alone (the harvested alias is 'ROSETTE NEBULA', the full common name -- this system does exact-token matching only, not substring, so the bare popular short form needs adding explicitly), and 'Sh2-275'/'SH2-275' (the Sharpless designation for this same object, verified via SIMBAD -- 'query id Sh2-275' resolves to 'NAME Rosette Nebula', otype HII, with the note 'Ionized by the stellar cluster NGC 2244' -- OpenNGC's own Identifiers column doesn't carry Sharpless numbers). Verified 2026-07-30.",
+      "source": "SIMBAD (simbad.u-strasbg.fr), object 'Sh2-275', resolves to 'NAME Rosette Nebula' (otype HII); OpenNGC NGC.csv row Name=NGC2238 (Common names, Identifiers columns)."
+    }
+  ]
+}

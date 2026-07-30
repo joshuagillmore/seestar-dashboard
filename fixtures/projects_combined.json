@@ -9,7 +9,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 217.1667
+      "total_minutes": 217.1667,
+      "goal": {
+        "track": "none",
+        "suggested_hours": null,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 27.12,
+        "bortle_multiplier": 1.0,
+        "reason": "photometry_unreliable",
+        "note": "SB 27.12 mag/arcsec\u00b2 computes to ~158 h, which is not credible for this object class \u2014 treating the catalogued magnitude as unreliable, not the target as unreachable."
+      }
     },
     {
       "target_id": "M42",
@@ -19,7 +29,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 200.6667
+      "total_minutes": 200.6667,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 1.2,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 22.4,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 22.40 mag/arcsec\u00b2 \u2192 suggested 1.2 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "M31",
@@ -30,7 +50,17 @@
         "store",
         "archive"
       ],
-      "total_minutes": 122.5333
+      "total_minutes": 122.5333,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 2.9,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 23.28,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 23.28 mag/arcsec\u00b2 \u2192 suggested 2.9 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "NGC1499",
@@ -40,7 +70,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 107.8333
+      "total_minutes": 107.8333,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 12.1,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 24.65,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 24.65 mag/arcsec\u00b2 \u2192 suggested 12.1 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "M81",
@@ -50,7 +90,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 97.8334
+      "total_minutes": 97.8334,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 1.0,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 22.2,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 22.20 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "SH2-142",
@@ -60,7 +110,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 93.0
+      "total_minutes": 93.0,
+      "goal": {
+        "track": "none",
+        "suggested_hours": null,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": null,
+        "reason": "no_magnitude",
+        "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
+      }
     },
     {
       "target_id": "M27",
@@ -71,7 +131,17 @@
         "store",
         "archive"
       ],
-      "total_minutes": 90.8667
+      "total_minutes": 90.8667,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 1.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": 20.16,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 20.16 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 coarse: planetary-nebula sizes in this catalogue run ~35% smaller than the convention this curve was checked against, and the curve itself has no planetary-nebula anchor (see integration_goal.py)."
+      }
     },
     {
       "target_id": "Unknown",
@@ -81,7 +151,8 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 89.1667
+      "total_minutes": 89.1667,
+      "goal": null
     },
     {
       "target_id": "NGC2244",
@@ -91,7 +162,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 80.6667
+      "total_minutes": 80.6667,
+      "goal": {
+        "track": "cluster",
+        "suggested_hours": 2.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
+      }
     },
     {
       "target_id": "NGC281",
@@ -102,7 +183,17 @@
         "store",
         "archive"
       ],
-      "total_minutes": 76.1666
+      "total_minutes": 76.1666,
+      "goal": {
+        "track": "none",
+        "suggested_hours": null,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": null,
+        "reason": "no_magnitude",
+        "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
+      }
     },
     {
       "target_id": "M45",
@@ -112,7 +203,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 74.5
+      "total_minutes": 74.5,
+      "goal": {
+        "track": "cluster",
+        "suggested_hours": 2.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
+      }
     },
     {
       "target_id": "LDN1625",
@@ -122,7 +223,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 69.6667
+      "total_minutes": 69.6667,
+      "goal": {
+        "track": "none",
+        "suggested_hours": null,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": null,
+        "reason": "no_magnitude",
+        "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
+      }
     },
     {
       "target_id": "M15",
@@ -132,7 +243,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 64.7
+      "total_minutes": 64.7,
+      "goal": {
+        "track": "cluster",
+        "suggested_hours": 2.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
+      }
     },
     {
       "target_id": "NGC7635",
@@ -142,7 +263,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 62.0
+      "total_minutes": 62.0,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 29.6,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 25.51,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 25.51 mag/arcsec\u00b2 \u2192 suggested 29.6 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "M1",
@@ -152,7 +283,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 44.1667
+      "total_minutes": 44.1667,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 1.0,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 21.54,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 21.54 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "M13",
@@ -162,7 +303,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 35.2
+      "total_minutes": 35.2,
+      "goal": {
+        "track": "cluster",
+        "suggested_hours": 2.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
+      }
     },
     {
       "target_id": "M103",
@@ -172,7 +323,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 34.3
+      "total_minutes": 34.3,
+      "goal": {
+        "track": "cluster",
+        "suggested_hours": 2.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
+      }
     },
     {
       "target_id": "NGC2237",
@@ -182,7 +343,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 33.1667
+      "total_minutes": 33.1667,
+      "goal": {
+        "track": "none",
+        "suggested_hours": null,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": null,
+        "reason": "no_magnitude",
+        "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
+      }
     },
     {
       "target_id": "M2",
@@ -192,7 +363,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 31.7
+      "total_minutes": 31.7,
+      "goal": {
+        "track": "cluster",
+        "suggested_hours": 2.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
+      }
     },
     {
       "target_id": "NGC7380",
@@ -202,7 +383,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 28.0
+      "total_minutes": 28.0,
+      "goal": {
+        "track": "cluster",
+        "suggested_hours": 2.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
+      }
     },
     {
       "target_id": "C14_DoubleCluster",
@@ -212,7 +403,8 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 28.0
+      "total_minutes": 28.0,
+      "goal": null
     },
     {
       "target_id": "IC5146",
@@ -222,7 +414,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 25.0
+      "total_minutes": 25.0,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 1.0,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 20.83,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 20.83 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "M57",
@@ -233,7 +435,17 @@
         "store",
         "archive"
       ],
-      "total_minutes": 25.0
+      "total_minutes": 25.0,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 1.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": 18.0,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 18.00 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 coarse: planetary-nebula sizes in this catalogue run ~35% smaller than the convention this curve was checked against, and the curve itself has no planetary-nebula anchor (see integration_goal.py)."
+      }
     },
     {
       "target_id": "M101",
@@ -243,7 +455,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 22.0
+      "total_minutes": 22.0,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 3.4,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 23.43,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 23.43 mag/arcsec\u00b2 \u2192 suggested 3.4 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "NGC7000",
@@ -253,7 +475,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 20.5
+      "total_minutes": 20.5,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 2.3,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 23.02,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 23.02 mag/arcsec\u00b2 \u2192 suggested 2.3 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "C33",
@@ -263,7 +495,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 14.3333
+      "total_minutes": 14.3333,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 10.6,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 24.52,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 24.52 mag/arcsec\u00b2 \u2192 suggested 10.6 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "M76",
@@ -273,7 +515,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 14.0
+      "total_minutes": 14.0,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 1.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": 18.94,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 18.94 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 coarse: planetary-nebula sizes in this catalogue run ~35% smaller than the convention this curve was checked against, and the curve itself has no planetary-nebula anchor (see integration_goal.py)."
+      }
     },
     {
       "target_id": "NGC2175",
@@ -283,7 +535,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 10.6667
+      "total_minutes": 10.6667,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 1.0,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 19.09,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 19.09 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "NGC1579",
@@ -293,7 +555,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 10.1667
+      "total_minutes": 10.1667,
+      "goal": {
+        "track": "none",
+        "suggested_hours": null,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": null,
+        "reason": "no_magnitude",
+        "note": "No catalogued magnitude (or no usable size) for this target \u2014 integrated magnitude is undefined for many dark/diffuse nebulae, not merely unmeasured."
+      }
     },
     {
       "target_id": "M92",
@@ -303,7 +575,17 @@
       "sources": [
         "store"
       ],
-      "total_minutes": 8.0
+      "total_minutes": 8.0,
+      "goal": {
+        "track": "cluster",
+        "suggested_hours": 2.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": null,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "Flat 2.0 h band for open/globular clusters \u2014 mean surface brightness misrepresents concentrated starlight, so this is a coarse, not computed, estimate."
+      }
     },
     {
       "target_id": "M106",
@@ -313,7 +595,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 4.3333
+      "total_minutes": 4.3333,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 6.7,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 24.08,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 24.08 mag/arcsec\u00b2 \u2192 suggested 6.7 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     },
     {
       "target_id": "NGC1501",
@@ -323,7 +615,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 1.3333
+      "total_minutes": 1.3333,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 1.0,
+        "coarse": true,
+        "beyond_reach": false,
+        "surface_brightness": 19.9,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 19.90 mag/arcsec\u00b2 \u2192 suggested 1.0 h \u2014 coarse: planetary-nebula sizes in this catalogue run ~35% smaller than the convention this curve was checked against, and the curve itself has no planetary-nebula anchor (see integration_goal.py)."
+      }
     },
     {
       "target_id": "M74",
@@ -333,7 +635,17 @@
       "sources": [
         "archive"
       ],
-      "total_minutes": 0.8333
+      "total_minutes": 0.8333,
+      "goal": {
+        "track": "photometric",
+        "suggested_hours": 2.0,
+        "coarse": false,
+        "beyond_reach": false,
+        "surface_brightness": 22.91,
+        "bortle_multiplier": 1.0,
+        "reason": null,
+        "note": "SB 22.91 mag/arcsec\u00b2 \u2192 suggested 2.0 h \u2014 an empirical fit to amateur practice at the 'solid/presentable' tier, not a physical requirement."
+      }
     }
   ],
   "count": 33,
