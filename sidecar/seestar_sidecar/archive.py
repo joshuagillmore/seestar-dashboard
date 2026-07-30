@@ -29,6 +29,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from seestar_sidecar import env as _env  # noqa: F401 — loads .env before the os.environ.get() below; see env.py
+
 logger = logging.getLogger(__name__)
 
 #: Configurable so this repo's tests and other machines are not stuck with

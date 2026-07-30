@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from seestar_sidecar import env as _env  # noqa: F401 — loads .env before SEESTAR_AI_DIR is read below; see env.py
 from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR
 from seestar_sidecar.catalog import DEFAULT_ALIASES_PATH, DEFAULT_CATALOG_PATH
 from seestar_sidecar.frontend import DEFAULT_WEB_DIST, mount_frontend

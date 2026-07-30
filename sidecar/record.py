@@ -12,6 +12,7 @@ import os
 import sys
 from pathlib import Path
 
+from seestar_sidecar import env as _env  # noqa: F401 — loads .env before the os.environ.get() below; see env.py
 from seestar_sidecar.allowlist import ALLOWED_TOOLS
 from seestar_sidecar.mcp_proxy import McpConnection
 

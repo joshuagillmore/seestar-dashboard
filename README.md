@@ -29,8 +29,13 @@ of crashing.
 
 ### Options
 
-Full reference, including what happens when each is unset and per-OS
-examples: [`docs/configuration.md`](docs/configuration.md). Short version:
+Set these once by copying [`.env.example`](.env.example) to `.env` in the
+repo root and filling in what you need — a real environment variable still
+overrides `.env` if you set one, but `.env` is what makes the settings
+persist across a new terminal, or a double-clicked `run.bat` shortcut with
+no terminal at all. Full reference, including what happens when each is
+unset and per-OS examples: [`docs/configuration.md`](docs/configuration.md).
+Short version:
 
 - **Port:** `uv run seestar-dashboard --port 8080`, or set `SEESTAR_PORT`.
   Port 8000 is intermittently held by Docker Desktop on some machines; if

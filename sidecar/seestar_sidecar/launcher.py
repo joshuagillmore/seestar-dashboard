@@ -14,6 +14,14 @@ import sys
 
 import uvicorn
 
+# Loads .env before SEESTAR_PORT is read below (main()'s argparse default) —
+# see env.py. This is the one machine-specific env-var read in this module
+# that doesn't happen via another seestar_sidecar module already importing
+# env.py first: launcher.py hands uvicorn a STRING ("seestar_sidecar.main:
+# create_app"), so main.py isn't actually imported until uvicorn.run() below,
+# which is after this module's own argparse defaults have already been built.
+from seestar_sidecar import env as _env  # noqa: F401, E402
+
 
 def _port_is_free(host: str, port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:

@@ -12,6 +12,42 @@ looked identical to "you have no data" rather than "you have not configured
 this". Both are unset by default now, and the sidecar reports that as an
 honest "not configured" state instead of guessing.
 
+## Setting these variables: `.env`, not just the shell
+
+A real environment variable only lasts for the shell session that exported
+it, which doesn't fit either audience this app has: it has to be re-exported
+in every new terminal, and the documented Windows launch path is a desktop
+shortcut with no shell to have exported anything into in the first place.
+
+The sidecar loads a `.env` file from the repo root at startup
+(`sidecar/seestar_sidecar/env.py`), before any of the variables below are
+read, using [`python-dotenv`](https://pypi.org/project/python-dotenv/) — a
+`.env` parser has more edge cases (quoting, escape sequences, comments) than
+are worth re-deriving by hand, and this is a small, dependency-free, widely
+used library rather than a novel one.
+
+**Copy [`.env.example`](../.env.example) to `.env` and fill in what you
+need.** `.env` is gitignored (never commit your real one — these are paths,
+not secrets, but the file is still machine-specific, and it's exactly where
+a real secret would end up later if this app ever grows one — see
+`CLAUDE.md` for this repo's actual secret-handling convention, age+sops,
+which this does not replace).
+
+A real environment variable always wins over `.env` — it's a convenience
+for a checkout, never an override of something deliberately set elsewhere
+(`load_dotenv(..., override=False)`, python-dotenv's own default).
+
+**Do not wrap a path in quotes in `.env`.** Quoting isn't needed even for a
+path containing spaces, and a double-quoted value undergoes escape
+processing — `\n` becomes an actual newline, `\t` a tab — which can silently
+corrupt a Windows path if a directory name happens to start with one of
+those letters right after a backslash (`C:\Users\nick\...` is fine
+unquoted; the identical path double-quoted turns `\n` into a line break).
+Unquoted values are taken completely literally, backslashes and all.
+Prefer forward slashes for every path regardless of OS (`C:/Users/you/...`)
+— this project's own code already follows that convention, and it sidesteps
+the whole question.
+
 ## SEESTAR_ARCHIVE_DIR
 
 Where the Seestar photo archive lives on disk — the directory holding one

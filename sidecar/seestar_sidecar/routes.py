@@ -122,13 +122,28 @@ def _catalog_paths(request: Request) -> tuple[Path, Path]:
     return Path(catalog_path), Path(aliases_path)
 
 
+#: Distinguishes "app.state.archive_dir was never set at all" (a bare app
+#: that skipped create_app()'s state-setting — not reachable through any
+#: real entry point today, but the same defensive style _catalog_paths
+#: above already holds itself to) from "it was set, and set to `None`" —
+#: the second is now a real, meaningful state since DEFAULT_ARCHIVE_DIR
+#: itself can legitimately be `None` (SEESTAR_ARCHIVE_DIR unconfigured; see
+#: archive.py). `getattr(..., None)` cannot tell those two apart — both
+#: read as "falsy" — so a `None or DEFAULT_ARCHIVE_DIR` fallback would
+#: silently re-derive and discard a deliberately-set `None`, exactly the
+#: bug this sentinel exists to rule out.
+_ARCHIVE_DIR_UNSET = object()
+
+
 def _archive_dir_and_tz(request: Request) -> tuple[Path | None, timezone | None]:
     """`None` when no archive is configured at all (see archive.
     DEFAULT_ARCHIVE_DIR) — every caller below (scan_archive,
     scan_stacked_images) accepts that directly rather than this wrapping it
     in `Path(None)`, which raises.
     """
-    archive_dir = getattr(request.app.state, "archive_dir", None) or DEFAULT_ARCHIVE_DIR
+    archive_dir = getattr(request.app.state, "archive_dir", _ARCHIVE_DIR_UNSET)
+    if archive_dir is _ARCHIVE_DIR_UNSET:
+        archive_dir = DEFAULT_ARCHIVE_DIR
     local_tz = getattr(request.app.state, "local_tz", None)
     return (Path(archive_dir) if archive_dir is not None else None), local_tz
 

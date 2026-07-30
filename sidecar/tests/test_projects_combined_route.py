@@ -5,6 +5,7 @@ neither of which touches the real archive or a live MCP server here.
 import json
 from datetime import timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -263,6 +264,34 @@ def test_archive_status_reports_unconfigured_when_nothing_is_set(monkeypatch):
     assert all(p["archive_minutes"] == 0.0 for p in body["projects"])
     assert all(p["nights"] == [] for p in body["projects"])
     assert all(p["image"] is None or p["image"]["source"] == "survey" for p in body["projects"])
+
+
+def test_a_none_archive_dir_on_app_state_is_not_silently_replaced_by_the_module_default(monkeypatch):
+    """Regression test for a bug this same hardening pass introduced and
+    then caught by actually running the sidecar with a real, configured
+    .env present, not by reasoning about the diff (see
+    .superpowers/harden-sidecar-report.md): `_archive_dir_and_tz` used to
+    read `getattr(request.app.state, "archive_dir", None) or
+    DEFAULT_ARCHIVE_DIR`, which cannot tell "the attribute was never set"
+    apart from "it was set, deliberately, to None" — both are falsy — so a
+    real, non-None module-level DEFAULT_ARCHIVE_DIR silently overrode an
+    app instance's genuinely-unconfigured archive_dir. `_ARCHIVE_DIR_UNSET`
+    (routes.py) is the fix; this proves it holds deterministically,
+    regardless of whether this machine happens to have a real
+    SEESTAR_ARCHIVE_DIR/.env — routes.DEFAULT_ARCHIVE_DIR is monkeypatched
+    to an unambiguously real, non-None path directly, rather than relying
+    on whatever the real environment happens to produce.
+    """
+    from seestar_sidecar import routes
+
+    monkeypatch.setattr(routes, "DEFAULT_ARCHIVE_DIR", Path("C:/some/real/configured/archive"))
+    fake_request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(archive_dir=None, local_tz=None))
+    )
+
+    archive_dir, _ = routes._archive_dir_and_tz(fake_request)
+
+    assert archive_dir is None
 
 
 def test_reports_totals_split_by_source(client):
