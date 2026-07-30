@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectCard } from './ProjectCard'
-import type { MergedProject } from './projects'
-import type { IntegrationGoal, Project } from '../../api/schemas'
+import { mergeProjects, type MergedProject } from './projects'
+import { ListProjectsSchema, ProjectsCombinedSchema, type IntegrationGoal, type Project } from '../../api/schemas'
+import { recordedListProjects, recordedProjectsCombined } from '../../test/fixtures'
 
 const project = (overrides: Partial<Project> = {}): Project => ({
   target_id: 'M1',
@@ -61,6 +62,18 @@ const merged = (overrides: Partial<MergedProject> = {}): MergedProject => ({
 // not a mock, so a flag left set by one test would otherwise leak into the
 // next.
 beforeEach(() => localStorage.clear())
+
+const realProjects = () =>
+  mergeProjects(
+    ProjectsCombinedSchema.parse(recordedProjectsCombined()).projects,
+    ListProjectsSchema.parse(recordedListProjects()).projects,
+  )
+
+const findReal = (targetId: string): MergedProject => {
+  const found = realProjects().find((p) => p.targetId === targetId)
+  if (!found) throw new Error(`fixture no longer has ${targetId} — pick another real example`)
+  return found
+}
 
 describe('ProjectCard', () => {
   it('renders the target id, common name, and hours collected', () => {
@@ -156,6 +169,36 @@ describe('ProjectCard', () => {
     const completeFill = container.querySelector('[data-testid="progress-track"]')?.firstElementChild as HTMLElement
     expect(completeFill.style.width).toBe('100%')
     expect(screen.getAllByText('complete').length).toBeGreaterThan(0)
+  })
+
+  describe('real fixture cases that clear their suggested goal (not contrived 50% cases)', () => {
+    it('M42 (archive-only, 3.3h captured vs 1.2h suggested, ~279%): clamps the fill, not the hours text, and colors it complete despite the "archive only" tag', () => {
+      render(<ProjectCard project={findReal('M42')} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByText('3.3 h')).toBeInTheDocument() // the true captured value — never clamped
+      expect(screen.getByText('of 1.2 h suggested')).toBeInTheDocument() // not coarse
+      expect(screen.getByText('archive only')).toBeInTheDocument() // a different axis — see projectStatus's doc comment
+      const track = screen.getByTestId('progress-track')
+      const fill = track.firstElementChild as HTMLElement
+      expect(fill.style.width).toBe('100%') // clamped from ~279%
+      expect(fill.className).toContain('fillComplete') // met its goal — must not read as still in-progress
+      expect(fill.className).not.toContain('fillProgress')
+    })
+
+    it('M27 (store-backed planetary nebula, coarse on the photometric track, ~151%): "~" prefix keyed off `coarse`, not `track`', () => {
+      const m27 = findReal('M27')
+      expect(m27.goal?.track).toBe('photometric') // NOT "cluster" — the real case the brief warned against keying on
+      expect(m27.goal?.coarse).toBe(true)
+      render(<ProjectCard project={m27} selected={false} onSelect={vi.fn()} />)
+      expect(screen.getByText('of ~1.0 h suggested')).toBeInTheDocument()
+      expect(screen.getByText('complete')).toBeInTheDocument() // store-backed, so the tag itself reflects completion
+      const fill = screen.getByTestId('progress-track').firstElementChild as HTMLElement
+      expect(fill.style.width).toBe('100%')
+    })
+  })
+
+  it('Unknown (real archive folder that resolves to no catalogue record at all) reads distinctly from a resolved-but-unmeasurable target', () => {
+    render(<ProjectCard project={findReal('Unknown')} selected={false} onSelect={vi.fn()} />)
+    expect(screen.getByText('not in DSO catalogue')).toBeInTheDocument()
   })
 
   it('shows the provenance split, not just the merged total', () => {

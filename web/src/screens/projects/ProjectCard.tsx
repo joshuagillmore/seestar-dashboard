@@ -88,8 +88,14 @@ export function ProjectCard({ project, selected, onSelect }: ProjectCardProps) {
           data-testid="progress-track"
         >
           {pct !== null && (
+            // Keyed off `pct` itself, not `status.tag`: an archive-only
+            // target (tag stays 'archive-only' regardless — see
+            // projectStatus's doc comment) can still fully clear its own
+            // suggested goal, e.g. the real M42 at 279% — its fill must read
+            // as met (pass), not as still-in-progress (accent), even though
+            // its badge says "archive only" for an unrelated reason.
             <div
-              className={`${styles.fill} ${status.tag === 'complete' ? styles.fillComplete : styles.fillProgress}`}
+              className={`${styles.fill} ${pct >= 100 ? styles.fillComplete : styles.fillProgress}`}
               style={{ width: `${pct}%` }}
             />
           )}
