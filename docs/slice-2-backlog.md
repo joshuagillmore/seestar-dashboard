@@ -98,7 +98,7 @@ path-constrained, not a general static mount.
 - **`horizon_mask: z.array(z.unknown())`.** Slices 1–2 read only `.length`. Tighten before any mask-rendering screen (slice 5), not on a fixed date.
 - **Global `* { animation: none !important }` for reduced motion.** `livePulse` is the only keyframe and renders nowhere in slice 1. Revisit in slice 3, which is where it first appears.
 - **Crash-path test untimed.** ~20 ms to failure, measured. A timeout wrapper hardens against a hypothetical SDK change and adds a dependency.
-- **`plan_targets?limit=` ignored in replay.** Inherent to one-fixture-per-tool; the fixture holds exactly the default 3.
+- **`plan_targets?limit=` ignored in replay.** Inherent to one-fixture-per-tool; the fixture is recorded at the default (now 12), so replay always returns that many regardless of the requested limit.
 - **`fetchSite` / `fetchHealth` untested.** Fixed-string one-liners with no interpolation. The real gap was one level up — screen-level prop threading — and that was fixed before merge.
 - **Retained clamp assertion** at `SweetBandTimeline.test.tsx:61-66` is true by construction and contributes nothing, but the test's weight is now carried by the pinned geometry beside it.
 - **Legend-only rail guard.** `not.toMatch(/above floor/i)` guards the legend text; a text-free grey rail div would slip past. A rail without its legend entry is not a failure mode anyone would plausibly introduce.
