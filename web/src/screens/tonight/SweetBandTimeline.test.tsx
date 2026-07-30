@@ -29,6 +29,16 @@ describe('SweetBandTimeline', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('names the zone its clock times are actually in, once, for the whole card', () => {
+    // Timezone-independent shape check, same reasoning as PlanCard's — the
+    // bracket labels, lane windows and axis ticks below all share this one
+    // zone note rather than each repeating it (none of them has the room).
+    render(<SweetBandTimeline conditions={conditions} targets={plan.targets} />)
+    expect(
+      screen.getByText(/^sweet band · times in UTC([+-]\d{1,2}(:\d{2})?)?$/),
+    ).toBeInTheDocument()
+  })
+
   it('omits the above-floor rail and its legend entry', () => {
     const { container } = render(
       <SweetBandTimeline conditions={conditions} targets={plan.targets} />,

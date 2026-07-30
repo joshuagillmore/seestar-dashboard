@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildScale, minutesBetween, parse, spanToPercent } from './timeline'
+import { buildScale, formatUtcOffset, minutesBetween, parse, spanToPercent, zoneLabel } from './timeline'
 
 describe('timeline scale', () => {
   const scale = buildScale(['2026-09-24T19:49:29.005', '2026-09-25T03:54:29.005'])
@@ -54,5 +54,45 @@ describe('timeline scale', () => {
     expect(
       minutesBetween(['2026-09-26T19:43:23.680', '2026-09-26T22:03:40.684']),
     ).toBe(140)
+  })
+})
+
+describe('formatUtcOffset', () => {
+  // Hand-picked offset minutes, not the test runner's own zone — this is the
+  // same shape check the localHhMm gap called for: assertable without
+  // depending on wherever CI or a contributor's machine happens to be.
+  it('renders zero offset as bare UTC, matching the design label exactly at that one value', () => {
+    expect(formatUtcOffset(0)).toBe('UTC')
+  })
+
+  it('renders a whole-hour negative offset (e.g. US Mountain Standard)', () => {
+    expect(formatUtcOffset(-420)).toBe('UTC-7')
+  })
+
+  it('renders a whole-hour positive offset (e.g. Central European Summer)', () => {
+    expect(formatUtcOffset(120)).toBe('UTC+2')
+  })
+
+  it('renders a fractional-hour offset (e.g. India Standard Time)', () => {
+    expect(formatUtcOffset(330)).toBe('UTC+5:30')
+  })
+
+  it('zero-pads a remainder under ten minutes', () => {
+    // No real IANA zone has a 5-minute remainder; this exercises padStart's
+    // branch directly rather than leaving it uncovered.
+    expect(formatUtcOffset(-425)).toBe('UTC-7:05')
+  })
+})
+
+describe('zoneLabel', () => {
+  it('names the zone the machine running the test is actually in, in the same shape formatUtcOffset produces', () => {
+    // Cannot pin an exact value without depending on the runner's own system
+    // zone (exactly the trap localHhMm's own untested-output gap warned
+    // about) — so this asserts the real Date-based wiring holds by checking
+    // it agrees with formatUtcOffset called on that same instant's real
+    // offset, and that the shape is well-formed either way.
+    const ms = Date.parse('2026-07-30T12:00:00Z')
+    expect(zoneLabel(ms)).toBe(formatUtcOffset(-new Date(ms).getTimezoneOffset()))
+    expect(zoneLabel(ms)).toMatch(/^UTC([+-]\d{1,2}(:\d{2})?)?$/)
   })
 })

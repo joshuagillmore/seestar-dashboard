@@ -513,6 +513,42 @@ is never populated.
 
 ---
 
+## 16. The observing site has no IANA timezone, only coordinates
+
+**Affects:** every clock on the Tonight screen (the ranked cards' `BEST WINDOW` stat, and the
+sweet-band timeline's dark/dawn labels, per-target windows and hour axis) — none of them can say
+whether they match the telescope's own zone.
+
+**Found 2026-07-30** while labeling those clocks so they at least name *some* zone rather than the
+ambiguous "local" the design uses.
+
+`get_site_profile` (`server.py:629`) returns `dataclasses.asdict(profile)` — `name`, `lat_deg`,
+`lon_deg`, `elevation_m`, `bortle`, `sqm`, `horizon_mask`, `min_altitude_deg`,
+`field_rotation_ceiling_deg`. No timezone field, named or otherwise.
+
+The one `local_tz` in this codebase (`sidecar/seestar_sidecar/archive.py`) is not a fit either, for
+two independent reasons: it is not derived from the site's coordinates at all — its own docstring
+says production leaves it `None` and reads "the system's own timezone" of whatever machine runs the
+sidecar — and it has no HTTP route exposing it regardless, since it exists only to parse archive
+filenames.
+
+So a browser checking Tonight's plan from anywhere other than the site (a hotel, a phone away from
+the mount) has no way to know whether the times it renders match the telescope's — the dashboard can
+name **its own** clock's zone (an honest UTC-offset label, shipped in this same change) but not the
+site's, and cannot even detect whether the two agree.
+
+**Asked for:** an IANA zone name on the site profile — e.g. `tz_name: str | None` alongside
+`lat_deg`/`lon_deg` on `SiteProfile`, set by `set_site_profile` (a user-supplied value, the same way
+`bortle`/`sqm` already are, since coordinates alone don't determine a zone unambiguously near a
+border and reverse-geocoding is a real dependency for a small gain). With it, the dashboard could
+show both clocks explicitly when they differ, instead of only being able to name one of them.
+
+**Note for anyone standing up a fresh installation:** until this exists, don't assume the machine
+running the sidecar is in the same zone as the browser viewing the dashboard, or as the telescope
+itself — today it happens to be true for this one installation, and nothing checks it.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
@@ -532,9 +568,12 @@ is never populated.
 | 13 | No one-line verdict summary, only `reasons[]` | Headline sentence of the Tonight banner | Partly — the server already composes the reason prose |
 | 14 | `plan_targets` does not return the narrowband/broadband class | Ranked-card subtitle descriptor; likely also item 5's filter chip | Yes — `LP_MODEL` already classifies it and the ranker scores on it |
 | 15 | `recommend_projects` ties every project on the same sentinel and returns list order | The Projects header recommendation, and the design's "N h short of goal" clause | No — it ranks on `goal_minutes`, which is 0 for every real project |
+| 16 | `SiteProfile` has coordinates but no IANA timezone | Every clock on Tonight can name the browser's own zone but not the site's, or detect whether the two agree | No — nothing computes or stores one today |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
 explicit absent state for each rather than a plausible-looking placeholder, so nothing on screen is
 a lie. Item 1 **blocks** the Review screen outright. Item 7 may indicate a real server-side defect.
 Item 10 blocks slice 5. Item 11 is the only one that degrades a tool the *agent* uses rather than
-just the dashboard — the ranker's blind spot is the user's most-imaged object.
+just the dashboard — the ranker's blind spot is the user's most-imaged object. Item 16 likewise
+degrades rather than blocks: the dashboard now states the zone it *can* name honestly instead of the
+ambiguous "local", it just cannot yet name the site's.

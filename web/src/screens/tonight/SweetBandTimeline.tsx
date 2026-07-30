@@ -1,6 +1,6 @@
 import type { Conditions, PlanTarget } from '../../api/schemas'
 import styles from './SweetBandTimeline.module.css'
-import { buildScale, localHhMm, minutesBetween, parse, spanToPercent } from './timeline'
+import { buildScale, localHhMm, minutesBetween, parse, spanToPercent, zoneLabel } from './timeline'
 
 interface Props {
   conditions: Conditions
@@ -25,8 +25,20 @@ export function SweetBandTimeline({ conditions, targets }: Props) {
     <section className={styles.card}>
       <div className={styles.head}>
         <span className={styles.eyebrow}>Tonight · sweet-band windows</span>
-        <span className={styles.legend}>
-          <span className={styles.swatch} /> sweet band
+        {/* Every clock on this card — the dark/dawn bracket labels, each
+            lane's window, and the hour axis below — is the browser's local
+            wall clock (see timeline.ts's localHhMm). None of them individually
+            has room for a zone marker (the axis is a bare "19", the lane
+            window column is 78px), so it's stated once here for the whole
+            card rather than repeated per label. See handback-to-seestar-ai.md
+            item 16 for why this can only name the browser's own zone, not the
+            observing site's — the two agree only when the reader is at the
+            site. */}
+        <span
+          className={styles.legend}
+          title="Browser-local clock time — may not match the observing site's zone."
+        >
+          <span className={styles.swatch} /> sweet band · times in {zoneLabel(scale.startMs)}
         </span>
       </div>
 

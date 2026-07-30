@@ -84,6 +84,14 @@ describe('PlanCard', () => {
     expect(screen.getByRole('button', { name: /Hand to run-session/ })).toBeDisabled()
   })
 
+  it('labels the best-window stat with the zone it is actually rendering, not a bare "local"', () => {
+    // Timezone-independent: asserts the shape (see timeline.test.ts's
+    // formatUtcOffset suite for the value-level coverage), not a value pinned
+    // to whatever zone happens to run this test.
+    render(<PlanCard target={target} />)
+    expect(screen.getByText(/^BEST WINDOW UTC([+-]\d{1,2}(:\d{2})?)?$/)).toBeInTheDocument()
+  })
+
   it('shows recommended subs and exposure', () => {
     render(<PlanCard target={target} />)
     expect(

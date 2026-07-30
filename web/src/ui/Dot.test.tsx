@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { Sidebar } from '../shell/Sidebar'
 import { Dot } from './Dot'
 
 describe('Dot', () => {
@@ -15,5 +18,53 @@ describe('Dot', () => {
     const md = screen.getByTestId('dot').className
     rerender(<Dot tone="pass" size="sm" />)
     expect(screen.getByTestId('dot').className).not.toBe(md)
+  })
+
+  describe('className passthrough', () => {
+    it('appends a caller class to its own, byte-for-byte, rather than replacing them', () => {
+      // CSS Modules give tone/size classes opaque hashed names (e.g.
+      // `_marginal_947f68`), so this compares against a same-props baseline
+      // rendered with no className, rather than pattern-matching the hash —
+      // the exact own-class string must survive untouched with the caller's
+      // class appended after it, not merely "contain marginal somewhere".
+      const { unmount } = render(<Dot tone="marginal" size="sm" />)
+      const bare = screen.getByTestId('dot').className
+      unmount()
+
+      render(<Dot tone="marginal" size="sm" className="guardrailDot" />)
+      expect(screen.getByTestId('dot').className).toBe(`${bare} guardrailDot`)
+    })
+
+    it('cannot let a caller override or remove the data-dot guarantee', () => {
+      // DotProps has no `data-dot` field at all, so a normal caller can't even
+      // author this — the guarantee is structural, not a runtime check. That
+      // structure (destructure exactly {tone, size, className}, never spread a
+      // rest object onto the element) is what a jsdom render can't observe
+      // directly, so it's read from source — the same technique
+      // PlanCard.test.tsx already uses for its hover-state CSS, for the same
+      // reason: the property under test has no other way to be exercised.
+      const src = readFileSync(join(__dirname, 'Dot.tsx'), 'utf8')
+      expect(src).not.toMatch(/\{\.\.\.(rest|props|other)\}/)
+      expect(src).toMatch(/data-dot=\{tone\}/)
+    })
+
+    it('still renders correctly through a real caller after the className change (Sidebar)', () => {
+      // Regression coverage through an actual composition, not just the
+      // isolated renders above — the goal-model incident this task's brief
+      // cites was exactly a prop whose isolated tests all passed while no
+      // real caller wiring was ever checked.
+      render(
+        <Sidebar
+          site={null}
+          verdict="GO"
+          gpsWarning={null}
+          gpsMatched={null}
+          view="tonight"
+          onNavigate={() => {}}
+        />,
+      )
+      const dots = screen.getAllByTestId('dot')
+      expect(dots[0]).toHaveAttribute('data-dot', 'pass')
+    })
   })
 })
