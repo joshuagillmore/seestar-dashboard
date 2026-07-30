@@ -306,3 +306,19 @@ came from where.
 
 This is ours, not a hand-back: no server change is needed. Worth doing before
 the Review screen (slice 4), which will want per-session detail anyway.
+
+> **Done 2026-07-30.** `combine_projects()` (`projects_union.py`) now attaches
+> exactly this shape to every entry — `nights: []` for a store-only target
+> (its detail is already fully available as `sessions` on the matching
+> `list_projects` entry, joined client-side), the archive's per-night detail
+> for the rest. Built from the same `known_nights`-filtered list
+> `archive_minutes` already used, not recomputed independently, so
+> `sum(n["minutes"] for n in nights) == archive_minutes` holds by
+> construction rather than by two calculations happening to agree — proven in
+> `test_projects_union.py` (unit level, plus a dedicated mutation test) and
+> again end-to-end through `/api/projects_combined` in
+> `test_projects_combined_route.py`, including a synthetic overlapping-night
+> fixture routed through the real store payload and archive scan, not just
+> `combine_projects()` called directly with hand-built objects. The web side
+> (rendering this in the session table, replacing the stopgap note) is a
+> separate, not-yet-done change.

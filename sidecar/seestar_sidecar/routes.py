@@ -4,6 +4,7 @@ read-only computation. Routes are literal — an unlisted tool 404s because no
 handler exists for it, not because a guard rejected it.
 """
 import os
+from dataclasses import asdict
 from datetime import timezone
 from pathlib import Path
 
@@ -68,7 +69,13 @@ async def call_tool(request: Request, tool: str, arguments: dict) -> dict:
         raise ProxyTransportError(f"call_tool invoked for a non-allowlisted tool: {tool!r}")
     connection = getattr(request.app.state, "connection", None)
     if connection is None:
-        raise ProxyTransportError("MCP connection not started")
+        # Two distinct reasons land here with the same symptom: the lifespan
+        # simply never ran (a bare TestClient(create_app())), or it ran but
+        # SEESTAR_AI_DIR wasn't set — main.py sets the latter's reason on
+        # app.state so this 502 names the actual fix instead of reading like
+        # an internal bug either way.
+        reason = getattr(request.app.state, "connection_unavailable_reason", None)
+        raise ProxyTransportError(reason or "MCP connection not started")
     return await connection.call(tool, arguments)
 
 
@@ -115,10 +122,15 @@ def _catalog_paths(request: Request) -> tuple[Path, Path]:
     return Path(catalog_path), Path(aliases_path)
 
 
-def _archive_dir_and_tz(request: Request) -> tuple[Path, timezone | None]:
+def _archive_dir_and_tz(request: Request) -> tuple[Path | None, timezone | None]:
+    """`None` when no archive is configured at all (see archive.
+    DEFAULT_ARCHIVE_DIR) — every caller below (scan_archive,
+    scan_stacked_images) accepts that directly rather than this wrapping it
+    in `Path(None)`, which raises.
+    """
     archive_dir = getattr(request.app.state, "archive_dir", None) or DEFAULT_ARCHIVE_DIR
     local_tz = getattr(request.app.state, "local_tz", None)
-    return Path(archive_dir), local_tz
+    return (Path(archive_dir) if archive_dir is not None else None), local_tz
 
 
 def _attach_images(entries: list[dict], id_key: str, request: Request) -> None:
@@ -208,6 +220,13 @@ async def projects_combined(request: Request) -> JSONResponse:
     couldn't already give it: no side effects, nothing written, and no
     network call — see imagery.py's module docstring for why `image` here is
     only ever a pointer, never a fetch.
+
+    `archive_status` (see archive.ArchiveStatus) tells the UI *why*
+    `archive_minutes` is 0 for every target when it is: SEESTAR_ARCHIVE_DIR
+    was never set, it's set to a path that isn't there, or it's set to a
+    real, currently-empty directory. Those read identically from the
+    per-target minutes alone, so this is reported once at the top level
+    rather than smuggled into every entry.
     """
     try:
         store = await _fetch(request, "list_projects", {})
@@ -241,7 +260,13 @@ async def projects_combined(request: Request) -> JSONResponse:
         "total_minutes": round(sum(p["total_minutes"] for p in projects), 4),
     }
     return JSONResponse(
-        {"ok": True, "projects": projects, "count": len(projects), "totals": totals}
+        {
+            "ok": True,
+            "projects": projects,
+            "count": len(projects),
+            "totals": totals,
+            "archive_status": asdict(scan.status),
+        }
     )
 
 

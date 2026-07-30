@@ -29,6 +29,9 @@ of crashing.
 
 ### Options
 
+Full reference, including what happens when each is unset and per-OS
+examples: [`docs/configuration.md`](docs/configuration.md). Short version:
+
 - **Port:** `uv run seestar-dashboard --port 8080`, or set `SEESTAR_PORT`.
   Port 8000 is intermittently held by Docker Desktop on some machines; if
   it's taken, the launcher prints which port is blocked and exits cleanly
@@ -36,9 +39,17 @@ of crashing.
 - **Offline / no telescope attached:** `SEESTAR_REPLAY=1 uv run seestar-dashboard`
   serves recorded fixtures (`fixtures/*.json`) instead of spawning the MCP
   server, and the UI's top bar shows a "fixtures — not live" indicator.
-- **SeeStar-AI checkout location:** the sidecar spawns
-  `seestar_mcp.server` from `SEESTAR_AI_DIR` (default
-  `C:/Users/<user>/SeeStar-AI`); override it if that checkout lives elsewhere.
+- **`seestar-mcp` checkout location:** set `SEESTAR_AI_DIR` to it — the
+  sidecar spawns `seestar_mcp.server` from there. No personal-machine
+  default: unset, the sidecar still boots, but every tool-backed route 502s
+  with a message naming the variable until it's set (or you run with
+  `SEESTAR_REPLAY=1` instead).
+- **Photo archive location:** set `SEESTAR_ARCHIVE_DIR` to your Seestar
+  archive directory. No personal-machine default here either: unset, the
+  sidecar still boots and serves the store's own data — `/api/projects_combined`
+  reports an `archive_status` field so the UI can tell "not configured" apart
+  from "configured, but that path doesn't exist" and "configured and
+  genuinely empty".
 
 ## Development
 
@@ -74,6 +85,8 @@ test suite alone doesn't prove the build is clean.
 - `docs/superpowers/specs/` — approved implementation specs, one per slice.
 - `docs/handback-to-seestar-ai.md` — server-side gaps this repo cannot fix
   itself (see the hand-back rule in `CLAUDE.md`).
+- `docs/configuration.md` — every environment variable the sidecar reads,
+  what happens when it's unset, and examples for Windows/macOS/Linux.
 
 ## Licences
 

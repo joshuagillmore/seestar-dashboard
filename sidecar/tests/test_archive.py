@@ -8,6 +8,7 @@ import pytest
 
 from seestar_sidecar.archive import (
     EXPOSURE_SECONDS,
+    ArchiveStatus,
     _local_capture_instant_utc,
     normalize_target_id,
     observing_night,
@@ -106,6 +107,50 @@ def test_missing_root_returns_an_empty_scan_not_an_error(tmp_path):
     scan = scan_archive(tmp_path / "does-not-exist", local_tz=EDT)
     assert scan.targets == {}
     assert scan.warnings == []
+
+
+# --- ArchiveStatus — "not configured" vs "configured but not found" vs
+# "configured, present, genuinely empty" (see docs/configuration.md and the
+# module docstring's portability note) -------------------------------------
+
+
+def test_status_reports_unconfigured_when_root_is_none():
+    # root=None is what DEFAULT_ARCHIVE_DIR resolves to when SEESTAR_ARCHIVE_DIR
+    # is unset — nobody has told the sidecar where an archive lives at all,
+    # distinct from a path that was given but isn't there (see below).
+    scan = scan_archive(None, local_tz=EDT)
+    assert scan.status == ArchiveStatus(configured=False, path=None, exists=False, target_count=0)
+
+
+def test_status_reports_configured_but_missing_for_a_nonexistent_root(tmp_path):
+    missing = tmp_path / "does-not-exist"
+    scan = scan_archive(missing, local_tz=EDT)
+    assert scan.status == ArchiveStatus(
+        configured=True, path=str(missing), exists=False, target_count=0
+    )
+
+
+def test_status_reports_configured_and_present_for_a_genuinely_empty_directory(tmp_path):
+    # A real, reachable directory with nothing in it yet — must read
+    # differently from both "unconfigured" and "configured but not found":
+    # the user pointed at a real place, it's just empty right now.
+    scan = scan_archive(tmp_path, local_tz=EDT)
+    assert scan.status == ArchiveStatus(
+        configured=True, path=str(tmp_path), exists=True, target_count=0
+    )
+    assert scan.targets == {}
+
+
+def test_status_target_count_matches_a_populated_scan(tmp_path):
+    subs = tmp_path / "M 31-sub"
+    subs.mkdir()
+    _light_fit(subs, "M 31", "20240104", "200000", 0)
+
+    scan = scan_archive(tmp_path, local_tz=EDT)
+
+    assert scan.status == ArchiveStatus(
+        configured=True, path=str(tmp_path), exists=True, target_count=1
+    )
 
 
 def test_counts_only_light_fit_files_in_the_sub_directory(tmp_path):
@@ -255,6 +300,12 @@ def _stacked_jpg(dir_path, target_display, date_str, time_str, content, thumbnai
 
 def test_missing_root_returns_an_empty_dict_not_an_error(tmp_path):
     assert scan_stacked_images(tmp_path / "does-not-exist", local_tz=EDT) == {}
+
+
+def test_unconfigured_root_returns_an_empty_dict_not_an_error():
+    # root=None (SEESTAR_ARCHIVE_DIR unset) — same degrade as a missing
+    # directory, since this function has no imagery to attach either way.
+    assert scan_stacked_images(None, local_tz=EDT) == {}
 
 
 def test_finds_the_stacked_image_in_the_plain_directory_not_the_sub_directory(tmp_path):

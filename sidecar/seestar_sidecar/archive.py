@@ -32,12 +32,16 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 #: Configurable so this repo's tests and other machines are not stuck with
-#: one person's OneDrive path. Read once at import time, matching main.py's
-#: SEESTAR_AI_DIR: both name "where does this sidecar's one external, personal
-#: data source live" for the whole process.
-DEFAULT_ARCHIVE_DIR = Path(
-    os.environ.get("SEESTAR_ARCHIVE_DIR", "C:/Users/<user>/OneDrive/Documents/SeeStar")
-)
+#: one person's OneDrive path. `None` when SEESTAR_ARCHIVE_DIR is unset —
+#: there is no cross-platform convention for "where does a Seestar archive
+#: live" to guess at (unlike web/dist, which always lives at one fixed
+#: place relative to this checkout — see frontend.py), so an unset var means
+#: "not configured yet", never a guessed personal path. Read once at import
+#: time, matching main.py's SEESTAR_AI_DIR: both name "where does this
+#: sidecar's one external, personal data source live" for the whole process.
+#: See docs/configuration.md.
+_env_archive_dir = os.environ.get("SEESTAR_ARCHIVE_DIR")
+DEFAULT_ARCHIVE_DIR: Path | None = Path(_env_archive_dir) if _env_archive_dir else None
 
 #: Confirmed by the user: every sub-frame in the archive is a 10.0s exposure,
 #: and every filename encodes it (`Light_<target>_<exposure>s_<filter>_<stamp>.fit`).
@@ -165,12 +169,42 @@ class ArchiveTarget:
 
 
 @dataclass
+class ArchiveStatus:
+    """Distinguishes *why* a scan found nothing — the state a screen needs
+    to render "set SEESTAR_ARCHIVE_DIR" instead of a misleading "0 minutes
+    logged" when nobody has pointed the sidecar at an archive yet.
+
+    Four fields carry three real states, not two:
+
+    - `configured=False` — nobody set SEESTAR_ARCHIVE_DIR at all
+      (DEFAULT_ARCHIVE_DIR is `None`). `path`/`exists`/`target_count` are
+      `None`/`False`/`0`, respectively, since there is nothing to report on.
+    - `configured=True, exists=False` — it's set, but that path isn't there
+      (a typo, an unmounted drive). Worth surfacing differently from
+      "empty", since the user DID try to configure something and it's wrong.
+    - `configured=True, exists=True` — the normal case. `target_count`
+      distinguishes "genuinely empty" (0 — a real, reachable directory with
+      no target subdirectories in it yet) from a working archive, without
+      the caller having to cross-reference `ArchiveScan.targets`' length
+      itself — the caller of `/api/projects_combined` only ever sees this
+      status and the store+archive *union*, which can be non-empty from the
+      store alone even when the archive side is empty.
+    """
+
+    configured: bool
+    path: str | None  # None only when configured is False
+    exists: bool  # always False when configured is False
+    target_count: int  # always 0 unless configured and exists are both True
+
+
+@dataclass
 class ArchiveScan:
     targets: dict[str, ArchiveTarget]
     #: Filenames that disagreed with the fixed exposure assumption, or that
     #: didn't match the expected naming shape at all. Never raises: a scan
     #: keeps going and the caller decides how loudly to surface this.
     warnings: list[str]
+    status: ArchiveStatus
 
 
 @dataclass
@@ -187,18 +221,31 @@ class StackedImage:
     captured_at: datetime
 
 
-def scan_archive(root: Path, local_tz: timezone | None = None) -> ArchiveScan:
+def scan_archive(root: Path | None, local_tz: timezone | None = None) -> ArchiveScan:
     """Scan every `<target>-sub` / `<target>_sub` directory under `root`.
 
-    A missing root is a normal state — no archive configured yet, or a
-    machine without one synced — not an error: returns an empty scan so the
-    sidecar keeps serving the store's data alone.
+    `root=None` — SEESTAR_ARCHIVE_DIR was never set (see DEFAULT_ARCHIVE_DIR)
+    — and a `root` that doesn't exist on disk are both normal, non-error
+    states: this keeps going and returns an empty scan so the sidecar keeps
+    serving the store's data alone either way. They are NOT the same state
+    though — see `ArchiveStatus` — so this reports which one occurred rather
+    than collapsing both into one silent "nothing found".
 
     `local_tz` is exposed only for tests — see `_local_capture_instant_utc`.
     Every real caller leaves it `None` and gets the system's local timezone.
     """
+    if root is None:
+        return ArchiveScan(
+            targets={},
+            warnings=[],
+            status=ArchiveStatus(configured=False, path=None, exists=False, target_count=0),
+        )
     if not root.is_dir():
-        return ArchiveScan(targets={}, warnings=[])
+        return ArchiveScan(
+            targets={},
+            warnings=[],
+            status=ArchiveStatus(configured=True, path=str(root), exists=False, target_count=0),
+        )
 
     targets: dict[str, ArchiveTarget] = {}
     warnings: list[str] = []
@@ -243,10 +290,18 @@ def scan_archive(root: Path, local_tz: timezone | None = None) -> ArchiveScan:
             EXPOSURE_SECONDS,
             "; ".join(warnings[:5]),
         )
-    return ArchiveScan(targets=targets, warnings=warnings)
+    return ArchiveScan(
+        targets=targets,
+        warnings=warnings,
+        status=ArchiveStatus(
+            configured=True, path=str(root), exists=True, target_count=len(targets)
+        ),
+    )
 
 
-def scan_stacked_images(root: Path, local_tz: timezone | None = None) -> dict[str, StackedImage]:
+def scan_stacked_images(
+    root: Path | None, local_tz: timezone | None = None
+) -> dict[str, StackedImage]:
     """The most recent stacked-master JPEG per target, full resolution
     preferred over its `_thn` thumbnail sibling — the imagery counterpart to
     `scan_archive()`, reading the *other* half of each target's directory
@@ -260,12 +315,16 @@ def scan_stacked_images(root: Path, local_tz: timezone | None = None) -> dict[st
     "Most recent" is by that same timestamp — an arbitrary but explainable
     rule; there is no way to know which stack is "best".
 
-    A missing root degrades to an empty dict, same as `scan_archive()` — no
-    archive configured is a normal state, not an error. `local_tz` is
-    test-only, exactly as in `scan_archive()`; production leaves it `None`
-    and reads the system's own timezone (see `_local_capture_instant_utc`).
+    `root=None` (unconfigured) or a missing directory both degrade to an
+    empty dict, same as `scan_archive()` — no archive configured, or one
+    configured but not found, is a normal state, not an error; this function
+    has no imagery to attach either way, so unlike `scan_archive()` it has no
+    need to distinguish the two beyond that (see `ArchiveStatus` for the
+    caller that does). `local_tz` is test-only, exactly as in
+    `scan_archive()`; production leaves it `None` and reads the system's own
+    timezone (see `_local_capture_instant_utc`).
     """
-    if not root.is_dir():
+    if root is None or not root.is_dir():
         return {}
 
     latest: dict[str, StackedImage] = {}

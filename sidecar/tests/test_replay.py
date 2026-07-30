@@ -126,7 +126,17 @@ def test_missing_fixture_uses_the_standard_error_shape(monkeypatch):
 
 
 def test_lifespan_creates_a_connection_in_live_mode(monkeypatch):
+    """SEESTAR_AI_DIR is read once at import time (see main.py) — has no
+    personal-path default any more, so this sets it explicitly rather than
+    relying on whatever happens to be in this machine's real environment
+    (see docs/configuration.md). monkeypatch.setattr on the module attribute,
+    not monkeypatch.setenv, because main.SEESTAR_AI_DIR was already bound
+    before this test runs; the env var itself is only read once, at import.
+    """
+    from seestar_sidecar import main
+
     monkeypatch.delenv("SEESTAR_REPLAY", raising=False)
+    monkeypatch.setattr(main, "SEESTAR_AI_DIR", "/some/seestar-mcp/checkout")
     app = create_app()
     with TestClient(app):
         assert app.state.connection is not None
@@ -140,9 +150,31 @@ def test_lifespan_creates_no_connection_in_replay(monkeypatch):
         assert app.state.connection is None
 
 
+def test_lifespan_leaves_connection_none_when_seestar_ai_dir_is_unset(monkeypatch):
+    """The portability fix: SEESTAR_AI_DIR unset must degrade to a clear,
+    non-crashing 502 on the first tool-backed request, not a TypeError out
+    of subprocess.Popen from a literal `None` argv entry — see main.py's
+    lifespan and routes.py's call_tool.
+    """
+    from seestar_sidecar import main
+
+    monkeypatch.delenv("SEESTAR_REPLAY", raising=False)
+    monkeypatch.setattr(main, "SEESTAR_AI_DIR", None)
+    app = create_app()
+    with TestClient(app) as client:
+        assert app.state.connection is None
+        assert app.state.connection_unavailable_reason is not None
+        response = client.get("/api/get_site_profile")
+        assert response.status_code == 502
+        assert "SEESTAR_AI_DIR" in response.json()["error"]
+
+
 def test_each_app_owns_its_connection(monkeypatch):
     """Two apps in one process must not share connection state."""
+    from seestar_sidecar import main
+
     monkeypatch.delenv("SEESTAR_REPLAY", raising=False)
+    monkeypatch.setattr(main, "SEESTAR_AI_DIR", "/some/seestar-mcp/checkout")
     first, second = create_app(), create_app()
     with TestClient(first), TestClient(second):
         assert first.state.connection is not second.state.connection
