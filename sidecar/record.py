@@ -18,7 +18,7 @@ FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
 ARGUMENTS: dict[str, dict] = {
     "assess_conditions": {},
-    "plan_targets": {"limit": 3},
+    "plan_targets": {"limit": 12},
     "get_site_profile": {},
 }
 
