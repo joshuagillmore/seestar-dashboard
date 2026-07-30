@@ -52,3 +52,5 @@
 .statValue { font-family: var(--font-mono); font-weight: 500; font-size: 17px; line-height: 1; margin-top: 7px; }
 .statAbsent { color: var(--text-ghost); }
 .statPass { color: var(--pass); }
+.statMarginal { color: var(--marginal); }
+.statReject { color: var(--reject); }

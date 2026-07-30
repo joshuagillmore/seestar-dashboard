@@ -11,7 +11,7 @@ const recorded = ConditionsSchema.parse(recordedConditions())
 function stubApi(overrides: Record<string, unknown> = {}) {
   const bodies: Record<string, unknown> = {
     '/api/assess_conditions': recordedConditions(),
-    '/api/plan_targets?limit=3': recordedPlan(),
+    '/api/plan_targets?limit=12': recordedPlan(),
     '/api/get_site_profile': recordedSite(),
     '/api/health': { ok: true, replay: false },
     ...overrides,

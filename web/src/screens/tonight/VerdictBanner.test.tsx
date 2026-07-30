@@ -31,21 +31,14 @@ describe('VerdictBanner', () => {
 
   it('shows cloud, moon and dew from real fields', () => {
     render(<VerdictBanner conditions={recorded} />)
-    // Scoped by testid rather than getByText. The recorded night is 99.0%
-    // cloud AND a 0.9877 moon that rounds to 99%, so a bare getByText('99%')
-    // matches two elements and throws. Do not "fix" that collision by
-    // truncating the moon to 98% — the display rounding is correct; it was the
-    // query that was too loose.
-    expect(screen.getByTestId('stat-cloud')).toHaveTextContent('99%')
-    expect(screen.getByTestId('stat-moon')).toHaveTextContent('99%')
+    // Scoped by testid rather than getByText. Cloud and moon are two
+    // independently-recorded percentages that can coincide by chance (they
+    // did the night this fixture was first recorded: both 99%) — a bare
+    // getByText would match two elements and throw whenever a re-record
+    // happens to line them up again.
+    expect(screen.getByTestId('stat-cloud')).toHaveTextContent('85%')
+    expect(screen.getByTestId('stat-moon')).toHaveTextContent('100%')
     expect(screen.getByTestId('stat-dew')).toHaveTextContent('high')
-  })
-
-  it('shows precipitation as absent, never a fabricated number', () => {
-    render(<VerdictBanner conditions={recorded} />)
-    const precip = screen.getByTestId('stat-precip')
-    expect(precip).toHaveTextContent('—')
-    expect(precip).not.toHaveTextContent('%')
   })
 
   it('renders null-valued stats as em-dashes on the UNKNOWN fixture', () => {
@@ -77,11 +70,53 @@ describe('VerdictBanner', () => {
     expect(moonTitle).toMatch(/suppressed by the ui/i)
   })
 
-  it('gives CLOUD an outage-specific tooltip, distinct from PRECIP\'s never-returned one', () => {
+  it('gives CLOUD an outage-specific tooltip, distinct from MOON\'s UI-suppressed one', () => {
     render(<VerdictBanner conditions={unknown} />)
     const cloudTitle = screen.getByTestId('stat-cloud').getAttribute('title')
-    const precipTitle = screen.getByTestId('stat-precip').getAttribute('title')
+    const moonTitle = screen.getByTestId('stat-moon').getAttribute('title')
     expect(cloudTitle).toMatch(/outage/i)
-    expect(cloudTitle).not.toBe(precipTitle)
+    expect(cloudTitle).not.toBe(moonTitle)
+  })
+
+  it('does not render a PRECIP tile — the server never returns the field, see handback item 3', () => {
+    render(<VerdictBanner conditions={recorded} />)
+    expect(screen.queryByTestId('stat-precip')).not.toBeInTheDocument()
+  })
+
+  describe('dew risk tone', () => {
+    // _dew_risk is a closed four-value categorical (high/moderate/low/unknown)
+    // and the mapping to a tone is a 1:1 relabel, not threshold arithmetic —
+    // the cutoffs (spread < 2 deg C, < 5 deg C) stay server-side. data-tone
+    // mirrors Dot's data-dot: the CSS Modules class name is a hashed
+    // implementation detail, not something a test should compare against.
+    it('gives a high dew risk the reject tone', () => {
+      // The recorded fixture is tonight's real -0.0 deg C spread — air at its
+      // dewpoint, optics will fog — so this is the actual worst case, not a
+      // constructed one.
+      expect(recorded.dew_risk).toBe('high')
+      render(<VerdictBanner conditions={recorded} />)
+      expect(screen.getByTestId('stat-dew')).toHaveAttribute('data-tone', 'reject')
+    })
+
+    it('gives a moderate dew risk the marginal tone', () => {
+      // No recorded or synthetic fixture currently has a moderate reading, so
+      // this constructs one from the GO fixture — everything else about it is
+      // irrelevant to this assertion, only dew_risk is overridden.
+      const moderate = { ...go, dew_risk: 'moderate' }
+      render(<VerdictBanner conditions={moderate} />)
+      expect(screen.getByTestId('stat-dew')).toHaveAttribute('data-tone', 'marginal')
+    })
+
+    it('gives a low dew risk the pass tone', () => {
+      expect(go.dew_risk).toBe('low')
+      render(<VerdictBanner conditions={go} />)
+      expect(screen.getByTestId('stat-dew')).toHaveAttribute('data-tone', 'pass')
+    })
+
+    it('renders "unknown" dew risk with no tone rather than guessing one', () => {
+      expect(unknown.dew_risk).toBe('unknown')
+      render(<VerdictBanner conditions={unknown} />)
+      expect(screen.getByTestId('stat-dew')).not.toHaveAttribute('data-tone')
+    })
   })
 })

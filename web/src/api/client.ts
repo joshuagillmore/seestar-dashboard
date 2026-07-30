@@ -55,7 +55,7 @@ function isToolFailure(body: unknown): body is { ok: false; error?: unknown } {
 export const fetchConditions = (): Promise<Conditions> =>
   get('/api/assess_conditions', ConditionsSchema)
 
-export const fetchPlan = (limit = 3): Promise<PlanTargets> =>
+export const fetchPlan = (limit = 12): Promise<PlanTargets> =>
   get(`/api/plan_targets?limit=${limit}`, PlanTargetsSchema)
 
 export const fetchSite = (): Promise<SiteProfile> =>

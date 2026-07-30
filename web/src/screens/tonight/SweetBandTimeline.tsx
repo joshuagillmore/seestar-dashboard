@@ -46,35 +46,43 @@ export function SweetBandTimeline({ conditions, targets }: Props) {
         <div className={styles.bracket} style={{ left: `${dark.left}%`, width: `${dark.width}%` }} />
       </div>
 
-      {targets.map((target) => {
-        const band = spanToPercent(scale, target.best_window_utc)
-        const [from, to] = target.best_window_utc
-        return (
-          <div key={target.id} className={styles.lane}>
-            <span className={styles.laneName}>{target.id}</span>
-            <div className={styles.laneTrack}>
-              <div
-                data-band
-                className={styles.band}
-                style={{ left: `${band.left}%`, width: `${band.width}%` }}
-              >
-                {/* The bar's OWN span, not target.sweet_band_min. The bar is
-                    drawn from best_window_utc — the longest contiguous run —
-                    while sweet_band_min is the integrated total across the dark
-                    window and may include time this bar does not cover. On
-                    tonight's data they differ by 2 minutes; on a night with a
-                    fragmented band they could differ a lot, and this is the one
-                    chart whose purpose is an auditable promised-vs-bankable
-                    comparison. See handback item 9. */}
-                {minutesBetween(target.best_window_utc)} min
+      {/* Only this list scrolls. The strip, bracket labels and axis above/below
+          share buildScale's coordinate frame and stay fixed — a scrolling axis
+          would be meaningless. Sized to show ~3 lanes (30px each: 20px track +
+          5px top/bottom padding); the rest is reachable by scroll rather than
+          growing the card with a 12-target plan. See .laneScroll's registration
+          note below for why the right inset there is 99px, not 90px. */}
+      <div className={styles.laneScroll} data-testid="lane-scroll">
+        {targets.map((target) => {
+          const band = spanToPercent(scale, target.best_window_utc)
+          const [from, to] = target.best_window_utc
+          return (
+            <div key={target.id} className={styles.lane}>
+              <span className={styles.laneName}>{target.id}</span>
+              <div className={styles.laneTrack}>
+                <div
+                  data-band
+                  className={styles.band}
+                  style={{ left: `${band.left}%`, width: `${band.width}%` }}
+                >
+                  {/* The bar's OWN span, not target.sweet_band_min. The bar is
+                      drawn from best_window_utc — the longest contiguous run —
+                      while sweet_band_min is the integrated total across the dark
+                      window and may include time this bar does not cover. On
+                      tonight's data they differ by 2 minutes; on a night with a
+                      fragmented band they could differ a lot, and this is the one
+                      chart whose purpose is an auditable promised-vs-bankable
+                      comparison. See handback item 9. */}
+                  {minutesBetween(target.best_window_utc)} min
+                </div>
               </div>
+              <span className={styles.laneWindow}>
+                {localHhMm(parse(from))}–{localHhMm(parse(to))}
+              </span>
             </div>
-            <span className={styles.laneWindow}>
-              {localHhMm(parse(from))}–{localHhMm(parse(to))}
-            </span>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
 
       <div className={styles.axis}>
         {scale.ticks.map((tick) => (

@@ -58,7 +58,7 @@ async def assess_conditions(request: Request) -> JSONResponse:
 
 @router.get("/plan_targets")
 async def plan_targets(
-    request: Request, limit: int = Query(default=3, ge=1, le=10)
+    request: Request, limit: int = Query(default=12, ge=1, le=50)
 ) -> JSONResponse:
     return await _serve(request, "plan_targets", {"limit": limit})
 

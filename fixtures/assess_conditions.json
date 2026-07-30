@@ -9,22 +9,22 @@
   },
   "go": false,
   "suitability": 0,
-  "cloud_cover_pct": 99.0,
+  "cloud_cover_pct": 85.0,
   "dew_risk": "high",
   "wind_kph": 7.128,
   "transparency": "poor",
   "seeing": "good",
-  "moon_illum_frac": 0.9877644441237166,
+  "moon_illum_frac": 0.9973109410407304,
   "dark_window_utc": [
-    "2026-09-24T19:48:37.257",
-    "2026-09-25T03:53:37.257"
+    "2026-09-26T19:43:20.878",
+    "2026-09-27T03:58:20.878"
   ],
   "source": "meteoblue",
   "reasons": [
-    "cloud cover 99% (worst over window)",
-    "dew risk high (min temp-dewpoint spread 1.2 deg C)",
+    "cloud cover 85% (worst over window)",
+    "dew risk high (min temp-dewpoint spread -0.0 deg C)",
     "wind up to 7 kph",
     "precipitation probability up to 65%",
-    "moon 99% illuminated (-15 suitability)"
+    "moon 100% illuminated (-15 suitability)"
   ]
 }

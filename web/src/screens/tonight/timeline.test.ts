@@ -50,9 +50,9 @@ describe('timeline scale', () => {
   })
 
   it('returns the whole-minute span between two timestamps', () => {
-    // M76's recorded best_window_utc: 19:48:37.986 to 22:10:55.589 UTC.
+    // M76's recorded best_window_utc: 19:43:23.680 to 22:03:40.684 UTC.
     expect(
-      minutesBetween(['2026-09-24T19:48:37.986', '2026-09-24T22:10:55.589']),
-    ).toBe(142)
+      minutesBetween(['2026-09-26T19:43:23.680', '2026-09-26T22:03:40.684']),
+    ).toBe(140)
   })
 })
