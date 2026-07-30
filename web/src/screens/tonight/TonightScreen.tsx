@@ -23,7 +23,7 @@ export function TonightScreen() {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetchConditions(), fetchPlan(3), fetchSite(), fetchHealth()])
+    Promise.all([fetchConditions(), fetchPlan(12), fetchSite(), fetchHealth()])
       .then(([conditions, plan, site, health]) => {
         if (!cancelled) setData({ conditions, plan, site, health })
       })
