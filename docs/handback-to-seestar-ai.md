@@ -864,6 +864,55 @@ here an entire time series is reduced to one scalar.
 
 ---
 
+## 22. The moon penalty ignores whether the target is narrowband
+
+**Affects:** the ranking of every emission target on a bright night — which, near full moon, is
+most of what is actually worth shooting.
+
+**Raised 2026-07-31**, from user feedback: *"we want to factor in those LP objects when moonlight
+is strong to the score."*
+
+`ranker.py:121`:
+
+```python
+moon_term = min(1.0, obs.moon_sep_deg / 90.0) * (1.0 - 0.5 * obs.moon_illum_frac)
+```
+
+The term is a function of moon separation and illumination only. **It is identical for a dual-band
+emission nebula and a broadband galaxy**, and that is not how the physics works: a dual-band filter
+passes Hα/OIII and rejects most of the moon's scattered broadband light. Under a bright moon a
+narrowband target is often the *right* answer, while a faint galaxy is hopeless. The ranker
+currently penalises both equally and so ranks them as though the moon affected them the same way.
+
+Tonight makes it concrete: the moon is **98% illuminated**, so `(1.0 - 0.5 × 0.98) = 0.51` — every
+target's moon term is roughly halved regardless of whether a filter would recover it.
+
+**The classification is already in the function, one line earlier.** Line 120 computes
+`lp_fit = lp_suitability(target.type, bortle_for(site))`, and `LP_MODEL` already sorts every target
+type into `narrowband` / `broadband` / `robust` / `neutral`. So this is not new knowledge or a new
+input — it is applying a value the function already holds to the term immediately below it.
+
+**Asked for:** let the moon penalty depend on that same classification, so narrowband targets take
+a reduced hit as moon illumination rises.
+
+**The shape and the numbers are yours, not ours.** This is scoring policy, the same as item 11's
+feasibility term — we are naming a factor the model does not currently account for, not proposing
+a weight. Two things worth deciding along the way:
+
+- Whether it belongs in `moon_term` or as a separate interaction, given `W_LP_FIT` already scores
+  the LP dimension on its own and double-counting is a real risk.
+- Whether separation should also be modulated, or only illumination. A narrowband filter helps with
+  scattered skyglow; it does less for a target sitting a few degrees off the lunar disc.
+
+**Please show the model before adopting it**, as you offered for item 11 — a change here reorders
+the plan on exactly the nights the user most needs it to be right.
+
+**Related:** item 14 (`lp_class` on ranked targets) is the display half of the same fact. The user
+also wants the design's `LP on` / `LP off` chip back on the Tonight cards, which that item covers —
+so 14 and this are the same classification surfacing in two places.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
