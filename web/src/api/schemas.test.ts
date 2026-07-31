@@ -127,10 +127,17 @@ describe('live-session schemas', () => {
   it('parses get_view_state\'s real nesting — ok.view_state.result.View.Stack.Annotate', () => {
     const parsed = ViewStateSchema.parse(recordedViewState())
     const view = parsed.view_state?.result?.View
-    expect(view?.Stack?.stacked_frame).toBe(211)
+    expect(view?.Stack?.stacked_frame).toBe(115)
     expect(view?.Stack?.dropped_frame).toBe(0)
-    expect(view?.Stack?.Annotate?.pixelx).toBe(219)
-    expect(view?.Stack?.Annotate?.pixely).toBe(960)
+    // Real firmware puts the solve inside `Annotate.result.annotations[]`,
+    // not flat on `Annotate`. The fixture is now a live capture (NGC 7380,
+    // firmware 7.75); the previous hand-authored one had the flat shape and
+    // agreed with a schema that was wrong the same way.
+    const solve = view?.Stack?.Annotate?.result?.annotations?.[0]
+    expect(solve?.pixelx).toBeCloseTo(309.123)
+    expect(solve?.pixely).toBeCloseTo(1190.65)
+    expect(solve?.names).toContain('NGC 7380')
+    expect(view?.Stack?.Annotate?.result?.image_size).toEqual([1080, 1920])
     expect(view?.Stack?.Annotate?.state).toBe('complete')
   })
 
@@ -199,10 +206,13 @@ describe('live-session schemas', () => {
 
   it('parses qa_tier1\'s real shape — snapshot/flags/status_line/trends', () => {
     const parsed = Tier1Schema.parse(recordedTier1())
-    expect(parsed.snapshot.stacked).toBe(211)
+    expect(parsed.snapshot.stacked).toBe(115)
     expect(parsed.snapshot.rejected).toBe(0)
-    expect(parsed.status_line).toMatch(/^stacked 211/)
-    expect(parsed.trends?.focus_delta).toBe(3)
+    expect(parsed.status_line).toMatch(/^stacked 115/)
+    // Live hardware reports focus_delta null: the scope populates focus_pos
+    // only in some states, and the previous hand-authored fixture asserted a
+    // value it had invented. Nullable is the real contract.
+    expect(parsed.trends?.focus_delta ?? null).toBeNull()
   })
 
   it('parses get_focuser_position\'s flat focus_pos field', () => {

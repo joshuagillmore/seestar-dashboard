@@ -20,7 +20,15 @@ import { appendTelemetryEntry } from './telemetryLog'
 const view = StackStateSchema.parse({
   stacked_frame: 211,
   dropped_frame: 0,
-  Annotate: { state: 'complete', pixelx: 219, pixely: 960, radius: 1200 },
+  // Real nesting, per firmware 7.75: the solve is inside
+  // Annotate.result.annotations[], not flat on Annotate.
+  Annotate: {
+    state: 'complete',
+    result: {
+      image_size: [1080, 1920],
+      annotations: [{ type: 'ngc', names: ['NGC 7380'], pixelx: 309.123, pixely: 1190.65, radius: 315.861 }],
+    },
+  },
 })
 const tier1 = Tier1Schema.parse(recordedTier1())
 const focuser = FocuserPositionSchema.parse(recordedFocuserPosition())
@@ -136,7 +144,7 @@ describe('MobileLiveView', () => {
     expect(screen.queryByText(/min$/)).not.toBeInTheDocument()
     // The stacked count itself is real and does render, just with a bare
     // "stacked" caption instead of "stacked · NN.N min".
-    expect(screen.getByText('211')).toBeInTheDocument()
+    expect(screen.getByText('115')).toBeInTheDocument()
     expect(screen.getByText('stacked')).toBeInTheDocument()
   })
 

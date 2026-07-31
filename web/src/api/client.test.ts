@@ -98,7 +98,7 @@ describe('api client', () => {
     it('parses a good get_view_state response, including the real view_state.result.View.Stack nesting', async () => {
       mockFetch(recordedViewState())
       const viewState = await fetchViewState()
-      expect(viewState.view_state?.result?.View?.Stack?.stacked_frame).toBe(211)
+      expect(viewState.view_state?.result?.View?.Stack?.stacked_frame).toBe(115)
     })
 
     it('parses get_status', async () => {
@@ -122,7 +122,7 @@ describe('api client', () => {
 
     it('parses qa_tier1', async () => {
       mockFetch(recordedTier1())
-      expect((await fetchTier1()).snapshot.stacked).toBe(211)
+      expect((await fetchTier1()).snapshot.stacked).toBe(115)
     })
 
     it('parses get_focuser_position', async () => {

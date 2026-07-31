@@ -244,20 +244,54 @@ export const ProjectsCombinedSchema = z.object({
  * the confirmed tool surface, so SweetBandGauge no longer plots a live
  * position marker.
  */
+/** One solved object in `Annotate.result.annotations`. Captured from firmware
+ * 7.75 mid-session on NGC 7380:
+ * `{"type":"ngc","names":["NGC 7380"],"pixelx":309.123,"pixely":1190.65,"radius":315.861}`
+ * Pixel coordinates are against `result.image_size` (`[1080, 1920]`). */
+export const AnnotationSchema = z.object({
+  type: z.string().nullish(),
+  names: z.array(z.string()).nullish(),
+  pixelx: z.number().nullish(),
+  pixely: z.number().nullish(),
+  radius: z.number().nullish(),
+})
+
+/**
+ * `pixelx`/`pixely`/`radius` live inside `result.annotations[]`, NOT flat on
+ * `Annotate`.
+ *
+ * This schema previously declared them flat, which made every live stacking
+ * payload fail validation — and because the client reads "get_view_state
+ * failed" as "the scope is idle", the Live screen reported an idle scope while
+ * it was actively stacking 94 frames. The recorded fixture had the flat shape
+ * too: it was hand-authored from a reference note that recorded the right
+ * fields at the wrong depth, so fixture and schema agreed with each other and
+ * both disagreed with the hardware.
+ *
+ * Third nesting-depth error in this codebase, after `ok.view_state.result.View`
+ * and battery under `pi_status`. The lesson each time: a field's absence at one
+ * level is not its absence, and a fixture nobody captured from a device is a
+ * record of what someone believed.
+ */
 export const AnnotateSchema = z.object({
-  /** A string in the one recorded fixture (`"complete"`), not a boolean —
-   * other values (a pending or failed solve) are not yet observed, so this
-   * only maps `"complete"` to the pass tone and renders anything else
-   * verbatim rather than guessing a second value. */
-  state: z.string().nullable(),
-  pixelx: z.number().nullable(),
-  pixely: z.number().nullable(),
-  radius: z.number().nullable(),
+  state: z.string().nullish(),
+  lapse_ms: z.number().nullish(),
+  result: z
+    .object({
+      image_size: z.array(z.number()).nullish(),
+      annotations: z.array(AnnotationSchema).nullish(),
+      image_id: z.unknown().nullish(),
+    })
+    .nullish(),
 })
 
 export const StackStateSchema = z.object({
   stacked_frame: z.number(),
   dropped_frame: z.number(),
+  /** Present on live hardware alongside the counts; not in the hand-authored
+   * fixture. Optional so neither source fails the other. */
+  frame_errcode: z.number().nullish(),
+  can_annotate: z.boolean().nullish(),
   Annotate: AnnotateSchema.nullable().optional(),
 })
 

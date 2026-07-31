@@ -36,9 +36,17 @@ export interface PreviewCardProps {
 export function PreviewCard({ preview, annotate }: PreviewCardProps) {
   const [overlayOn, setOverlayOn] = useState(false)
 
+  // The solve lives in `Annotate.result.annotations[]`, not flat on `Annotate`
+  // — confirmed against firmware 7.75 mid-session on NGC 7380. Reading the flat
+  // fields made every live payload fail schema validation, which the client
+  // reads as "get_view_state failed" and therefore "the scope is idle": the
+  // screen reported an idle scope while it was stacking. The first annotation
+  // is the plate-solve's primary match (`{type, names, pixelx, pixely,
+  // radius}`); further entries are additional catalogued objects in frame.
+  const solve = annotate?.result?.annotations?.[0]
   const framing =
-    annotate?.pixelx != null && annotate?.pixely != null
-      ? computeFraming(annotate.pixelx, annotate.pixely)
+    solve?.pixelx != null && solve?.pixely != null
+      ? computeFraming(solve.pixelx, solve.pixely)
       : null
 
   const imageSrc = livePreviewImageSrc(preview)

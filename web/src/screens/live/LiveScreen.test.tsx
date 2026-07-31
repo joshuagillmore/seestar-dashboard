@@ -217,10 +217,10 @@ describe('LiveScreen', () => {
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
     // The grid reads Stack.stacked_frame/dropped_frame from the real,
-    // recorded get_view_state fixture (211/0) — proof the real nesting
+    // recorded get_view_state fixture (115/0) — proof the real nesting
     // (ok.view_state.result.View.Stack) was actually parsed, not merely
     // that SOME number rendered.
-    expect(screen.getByText('211')).toBeInTheDocument()
+    expect(screen.getByText('115')).toBeInTheDocument()
     // The target header sources its name from get_target_observability
     // once it resolves (the recorded fixture is M27 / Dumbbell Nebula).
     await waitFor(() => expect(screen.getByText('Dumbbell Nebula')).toBeInTheDocument())
@@ -276,8 +276,8 @@ describe('LiveScreen', () => {
     expect(screen.queryByTestId('preview-overlay')).not.toBeInTheDocument()
     // But the framing readout — information, not decoration — is visible
     // regardless, per the slice-3 spec's own ruling. Numbers are the real
-    // recorded fixture's (pixelx 219, pixely 960 against a 540/960 centre).
-    expect(screen.getByTestId('framing-readout')).toHaveTextContent(/offset 321 px left — in frame/)
+    // recorded fixture's (pixelx 309.123, pixely 1190.65 against a 540/960 centre) — a live capture, read from Annotate.result.annotations[0].
+    expect(screen.getByTestId('framing-readout')).toHaveTextContent(/offset 231 px left — in frame/)
 
     fireEvent.click(screen.getByRole('button', { name: /show plate-solve overlay/i }))
     expect(screen.getByTestId('preview-overlay')).toBeInTheDocument()
@@ -292,7 +292,7 @@ describe('LiveScreen', () => {
     await waitFor(() => expect(screen.getByTestId('telemetry-log-body')).toBeInTheDocument())
     await waitFor(() => expect(screen.getAllByTestId('telemetry-log-line').length).toBeGreaterThan(0))
     expect(screen.getByText(/Quality verdict pending/i)).toBeInTheDocument()
-    expect(screen.getByText(/stacked 211/)).toBeInTheDocument()
+    expect(screen.getByText(/stacked 115/)).toBeInTheDocument()
   })
 
   it('never shows a per-sub PASS/MARGINAL/REJECT verdict during the session', async () => {
