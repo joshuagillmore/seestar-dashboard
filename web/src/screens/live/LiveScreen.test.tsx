@@ -398,7 +398,11 @@ describe('LiveScreen', () => {
       stubApi({ '/api/last_stack': lastStackAbsent() })
       render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
       await waitFor(() => expect(screen.getByTestId('last-stack-empty')).toBeInTheDocument())
-      expect(screen.getByText(/no completed stack found on the share for this target yet/i)).toBeInTheDocument()
+      // The card renders the mapped label, never the raw wire token. last_stack.py
+      // states the rule itself: reason is a short code and the wording a user
+      // reads is the UI's job.
+      expect(screen.getByText(/no completed stack yet for this target/i)).toBeInTheDocument()
+      expect(screen.queryByText('no_stack')).not.toBeInTheDocument()
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
 

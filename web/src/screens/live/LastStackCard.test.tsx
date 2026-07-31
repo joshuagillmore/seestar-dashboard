@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { LastStack } from '../../api/schemas'
 import { LastStackCard } from './LastStackCard'
-import { formatStackDate } from './lastStack'
+import { formatStackDate, lastStackReasonLabel } from './lastStack'
 
 const found: LastStack = {
   ok: true,
@@ -13,13 +13,17 @@ const found: LastStack = {
   reason: null,
 }
 
+// The real, committed route always sends this literal url — even on the
+// absent branch (`_last_stack_absent` hardcodes it) — and `no_stack` is the
+// real wire token for "nothing completed yet for this target", not a
+// hand-written sentence. See LastStackSchema's own doc comment.
 const noneYet: LastStack = {
   ok: true,
   target: null,
   captured_at: null,
   frame_count: null,
-  url: null,
-  reason: 'no completed stack recorded yet for this target',
+  url: '/api/last_stack/image',
+  reason: 'no_stack',
 }
 
 describe('LastStackCard', () => {
@@ -51,10 +55,31 @@ describe('LastStackCard', () => {
   it('renders an honest empty state — not an error — when this target has never had a stack completed', () => {
     render(<LastStackCard lastStack={noneYet} />)
     expect(screen.getByTestId('last-stack-empty')).toBeInTheDocument()
-    expect(screen.getByText('no completed stack recorded yet for this target')).toBeInTheDocument()
+    expect(screen.getByText('No completed stack yet for this target.')).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
+
+  it('keys the empty state off target, not url — the real route sends the same literal url on both branches', () => {
+    // If this card ever regresses to checking `url` instead of `target`, it
+    // would try to render an <img> here, since `noneYet.url` is truthy too.
+    render(<LastStackCard lastStack={noneYet} />)
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
+
+  it('never renders a raw reason code — "no_stack" must not appear as literal user-facing text', () => {
+    render(<LastStackCard lastStack={noneYet} />)
+    expect(screen.queryByText('no_stack')).not.toBeInTheDocument()
+  })
+
+  it.each(['idle', 'bridge_down', 'not_configured', 'share_unreachable'] as const)(
+    'translates the "%s" wire token into its friendly label, not the raw code',
+    (reason) => {
+      render(<LastStackCard lastStack={{ ...noneYet, reason }} />)
+      expect(screen.getByTestId('last-stack-empty')).toHaveTextContent(lastStackReasonLabel(reason))
+      expect(screen.queryByText(reason)).not.toBeInTheDocument()
+    },
+  )
 
   it('renders a generic not-available placeholder, distinct wording aside, when nothing has been fetched at all', () => {
     render(<LastStackCard lastStack={null} />)

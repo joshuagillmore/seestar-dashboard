@@ -1,5 +1,5 @@
 import type { LastStack } from '../../api/schemas'
-import { formatStackDate, lastStackImageSrc } from './lastStack'
+import { formatStackDate, lastStackImageSrc, lastStackReasonLabel } from './lastStack'
 import styles from './LastStackCard.module.css'
 
 export interface LastStackCardProps {
@@ -28,15 +28,19 @@ export interface LastStackCardProps {
  * dot because that frame genuinely is current.
  *
  * A target with no completed stack yet (e.g. the first-ever session on an
- * object) is a normal, common state, not an error — rendered from the
- * server's own `reason` string when `target` comes back `null`, the same
- * discriminator PreviewCard's empty state uses for `live_preview`'s
- * `reason`. `lastStack === null` (nothing fetched yet, or the fetch failed)
- * renders the same shape with a generic fallback, since neither is anything
- * this card can distinguish from the other.
+ * object) is a normal, common state, not an error. `target` is the real
+ * discriminator, not `url` — the committed route always sends the same
+ * literal `url` ("/api/last_stack/image") on both branches, so checking it
+ * would show an image attempt even when there is nothing behind it.
+ * `reason` is a short machine code (`no_stack`/`idle`/`bridge_down`/
+ * `not_configured`/`share_unreachable`), never prose — see
+ * `lastStackReasonLabel`'s own doc comment for why this never renders it
+ * raw. `lastStack === null` (nothing fetched yet, or the fetch failed)
+ * renders through the same label function, which falls back to a generic
+ * message for a missing reason too.
  */
 export function LastStackCard({ lastStack }: LastStackCardProps) {
-  const hasImage = Boolean(lastStack?.target && lastStack.url)
+  const hasImage = Boolean(lastStack?.target)
 
   return (
     <section className={styles.card} data-testid="last-stack-card">
@@ -60,7 +64,7 @@ export function LastStackCard({ lastStack }: LastStackCardProps) {
         </>
       ) : (
         <div className={styles.empty} data-testid="last-stack-empty">
-          {lastStack?.reason ?? 'No completed stack available for this target yet.'}
+          {lastStackReasonLabel(lastStack?.reason)}
         </div>
       )}
     </section>

@@ -44,18 +44,51 @@ export function formatStackDate(capturedAt: string | null): string {
 }
 
 /**
- * The sidecar's `/api/last_stack/image` URL is expected to be the same
- * literal path regardless of which target it currently serves (mirroring
- * `/api/live_preview/image` — see livePreviewImage.ts's own doc comment for
- * why that matters): without a cache-buster, switching targets could leave
- * the browser serving whichever stack it fetched first for the lifetime of
- * the tab. `captured_at` genuinely changes with the target (a different
- * night's stack), so it rides as the cache-busting query param, same
- * approach as `livePreviewImageSrc`.
+ * The sidecar's `/api/last_stack/image` URL is the same literal path
+ * regardless of which target it currently serves — confirmed against the
+ * real, committed route (`_last_stack_absent`/`_last_stack_payload` in
+ * routes.py both hardcode `"url": "/api/last_stack/image"`, even on the
+ * absent branch), mirroring `/api/live_preview/image` (see
+ * livePreviewImage.ts's own doc comment). Without a cache-buster, switching
+ * targets could leave the browser serving whichever stack it fetched first
+ * for the lifetime of the tab. `captured_at` genuinely changes with the
+ * target (a different night's stack), so it rides as the cache-busting
+ * query param, same approach as `livePreviewImageSrc`.
  */
 export function lastStackImageSrc(lastStack: LastStack | null): string | undefined {
   if (!lastStack?.url) return undefined
   return lastStack.captured_at
     ? `${lastStack.url}?t=${encodeURIComponent(lastStack.captured_at)}`
     : lastStack.url
+}
+
+/**
+ * `reason` tokens are short, stable, machine-readable wire values — the real,
+ * committed route (`sidecar/seestar_sidecar/last_stack.py`) reuses
+ * `live_preview.py`'s own `REASON_IDLE`/`REASON_BRIDGE_DOWN`/
+ * `REASON_NOT_CONFIGURED`/`REASON_SHARE_UNREACHABLE` tokens verbatim, adding
+ * only `REASON_NO_STACK`, and that module's own doc comment is explicit:
+ * "the wording a user reads is the UI's job, never this module's." So this
+ * client must translate the code, never render it raw — a card that showed
+ * literal text like "no_stack" or "share_unreachable" would fail that rule.
+ *
+ * `no_stack` is the normal, common case this whole panel exists to handle
+ * gracefully (a first-ever session on this target, or the only session so
+ * far still running) — worded as such, not as a fault. The other four are
+ * infra hiccups this card degrades from independently, same soft-fail
+ * register `GuardrailsCard`/`PreviewCard`'s own empty states use elsewhere on
+ * this screen. An unrecognised future code falls back to itself rather than
+ * disappearing silently — loud, not blank.
+ */
+const LAST_STACK_REASON_LABELS: Record<string, string> = {
+  no_stack: 'No completed stack yet for this target.',
+  idle: 'Scope not observing right now.',
+  bridge_down: 'Bridge unreachable — the same connection the rest of this screen depends on.',
+  not_configured: 'Live share not configured on the sidecar.',
+  share_unreachable: 'Live share unreachable right now.',
+}
+
+export function lastStackReasonLabel(reason: string | null | undefined): string {
+  if (!reason) return 'No completed stack available yet.'
+  return LAST_STACK_REASON_LABELS[reason] ?? reason
 }
