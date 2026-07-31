@@ -295,11 +295,30 @@ export const StackStateSchema = z.object({
   Annotate: AnnotateSchema.nullable().optional(),
 })
 
-/** No `target_name` anywhere in this shape, confirmed against the recorded
- * fixture — the target header sources its name from `get_target_observability`
- * / the live-preview frame's own `target` id instead (see useLiveSession.ts). */
+/** `target_name` and `lp_filter` are both present on the View block —
+ * confirmed on hardware 2026-07-31 against a live NGC 7380 session (firmware
+ * 7.75): `{"target_name":"NGC7380","lp_filter":true,"gain":80,...}`. An
+ * earlier version of this comment said no `target_name` existed anywhere in
+ * this shape; that was true of the hand-authored fixture this schema was
+ * first written against, and false of the real device — see this section's
+ * own module doc comment on why a recorded fixture now outranks an older
+ * assumption in a comment.
+ *
+ * `target_name` is a catalogue id ("NGC7380"), not the resolved common name
+ * `get_target_observability`'s `target.name` returns ("Wizard Nebula") — the
+ * target header's name fallback chain (LiveScreen.tsx) treats it as a
+ * source ahead of the live-preview-derived id it used exclusively before,
+ * still behind observability's own resolved name once that arrives.
+ *
+ * `lp_filter` is a genuine boolean, not a tri-state: `false` means the
+ * filter is confirmed OFF, not that the field is absent. `.nullish()` is for
+ * a firmware/stage that omits the key entirely (e.g. pre-stack), which must
+ * render as "unknown" rather than as `false` — see TargetHeader's own LP
+ * chip, which renders three distinct states for exactly this reason. */
 const ViewSchema = z.object({
   stage: z.string().nullable().optional(),
+  target_name: z.string().nullish(),
+  lp_filter: z.boolean().nullish(),
   /** Absent/null during a pre-stack stage (3PPA, AutoGoto) — a session can
    * be "ok" without stacking having started yet. Not observed directly (the
    * one recorded fixture is mid-stack) but kept nullable on the same
@@ -450,6 +469,34 @@ export const LivePreviewSchema = z.object({
   reason: z.string().nullable().optional(),
 })
 
+/** `/api/last_stack` — the previous session's stacked master for the
+ * currently-framed target, since handback-to-seestar-ai.md item 23:
+ * established on hardware twice in one session (at 37 and 141 stacked
+ * frames) that the scope writes the stacked JPEG exactly once, at session
+ * END, with the final frame count baked into the filename. Mid-session the
+ * only stack on the share is therefore from a PRIOR session — sometimes
+ * weeks old — never the one currently accumulating; there is no read-only
+ * access to that live stack (same item). This is the workaround item 23
+ * itself names: "a clearly-dated 'last completed stack' panel beneath [the
+ * live sub], built from the share."
+ *
+ * `target: null` means no completed stack exists yet for this target (e.g.
+ * a first-ever session on the object) and always carries a `reason` — a
+ * normal, common state, not an error, same discriminator convention as
+ * `LivePreviewSchema.source` above. Every other field stays independently
+ * nullable on the same defensive reasoning as the rest of this section: the
+ * sidecar route this client calls has no recorded fixture yet (built in
+ * parallel — see the last-stack sidecar report), so this schema must not
+ * assume a field it hasn't seen on a live payload is non-null. */
+export const LastStackSchema = z.object({
+  ok: z.boolean(),
+  target: z.string().nullable(),
+  captured_at: z.string().nullable(),
+  frame_count: z.number().nullable(),
+  url: z.string().nullable(),
+  reason: z.string().nullable().optional(),
+})
+
 /**
  * `/api/session_activity` — verified against `sidecar/seestar_sidecar/
  * session_activity.py` and `routes.py`'s handler directly (no recorded
@@ -517,5 +564,6 @@ export type ObservabilityTarget = z.infer<typeof ObservabilityTargetSchema>
 export type ObservabilityDetail = z.infer<typeof ObservabilityDetailSchema>
 export type TargetObservability = z.infer<typeof TargetObservabilitySchema>
 export type LivePreview = z.infer<typeof LivePreviewSchema>
+export type LastStack = z.infer<typeof LastStackSchema>
 export type SessionActivityRecord = z.infer<typeof SessionActivityRecordSchema>
 export type SessionActivity = z.infer<typeof SessionActivitySchema>

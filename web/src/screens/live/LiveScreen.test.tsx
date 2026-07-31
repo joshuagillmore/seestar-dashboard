@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -6,6 +6,8 @@ import { LiveScreen } from './LiveScreen'
 import { SiteProfileSchema, type Health } from '../../api/schemas'
 import { stubMatchMedia } from '../../test/matchMedia'
 import {
+  lastStackAbsent,
+  lastStackFound,
   livePreviewStale,
   livePreviewStacked,
   livePreviewSub,
@@ -18,6 +20,7 @@ import {
   recordedViewState,
   sessionActivity,
 } from '../../test/fixtures'
+import { formatStackDate } from './lastStack'
 
 const site = SiteProfileSchema.parse(recordedSite())
 const notReplaying: Health = { ok: true, replay: false }
@@ -41,6 +44,7 @@ function stubApi(overrides: Record<string, Body | (() => Body)> = {}) {
     '/api/get_target_observability': recordedObservability(),
     '/api/live_preview': livePreviewStacked(),
     '/api/session_activity': sessionActivity(),
+    '/api/last_stack': lastStackFound(),
     ...overrides,
   }
   vi.stubGlobal(
@@ -364,6 +368,74 @@ describe('LiveScreen', () => {
     await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
     expect(screen.getByTestId('session-activity-unavailable')).toBeInTheDocument()
     expect(screen.getByText('Session activity')).toBeInTheDocument()
+  })
+
+  describe('last completed stack panel', () => {
+    it('renders beneath the live preview with its date and frame count, wired to the real hook state', async () => {
+      stubApi()
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('last-stack-caption')).toBeInTheDocument())
+      const fixture = lastStackFound() as { captured_at: string; frame_count: number }
+      expect(screen.getByTestId('last-stack-caption')).toHaveTextContent(
+        formatStackDate(fixture.captured_at),
+      )
+      expect(screen.getByTestId('last-stack-caption')).toHaveTextContent(`${fixture.frame_count} frames`)
+    })
+
+    it('never labels the panel "live" — it must not be mistaken for the current stack', async () => {
+      stubApi()
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('last-stack-caption')).toBeInTheDocument())
+      expect(screen.getByText('Last completed stack')).toBeInTheDocument()
+      // Scoped to this card alone — "Live session"/"Live stack"/the sidebar's
+      // "live" meta all legitimately appear elsewhere on this screen; the
+      // property under test is that THIS panel never carries the word.
+      const panel = screen.getByTestId('last-stack-card')
+      expect(within(panel).queryByText(/\blive\b/i)).not.toBeInTheDocument()
+    })
+
+    it('renders an honest empty state, not an error, when this target has no completed stack yet', async () => {
+      stubApi({ '/api/last_stack': lastStackAbsent() })
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('last-stack-empty')).toBeInTheDocument())
+      expect(screen.getByText(/no completed stack found on the share for this target yet/i)).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('fetches /api/last_stack scoped to the resolved target — the wiring shouldFetchLastStack\'s own unit tests assume exists', async () => {
+      const calls: string[] = []
+      stubApi()
+      const realFetch = globalThis.fetch
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        calls.push(url)
+        return realFetch(url)
+      }))
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('last-stack-caption')).toBeInTheDocument())
+      expect(calls.some((url) => url.startsWith('/api/last_stack') && url.includes('M27'))).toBe(true)
+    })
+  })
+
+  it("sources the target header's LP filter chip from get_view_state's own lp_filter field", async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('lp-filter-chip')).toBeInTheDocument())
+    // The real recorded fixture (NGC 7380, firmware 7.75) carries lp_filter: true.
+    expect(screen.getByTestId('lp-filter-chip')).toHaveAttribute('data-lp-filter', 'true')
+  })
+
+  it("sources the target header's name from get_view_state's target_name when observability hasn't resolved one", async () => {
+    // A genuine tool failure — observability legitimately unavailable this
+    // poll — not a 404; get()'s isToolFailure() branch turns this into the
+    // ApiError useLiveSession's own .catch(() => null) absorbs.
+    stubApi({ '/api/get_target_observability': { ok: false, error: 'target not resolved yet' } })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
+    // recordedViewState()'s View.target_name is "NGC7380" — distinct from
+    // live_preview's own target field ("M27"), so this proves the header is
+    // reading view.target_name rather than falling all the way back to
+    // currentTarget.
+    expect(screen.getByText('NGC7380')).toBeInTheDocument()
   })
 
   describe('mobile breakpoint', () => {

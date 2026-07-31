@@ -913,6 +913,54 @@ so 14 and this are the same classification surfacing in two places.
 
 ---
 
+## 23. No read-only access to the live accumulating stack
+
+**Affects:** the Live session screen's preview — the single feature the user named as the reason
+that screen exists.
+
+**Raised 2026-07-31**, from watching a real session end to end.
+
+> *"the main thing is to see the current visual of the camera so I'm not having to go into the
+> seestar app"*
+
+The dashboard now shows the **latest 10-second sub**, pulled from the scope's share seconds after
+capture. That is genuinely the current camera view, and it works. But it is a single raw
+sub-exposure: dark, noisy, and nothing like the accumulating stack the vendor app displays — which
+is what a person actually wants to look at.
+
+**Established on hardware, twice in one session (at 37 and 141 stacked frames): the scope writes
+the stacked master exactly once, at session end.** `<target>/Stacked_<N>_..._<timestamp>.jpg`
+appears with the final frame count baked into the name; nothing intermediate is ever written. So
+mid-session the only stack on the share is the *previous* session's — tonight, a 12 July image
+while the scope stacked tonight's frames on the same object.
+
+The vendor app clearly has the live stack, so the device produces it. Investigation found it is
+served over a **binary live-stack stream (ports 4800/4804)** alongside RTSP — reverse-engineered,
+unwrapped by anything in this stack, and continuous rather than pollable.
+
+**We are deliberately not building a client for it.** Putting a reverse-engineered raw protocol in
+the dashboard would violate `seestar-mcp`'s own "confine the fragile surface to one place" rule,
+and it is exactly the kind of thing that belongs behind the tool boundary rather than in a browser
+client. It is also the wrong shape: a continuous stream feeding an interval fetch.
+
+**Asked for:** a read-only accessor returning the current live stack as an image — the same picture
+the vendor app shows. Shape is yours; a JPEG of the current stack, with the frame count it
+represents, is all the dashboard needs.
+
+Two notes on cost, since the traffic hazard is real and we have measured it:
+
+- The dashboard already polls a **15 KB** sub thumbnail on a slow interval, which is a trickle.
+  Whatever this returns should be similarly modest — a preview-sized JPEG, not a full-resolution
+  master.
+- The share-side numbers for reference: a per-sub thumbnail is 15.3 KB, a stacked thumbnail 14.7 KB,
+  a full stacked JPEG 476–730 KB, and a sub FITS 4,056 KB.
+
+**Until it exists** the dashboard shows the live sub, plus a clearly-dated "last completed stack"
+panel beneath it built from the share. That is honest and useful, but it is a workaround for a
+picture the device already has.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
