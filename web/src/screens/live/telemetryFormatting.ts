@@ -1,3 +1,5 @@
+import type { FocuserPosition, StackState, Tier1 } from '../../api/schemas'
+
 /**
  * Formatting helpers for the six-cell telemetry grid. `qa_tier1`'s own
  * `trends` already computes the per-poll deltas the grid shows (stacked/
@@ -46,3 +48,37 @@ export function formatAnnotateState(state: string | null | undefined): string {
  * signal, for the PLATE SOLVE cell's tone — see formatAnnotateState's own
  * doc comment on why nothing else is asserted as a failure state. */
 export const ANNOTATE_STATE_OK = 'complete'
+
+export interface TelemetryValues {
+  stackedValue: number | null
+  droppedValue: number | null
+  droppedPctValue: number | null
+  focusValue: number | null
+  annotateState: string | null | undefined
+  solveTone: 'pass' | undefined
+}
+
+/**
+ * The single derivation of "what do STACKED/DROPPED/FOCUS/PLATE SOLVE
+ * actually read this poll" — shared by TelemetryGrid (desktop's six-cell
+ * grid) and MobileLiveView (the three tiles field density leaves room for:
+ * DROPS, FOCUS, PLATE SOLVE — see that component's own doc comment for why
+ * ALT/BAND aren't among them). Pulling this out of TelemetryGrid means the
+ * two compositions can render entirely different markup around these values
+ * without risking the underlying numbers drifting apart.
+ */
+export function deriveTelemetryValues(
+  stack: StackState | null,
+  tier1: Tier1 | null,
+  focuser: FocuserPosition | null,
+): TelemetryValues {
+  const snapshot = tier1?.snapshot
+  const stackedValue = snapshot?.stacked ?? stack?.stacked_frame ?? null
+  const droppedValue = snapshot?.rejected ?? stack?.dropped_frame ?? null
+  const droppedPctValue = droppedPct(stackedValue, droppedValue)
+  const focusValue = snapshot?.focus_pos ?? focuser?.focus_pos ?? null
+  const annotateState = stack?.Annotate?.state
+  const solveTone = annotateState === ANNOTATE_STATE_OK ? ('pass' as const) : undefined
+
+  return { stackedValue, droppedValue, droppedPctValue, focusValue, annotateState, solveTone }
+}

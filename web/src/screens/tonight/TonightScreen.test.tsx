@@ -4,6 +4,7 @@ import { TonightScreen } from './TonightScreen'
 import { shortlistOrderLabel } from './shortlist'
 import { ConditionsSchema, PlanTargetsSchema, SiteProfileSchema, type Health } from '../../api/schemas'
 import { goConditions, recordedConditions, recordedPlan, recordedProjectsCombined, recordedSite } from '../../test/fixtures'
+import { stubMatchMedia } from '../../test/matchMedia'
 
 /** One card per ranked target — read from the fixture, not hardcoded. */
 const plan = PlanTargetsSchema.parse(recordedPlan())
@@ -238,5 +239,55 @@ describe('TonightScreen', () => {
     expect(screen.getByRole('button', { name: /Tonight/ })).toHaveAttribute('aria-current', 'page')
     fireEvent.click(screen.getByRole('button', { name: /Projects/ }))
     expect(onNavigate).toHaveBeenCalledWith('projects')
+  })
+
+  describe('mobile breakpoint', () => {
+    it('renders MobileTonightView and drops the AppShell chrome once the mobile breakpoint matches', async () => {
+      stubMatchMedia(true)
+      stubApi()
+      render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('mobile-shortlist')).toBeInTheDocument())
+      // The desktop composition (VerdictBanner's own fact row, the sweet-band
+      // timeline, PlanCard's ranked grid) must not also render.
+      expect(screen.queryByTestId('fact-row')).not.toBeInTheDocument()
+      expect(screen.queryByText(/sweet-band windows/i)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Hand to run-session/ })).not.toBeInTheDocument()
+      // No Sidebar nav (no Projects/Review rows, no site profile block), no
+      // TopBar wordmark — MobileNav's own two tabs are the one exception.
+      expect(screen.queryByRole('button', { name: /Projects/ })).not.toBeInTheDocument()
+      expect(screen.queryByText('seestar')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Tonight' })).toHaveAttribute('aria-current', 'page')
+      expect(screen.getByRole('button', { name: 'Live' })).toBeInTheDocument()
+    })
+
+    it('gives mobile a working nav — switching to Live actually calls onNavigate', async () => {
+      stubMatchMedia(true)
+      stubApi()
+      const onNavigate = vi.fn()
+      render(<TonightScreen view="tonight" onNavigate={onNavigate} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('mobile-shortlist')).toBeInTheDocument())
+      fireEvent.click(screen.getByRole('button', { name: 'Live' }))
+      expect(onNavigate).toHaveBeenCalledWith('live')
+    })
+
+    it('keeps the ordinary desktop layout, chrome included, when the mobile breakpoint does not match', async () => {
+      stubMatchMedia(false)
+      stubApi()
+      render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() =>
+        expect(screen.getByText('NO-GO', { selector: 'div' })).toBeInTheDocument(),
+      )
+      expect(screen.queryByTestId('mobile-shortlist')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Projects/ })).toBeInTheDocument()
+      expect(screen.getByText('seestar')).toBeInTheDocument()
+    })
+
+    it('shows the loading skeleton full-width, without AppShell chrome, before conditions/plan arrive at the mobile breakpoint', () => {
+      stubMatchMedia(true)
+      stubApi()
+      render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      expect(screen.getByTestId('tonight-loading')).toBeInTheDocument()
+      expect(screen.queryByText('seestar')).not.toBeInTheDocument()
+    })
   })
 })

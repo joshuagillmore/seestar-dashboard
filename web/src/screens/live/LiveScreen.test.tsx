@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LiveScreen } from './LiveScreen'
 import { SiteProfileSchema, type Health } from '../../api/schemas'
+import { stubMatchMedia } from '../../test/matchMedia'
 import {
   livePreviewStale,
   livePreviewStacked,
@@ -363,6 +364,61 @@ describe('LiveScreen', () => {
     await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
     expect(screen.getByTestId('session-activity-unavailable')).toBeInTheDocument()
     expect(screen.getByText('Session activity')).toBeInTheDocument()
+  })
+
+  describe('mobile breakpoint', () => {
+    it('renders MobileLiveView and drops the AppShell chrome once the mobile breakpoint matches', async () => {
+      stubMatchMedia(true)
+      stubApi()
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('mobile-live-tiles')).toBeInTheDocument())
+      // The desktop three-column composition (telemetry grid, sweet-band
+      // gauge, guardrails card, session activity feed) must not also render
+      // — this is a swap, not an addition.
+      expect(screen.queryByTestId('telemetry-grid')).not.toBeInTheDocument()
+      expect(screen.queryByText('check_night_guardrails')).not.toBeInTheDocument()
+      // No TopBar wordmark, and no Sidebar-only content (site profile block,
+      // the "Session" eyebrow) — the design's phone frame has zero chrome
+      // (see LiveScreen.tsx's own doc comment on why). MobileNav's own
+      // "Tonight"/"Live" tabs are the one exception — see the dedicated
+      // MobileNav coverage below and MobileNav.test.tsx.
+      expect(screen.queryByText('seestar')).not.toBeInTheDocument()
+      expect(screen.queryByText('Session')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Site profile/)).not.toBeInTheDocument()
+    })
+
+    it('keeps the ordinary desktop layout, chrome included, when the mobile breakpoint does not match', async () => {
+      stubMatchMedia(false)
+      stubApi()
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
+      expect(screen.queryByTestId('mobile-live-tiles')).not.toBeInTheDocument()
+      expect(screen.getByText('Session')).toBeInTheDocument()
+      expect(screen.getByText('seestar')).toBeInTheDocument()
+    })
+
+    it('gives mobile a working nav — MobileNav marks Live active and switching to Tonight actually calls onNavigate', async () => {
+      stubMatchMedia(true)
+      stubApi()
+      const onNavigate = vi.fn()
+      render(<LiveScreen view="live" onNavigate={onNavigate} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('mobile-live-tiles')).toBeInTheDocument())
+      expect(screen.getByRole('button', { name: 'Live' })).toHaveAttribute('aria-current', 'page')
+      fireEvent.click(screen.getByRole('button', { name: 'Tonight' }))
+      expect(onNavigate).toHaveBeenCalledWith('tonight')
+    })
+
+    it('renders the idle state full-width, without AppShell chrome, at the mobile breakpoint too — the design has no dedicated mobile idle screen, so this keeps the ordinary idle card rather than inventing one', async () => {
+      stubMatchMedia(true)
+      stubIdle()
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+      expect(screen.queryByText('Session')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Site profile/)).not.toBeInTheDocument()
+      // MobileNav still renders during idle — it's the only way off this
+      // screen at all on a real phone, phase notwithstanding.
+      expect(screen.getByRole('button', { name: 'Tonight' })).toBeInTheDocument()
+    })
   })
 
   it('the telemetry grid uses minmax(0,1fr), not a bare 1fr, so a label cannot overflow the container', () => {

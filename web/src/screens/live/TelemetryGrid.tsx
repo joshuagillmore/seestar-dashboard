@@ -1,5 +1,5 @@
 import type { FocuserPosition, StackState, Tier1 } from '../../api/schemas'
-import { ANNOTATE_STATE_OK, droppedPct, formatAnnotateState, formatStageHistory } from './telemetryFormatting'
+import { deriveTelemetryValues, formatAnnotateState, formatStageHistory } from './telemetryFormatting'
 import styles from './TelemetryGrid.module.css'
 
 export interface TelemetryGridProps {
@@ -44,15 +44,9 @@ const signed = (n: number): string => `${n >= 0 ? '+' : ''}${n}`
  * headline, the QA verdict banner, …).
  */
 export function TelemetryGrid({ stack, tier1, focuser, stage, stageHistory }: TelemetryGridProps) {
-  const snapshot = tier1?.snapshot
   const trends = tier1?.trends
-
-  const stackedValue = snapshot?.stacked ?? stack?.stacked_frame ?? null
-  const droppedValue = snapshot?.rejected ?? stack?.dropped_frame ?? null
-  const pct = droppedPct(stackedValue, droppedValue)
-  const focusValue = snapshot?.focus_pos ?? focuser?.focus_pos ?? null
-  const annotateState = stack?.Annotate?.state
-  const solveTone = annotateState === ANNOTATE_STATE_OK ? ('pass' as const) : undefined
+  const { stackedValue, droppedValue, droppedPctValue: pct, focusValue, annotateState, solveTone } =
+    deriveTelemetryValues(stack, tier1, focuser)
 
   const cells: Cell[] = [
     {

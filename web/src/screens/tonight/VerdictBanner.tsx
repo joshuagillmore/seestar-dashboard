@@ -1,25 +1,11 @@
 import type { Conditions } from '../../api/schemas'
-import { verdictFor, verdictTone } from '../../api/verdict'
+import { dewRiskTone, verdictFor, verdictTone } from '../../api/verdict'
 import { Dot } from '../../ui/Dot'
 import styles from './VerdictBanner.module.css'
 
 const SPINE = { pass: styles.spinePass, reject: styles.spineReject, marginal: styles.spineMarginal } as const
 const WORD = { pass: styles.wordPass, reject: styles.wordReject, marginal: styles.wordMarginal } as const
 const FACT_TONE = { pass: styles.factPass, marginal: styles.factMarginal, reject: styles.factReject } as const
-
-/**
- * `_dew_risk` on the server returns exactly four strings: high (spread < 2 deg
- * C), moderate (< 5 deg C), low (>= 5 deg C), or "unknown" from the
- * weather-outage fallback. Mapping that closed categorical to a tone is a 1:1
- * relabel, not a derivation — the cutoffs themselves stay server-side. Any
- * value this map doesn't recognise (today, just "unknown") falls through to
- * `undefined` and renders uncoloured, honestly, rather than guessing a tone.
- */
-const DEW_TONE: Partial<Record<string, 'pass' | 'marginal' | 'reject'>> = {
-  low: 'pass',
-  moderate: 'marginal',
-  high: 'reject',
-}
 
 /** Round, don't truncate — a fraction like 0.995 should read 100%, not 99%.
  *  (Illustrative only: pinning this to today's recorded moon value would make
@@ -113,7 +99,7 @@ export function VerdictBanner({ conditions }: { conditions: Conditions }) {
               in the UI. Bring it back when handback item 3 lands
               (max_precip_pct on ConditionsAssessment) — see
               docs/handback-to-seestar-ai.md item 3. */}
-          <Fact id="dew" label="dew" value={conditions.dew_risk} tone={DEW_TONE[conditions.dew_risk]} />
+          <Fact id="dew" label="dew" value={conditions.dew_risk} tone={dewRiskTone(conditions.dew_risk)} />
           <Fact
             id="wind"
             label="wind"

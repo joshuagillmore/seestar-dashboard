@@ -21,3 +21,25 @@ export function verdictTone(verdict: Verdict): 'pass' | 'reject' | 'marginal' {
   if (verdict === 'NO-GO') return 'reject'
   return 'marginal'
 }
+
+/**
+ * `assess_conditions.dew_risk` returns exactly four strings: high (spread < 2
+ * deg C), moderate (< 5 deg C), low (>= 5 deg C), or "unknown" from the
+ * weather-outage fallback. Mapping that closed categorical to a tone is a 1:1
+ * relabel, not a derivation — the cutoffs themselves stay server-side. Any
+ * value this map doesn't recognise (today, just "unknown") falls through to
+ * `undefined` and renders uncoloured, honestly, rather than guessing a tone.
+ *
+ * Shared by VerdictBanner (desktop) and MobileTonightView's DEW RISK tile —
+ * both read the same server field, so the mapping lives in one place rather
+ * than drifting between two copies.
+ */
+const DEW_TONE: Partial<Record<string, 'pass' | 'marginal' | 'reject'>> = {
+  low: 'pass',
+  moderate: 'marginal',
+  high: 'reject',
+}
+
+export function dewRiskTone(risk: string): 'pass' | 'marginal' | 'reject' | undefined {
+  return DEW_TONE[risk]
+}

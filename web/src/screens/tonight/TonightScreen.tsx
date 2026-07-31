@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react'
 import { fetchConditions, fetchPlan, fetchProjectsCombined } from '../../api/client'
 import type { Conditions, Health, PlanTargets, ProjectsCombinedEntry, SiteProfile } from '../../api/schemas'
 import { verdictFor } from '../../api/verdict'
+import { MOBILE_QUERY } from '../../shell/breakpoints'
+import { MobileNav } from '../../shell/MobileNav'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
 import { AppShell } from '../../shell/AppShell'
+import { useMediaQuery } from '../../shell/useMediaQuery'
 import type { View } from '../../shell/view'
+import { MobileTonightView } from './MobileTonightView'
 import { PlanCard } from './PlanCard'
 import { shortlistOrderLabel } from './shortlist'
 import { SweetBandTimeline } from './SweetBandTimeline'
@@ -68,6 +72,38 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
   }, [])
 
   const verdict = data ? verdictFor(data.conditions.go) : null
+  const isMobile = useMediaQuery(MOBILE_QUERY)
+
+  // Mobile — Tonight (design README.md:712-722) replaces the whole desktop
+  // composition (VerdictBanner/SweetBandTimeline/PlanCard grid) with
+  // MobileTonightView, and — like LiveScreen's own mobile branch — skips
+  // AppShell entirely rather than squeezing Sidebar/TopBar chrome into a
+  // phone-width viewport; see LiveScreen.tsx's doc comment for the full
+  // reasoning, including why `MobileNav` (not Sidebar) is what threads
+  // `view`/`onNavigate` here instead. The loading/error states have no
+  // mobile design either, so they keep the exact same markup as the desktop
+  // branch below, just outside AppShell.
+  if (isMobile) {
+    return (
+      <div className={styles.mobileRoot}>
+        <MobileNav view={view} onNavigate={onNavigate} />
+
+        {error && (
+          <div className={styles.error} role="alert">
+            {error}
+          </div>
+        )}
+
+        {!data && !error && (
+          <div data-testid="tonight-loading">
+            <div className={styles.skeleton} />
+          </div>
+        )}
+
+        {data && <MobileTonightView conditions={data.conditions} targets={data.plan.targets} site={site} />}
+      </div>
+    )
+  }
 
   return (
     <AppShell

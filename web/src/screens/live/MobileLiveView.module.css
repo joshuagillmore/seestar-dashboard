@@ -1,0 +1,79 @@
+.root { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.headerLeft { min-width: 0; }
+.statusRow { display: flex; align-items: center; gap: 7px; }
+.status {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.targetId {
+  margin: 4px 0 0;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+.targetName { margin-top: 2px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dimmer); }
+
+.headerRight { flex: 0 0 auto; text-align: right; }
+.stackedValue { font-family: var(--font-mono); font-weight: 500; font-size: 26px; color: var(--text-primary); }
+.stackedCaption { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); }
+
+.previewWrap {
+  position: relative;
+  height: 230px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-root);
+  overflow: hidden;
+}
+.previewImage { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; display: block; }
+.previewEmpty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-dimmer);
+}
+
+.badges { position: absolute; left: 8px; bottom: 8px; right: 8px; display: flex; flex-direction: column; gap: 5px; }
+.badge {
+  align-self: flex-start;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--overlay-scrim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.badgeStale { color: var(--marginal); }
+
+/* Three stat tiles (design README.md:705-706) — DROPS, FOCUS, PLATE SOLVE.
+   Not ALT/BAND: see MobileLiveView.tsx's own doc comment for why those two
+   are replaced rather than shown as placeholders. */
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.tile { padding: 9px 10px; background: var(--bg-cell); border-radius: 8px; min-width: 0; }
+.tileLabel { font-family: var(--font-mono); font-weight: 500; font-size: 9px; letter-spacing: 0.1em; color: var(--text-fainter); }
+.tileValue {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tileValue.pass { color: var(--pass); }
+.tileSub { margin-top: 2px; font-family: var(--font-mono); font-size: 9px; color: var(--text-dimmer); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
