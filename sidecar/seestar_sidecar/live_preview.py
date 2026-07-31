@@ -165,6 +165,46 @@ def extract_stack_count(view_state_payload: dict) -> int | None:
         return None
 
 
+#: A discovered frame older than this is reported `stale: true` even though the
+#: scan succeeded. Subs land every ~10 s during a session, so anything older by
+#: minutes is not "what the camera is doing now" — it is a leftover from an
+#: earlier night sitting in the same directory.
+#:
+#: This exists because `stale` used to mean only "we fell back to cache after a
+#: failed scan", which let a genuinely successful scan of a week-old file report
+#: `stale: false`. Verified against real hardware: the preview served a 2026-07-24
+#: M103 frame, correctly `captured_at`-stamped, while claiming to be current.
+#: The spec is explicit that "a stale image presented as current is the
+#: dishonesty this project avoids everywhere else".
+STALE_AFTER_SECONDS = 300.0
+
+
+def extract_target_name(view_state_payload: dict) -> str | None:
+    """Best-effort `View.target_name` out of a get_view_state payload — the
+    object the scope is *currently* on, used to scope the share scan.
+
+    Hardware-observed 2026-07-31: during AutoGoto the View block carries
+    `target_name`, `lp_filter`, `gain` and `target_ra_dec` alongside `stage`.
+    Without this the scan returns whatever is newest across the whole share,
+    which is routinely a different object from a previous night.
+
+    Never raises — an unexpected shape degrades to `None`, which means "scan
+    unscoped" rather than failing the screen.
+    """
+    try:
+        name = view_state_payload["view_state"]["result"]["View"]["target_name"]
+    except (KeyError, TypeError):
+        return None
+    return normalize_target_id(name) if isinstance(name, str) and name.strip() else None
+
+
+def is_frame_stale(frame: "LiveFrame", now: datetime | None = None) -> bool:
+    """Whether `frame` is too old to present as current. See
+    STALE_AFTER_SECONDS."""
+    reference = now or datetime.now(tz=timezone.utc)
+    return (reference - frame.captured_at).total_seconds() > STALE_AFTER_SECONDS
+
+
 class ShareUnreachableError(RuntimeError):
     """The share is configured but a scan of it raised or ran past
     SHARE_SCAN_TIMEOUT_SECONDS. Distinct from returning `None` (see
@@ -196,11 +236,44 @@ class LiveFrame:
     captured_at: datetime  # aware UTC, captured once at discovery time
 
 
-def _newest_stacked_thumbnail(root: Path) -> LiveFrame | None:
-    """The single most recently written `Stacked_..._thn.jpg`, across every
-    plain `<target>/` directory under `root` (never a `<target>-sub/` one —
-    those hold individual FITS/thumbnails, not stacks). `None` if no target
-    directory has ever written one.
+def _newest_by_filename(paths, pattern) -> "Path | None":
+    """The newest matching file, ordered by the timestamp in its NAME.
+
+    Deliberately does not `stat()` every candidate. Measured over the real SMB
+    share mid-session: globbing 235 sub thumbnails took 0.39 s, but stat-ing
+    each took a further 4.73 s — past SHARE_SCAN_TIMEOUT_SECONDS, so the whole
+    preview degraded to `share_unreachable` while the scope was happily
+    stacking. The cost grows with every sub written, so it fails worse the
+    longer a session runs.
+
+    Both filename patterns already capture zero-padded `date` (YYYYMMDD) and
+    `time` (HHMMSS), which sort lexicographically in chronological order, so
+    the newest can be picked from names alone and only that one file stat-ed.
+    """
+    newest = None
+    newest_key = ""
+    for path in paths:
+        m = pattern.match(path.name)
+        if m is None:
+            continue
+        key = m.group("date") + m.group("time")
+        if key > newest_key:
+            newest_key = key
+            newest = path
+    return newest
+
+
+def _newest_stacked_thumbnail(root: Path, target: str | None = None) -> LiveFrame | None:
+    """The single most recently written `Stacked_..._thn.jpg` under `root`,
+    restricted to `target` when one is given (never a `<target>-sub/`
+    directory — those hold individual FITS/thumbnails, not stacks). `None` if
+    nothing matches.
+
+    `target` is not optional in practice and the route always passes it: an
+    unscoped scan returns whatever is newest across the WHOLE share, which
+    during a live session is very often a different object from a previous
+    night. Caught against real hardware — the preview reported a week-old
+    M103 while the scope was slewing to NGC 7380.
     """
     newest: LiveFrame | None = None
     newest_mtime = float("-inf")
@@ -208,24 +281,27 @@ def _newest_stacked_thumbnail(root: Path) -> LiveFrame | None:
         if not entry.is_dir() or _SUB_DIR_SUFFIX.search(entry.name):
             continue
         target_id = normalize_target_id(entry.name)
-        for jpg in entry.glob("Stacked_*_thn.jpg"):
-            if not _STACKED_THUMBNAIL.match(jpg.name):
-                continue
-            mtime = jpg.stat().st_mtime
-            if mtime > newest_mtime:
-                newest_mtime = mtime
-                newest = LiveFrame(
-                    path=jpg,
-                    source="stacked",
-                    target=target_id,
-                    captured_at=datetime.fromtimestamp(mtime, tz=timezone.utc),
-                )
+        if target is not None and target_id != target:
+            continue
+        jpg = _newest_by_filename(entry.glob("Stacked_*_thn.jpg"), _STACKED_THUMBNAIL)
+        if jpg is None:
+            continue
+        mtime = jpg.stat().st_mtime
+        if mtime > newest_mtime:
+            newest_mtime = mtime
+            newest = LiveFrame(
+                path=jpg,
+                source="stacked",
+                target=target_id,
+                captured_at=datetime.fromtimestamp(mtime, tz=timezone.utc),
+            )
     return newest
 
 
-def _newest_sub_thumbnail(root: Path) -> LiveFrame | None:
-    """The single most recently written `Light_..._thn.jpg`, across every
-    `<target>-sub/` directory under `root`. `None` if none exist yet.
+def _newest_sub_thumbnail(root: Path, target: str | None = None) -> LiveFrame | None:
+    """The single most recently written `Light_..._thn.jpg` under `root`,
+    restricted to `target` when one is given. `None` if none exist yet.
+    See _newest_stacked_thumbnail() for why the scoping matters.
     """
     newest: LiveFrame | None = None
     newest_mtime = float("-inf")
@@ -236,23 +312,26 @@ def _newest_sub_thumbnail(root: Path) -> LiveFrame | None:
         if not suffix_match:
             continue
         target_id = normalize_target_id(entry.name[: suffix_match.start()])
-        for jpg in entry.glob("Light_*_thn.jpg"):
-            if not _SUB_THUMBNAIL.match(jpg.name):
-                continue
-            mtime = jpg.stat().st_mtime
-            if mtime > newest_mtime:
-                newest_mtime = mtime
-                newest = LiveFrame(
-                    path=jpg,
-                    source="sub",
-                    target=target_id,
-                    captured_at=datetime.fromtimestamp(mtime, tz=timezone.utc),
-                )
+        if target is not None and target_id != target:
+            continue
+        jpg = _newest_by_filename(entry.glob("Light_*_thn.jpg"), _SUB_THUMBNAIL)
+        if jpg is None:
+            continue
+        mtime = jpg.stat().st_mtime
+        if mtime > newest_mtime:
+            newest_mtime = mtime
+            newest = LiveFrame(
+                path=jpg,
+                source="sub",
+                target=target_id,
+                captured_at=datetime.fromtimestamp(mtime, tz=timezone.utc),
+            )
     return newest
 
 
-def discover_frame(root: Path) -> LiveFrame | None:
-    """A live stacked thumbnail if the share has one for ANY target, else the
+def discover_frame(root: Path, target: str | None = None) -> LiveFrame | None:
+    """A live stacked thumbnail for `target` if the share has one, else that
+    target's newest per-sub thumbnail, else `None`. With `target=None` the
     newest per-sub thumbnail, else `None` — "reachable, nothing there yet"
     (REASON_NO_FRAME at the route), not a failure. Raises OSError (a real
     filesystem/SMB fault — e.g. a dropped share) rather than degrading it
@@ -271,14 +350,35 @@ def discover_frame(root: Path) -> LiveFrame | None:
     """
     if not root.is_dir():
         raise OSError(f"live preview share root not found: {root}")
-    stacked = _newest_stacked_thumbnail(root)
-    if stacked is not None:
+    stacked = _newest_stacked_thumbnail(root, target)
+    if stacked is not None and not is_frame_stale(stacked):
         return stacked
-    return _newest_sub_thumbnail(root)
+
+    # A stale stacked frame must not beat a fresh sub. Proven on hardware
+    # 2026-07-31: mid-session on NGC 7380 at 37 stacked frames, the target's
+    # only Stacked_*_thn.jpg was 18 days old (the scope writes the stacked
+    # master once, at session end — there is no intermediate stacked preview,
+    # which settles the open question in the slice-3 spec), while its
+    # `<target>-sub/` directory held thumbnails from seconds earlier. Blindly
+    # preferring "stacked" served a picture from a previous night as the live
+    # view.
+    sub = _newest_sub_thumbnail(root, target)
+    if sub is not None and not is_frame_stale(sub):
+        return sub
+
+    # Neither is current. Return the newer of the two so the caller still has
+    # something to show, correctly flagged stale rather than suppressed — an
+    # old frame with an honest timestamp beats an empty panel.
+    candidates = [f for f in (stacked, sub) if f is not None]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda f: f.captured_at)
 
 
 async def discover_frame_within_timeout(
-    root: Path, timeout_s: float = SHARE_SCAN_TIMEOUT_SECONDS
+    root: Path,
+    timeout_s: float = SHARE_SCAN_TIMEOUT_SECONDS,
+    target: str | None = None,
 ) -> LiveFrame | None:
     """Async wrapper for callers on the event loop (routes.py): discover_frame()
     is a blocking Path.iterdir()/glob()/stat() walk, and over a live SMB share
@@ -300,7 +400,7 @@ async def discover_frame_within_timeout(
     needs "could not tell", not which of the two happened.
     """
     try:
-        return await asyncio.wait_for(asyncio.to_thread(discover_frame, root), timeout=timeout_s)
+        return await asyncio.wait_for(asyncio.to_thread(discover_frame, root, target), timeout=timeout_s)
     except asyncio.TimeoutError as exc:
         raise ShareUnreachableError(f"scan of {root} exceeded {timeout_s}s") from exc
     except OSError as exc:

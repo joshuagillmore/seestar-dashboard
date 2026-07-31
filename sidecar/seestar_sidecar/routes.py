@@ -40,6 +40,8 @@ from seestar_sidecar.live_preview import (
     ShareUnreachableError,
     discover_frame_within_timeout,
     extract_stack_count,
+    extract_target_name,
+    is_frame_stale,
 )
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
@@ -481,6 +483,11 @@ async def live_preview(request: Request) -> JSONResponse:
         return JSONResponse(_live_preview_absent(REASON_IDLE))
 
     stack_count = extract_stack_count(view)
+    # Scope the scan to what the scope is actually on. Unscoped, discovery
+    # returns the newest frame across the entire share — which during a live
+    # session is routinely a different object from a previous night. Observed
+    # on hardware: a week-old M103 served while slewing to NGC 7380.
+    active_target = extract_target_name(view)
 
     share_dir = _live_share_dir(request)
     if share_dir is None:
@@ -488,7 +495,7 @@ async def live_preview(request: Request) -> JSONResponse:
 
     cache: LiveFrame | None = getattr(request.app.state, "live_preview_cache", None)
     try:
-        frame = await discover_frame_within_timeout(share_dir)
+        frame = await discover_frame_within_timeout(share_dir, target=active_target)
     except ShareUnreachableError:
         if cache is not None:
             return JSONResponse(_live_preview_frame(cache, stack_count, stale=True))
@@ -500,7 +507,9 @@ async def live_preview(request: Request) -> JSONResponse:
         return JSONResponse(_live_preview_absent(REASON_NO_FRAME))
 
     request.app.state.live_preview_cache = frame
-    return JSONResponse(_live_preview_frame(frame, stack_count, stale=False))
+    # A successful scan does not mean a current frame: the target's directory
+    # can still hold only an earlier night's files. See STALE_AFTER_SECONDS.
+    return JSONResponse(_live_preview_frame(frame, stack_count, stale=is_frame_stale(frame)))
 
 
 @router.get("/live_preview/image")

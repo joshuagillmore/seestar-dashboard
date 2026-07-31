@@ -11,6 +11,8 @@ be exactly the offload this feature was built to avoid.
 """
 from datetime import timezone
 
+import time
+
 import pytest
 
 from seestar_sidecar import live_preview
@@ -47,14 +49,19 @@ def test_empty_but_present_root_returns_none(share_root):
 # --- stacked-thumbnail preference -------------------------------------------
 
 
-def test_prefers_stacked_thumbnail_over_sub_thumbnail_when_both_exist(share_root):
+def test_prefers_stacked_thumbnail_over_sub_thumbnail_when_BOTH_ARE_FRESH(share_root):
+    """A stacked master is the better picture, so it wins — but only while it
+    is actually current. Fixtures must be recent: with the old epoch-relative
+    mtimes both frames were stale and this asserted the wrong branch.
+    """
+    now = time.time()
     _touch(
         share_root / "M27" / "Stacked_M27_10.0s_IRCUT_20260730-030000_thn.jpg",
-        mtime=1000,
+        mtime=now - 60,
     )
     _touch(
         share_root / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg",
-        mtime=2000,  # newer than the stacked thumbnail, but must still lose
+        mtime=now - 5,  # newer than the stacked thumbnail, but must still lose
     )
 
     frame = live_preview.discover_frame(share_root)
@@ -62,6 +69,50 @@ def test_prefers_stacked_thumbnail_over_sub_thumbnail_when_both_exist(share_root
     assert frame is not None
     assert frame.source == "stacked"
     assert frame.path.name == "Stacked_M27_10.0s_IRCUT_20260730-030000_thn.jpg"
+
+
+def test_a_stale_stacked_thumbnail_loses_to_a_fresh_sub(share_root):
+    """The bug this rule exists for, reproduced from real hardware.
+
+    Mid-session on NGC 7380 at 37 stacked frames, the target's only
+    Stacked_*_thn.jpg was 18 days old — the scope writes the stacked master
+    once, at session end, so there is no intermediate stacked preview — while
+    its sub directory held thumbnails from seconds earlier. Preferring
+    "stacked" unconditionally served a picture from a previous night as the
+    live view of an active session.
+    """
+    now = time.time()
+    _touch(
+        share_root / "M27" / "Stacked_M27_10.0s_IRCUT_20260712-040704_thn.jpg",
+        mtime=now - (18 * 24 * 3600),
+    )
+    fresh = _touch(
+        share_root / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-233800_thn.jpg",
+        mtime=now - 5,
+    )
+
+    frame = live_preview.discover_frame(share_root)
+
+    assert frame is not None
+    assert frame.source == "sub", "a fresh sub must beat an 18-day-old stack"
+    assert frame.path == fresh
+    assert not live_preview.is_frame_stale(frame)
+
+
+def test_when_nothing_is_fresh_the_newer_frame_is_returned_not_nothing(share_root):
+    """An old frame with an honest timestamp beats an empty panel — the route
+    marks it stale rather than suppressing it."""
+    now = time.time()
+    _touch(share_root / "M27" / "Stacked_M27_10.0s_IRCUT_20260712-040704_thn.jpg", mtime=now - 9000)
+    newer = _touch(
+        share_root / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-233800_thn.jpg", mtime=now - 4000
+    )
+
+    frame = live_preview.discover_frame(share_root)
+
+    assert frame is not None
+    assert frame.path == newer
+    assert live_preview.is_frame_stale(frame)
 
 
 def test_falls_back_to_sub_thumbnail_when_no_stacked_thumbnail_exists(share_root):
@@ -195,7 +246,7 @@ async def test_discover_frame_within_timeout_raises_share_unreachable_on_real_ti
 
     share_root.mkdir()
 
-    def hangs_forever(root):
+    def hangs_forever(root, target=None):
         # A `to_thread` work item can't truly be cancelled once started — it
         # keeps the underlying thread busy for its full duration regardless
         # of asyncio.wait_for's timeout. Long enough to comfortably outlast
