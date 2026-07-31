@@ -157,6 +157,34 @@ describe('live-session schemas', () => {
     expect(parsed.view_state?.result?.View?.Stack).toBeNull()
   })
 
+  it('parses the connected-but-idle payload, where `result` is {} and `View` is absent', () => {
+    // Captured from live hardware 2026-07-31: scope connected and tracking,
+    // no view session, so get_view_state returns `result: {}` — the `View`
+    // key is *missing*, not null.
+    //
+    // This is the most common real state of the screen, and it used to throw:
+    // `View` was `.nullable()`, which accepts null but rejects undefined, so
+    // the Live screen showed a parse error whenever nothing was stacking. No
+    // fixture caught it because every one had either a full `View` or a null
+    // payload — nobody had written the empty middle. Only real hardware did.
+    const live = {
+      ok: true,
+      view_state: {
+        jsonrpc: '2.0',
+        Timestamp: '2439.848473865',
+        method: 'get_view_state',
+        result: {},
+        code: 0,
+        id: 10054,
+      },
+    }
+    const parsed = ViewStateSchema.parse(live)
+    expect(parsed.ok).toBe(true)
+    // The point is that it parses *and* reports no view — not that it merely
+    // fails to throw.
+    expect(parsed.view_state?.result?.View ?? null).toBeNull()
+  })
+
   it('parses get_status', () => {
     expect(() => StatusSchema.parse(recordedStatus())).not.toThrow()
   })

@@ -278,7 +278,14 @@ export const ViewStateSchema = z.object({
   // The extra nesting the earlier guess missed entirely.
   view_state: z
     .object({
-      result: z.object({ View: ViewSchema.nullable() }).nullable(),
+      // `View` is `nullish`, not `nullable`, and the difference is the whole
+      // idle state. A connected-but-not-observing scope returns `result: {}` —
+      // the key is *absent*, not null — and `.nullable()` rejects that, so the
+      // screen threw a parse error in the single most common real condition.
+      // Caught only against live hardware: every fixture had either a full
+      // `View` or a null payload, and nobody had written the empty middle.
+      // `result` is nullish for the same reason, one level up.
+      result: z.object({ View: ViewSchema.nullish() }).nullish(),
     })
     .nullable(),
 })
