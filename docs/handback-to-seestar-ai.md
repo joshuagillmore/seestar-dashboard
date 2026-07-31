@@ -408,10 +408,32 @@ each call.
 > internal call graph, in another repo, maintained by another session. Add a native call anywhere
 > and the dashboard silently starts misattributing again, with nothing to catch it.
 >
-> **So the ask is now two things:** a stable client identifier per record, and a tool tag naming the
-> method actually invoked rather than a fixed `alpaca.put.action`. The first removes the guessing;
-> the second makes the log honest about its own contents. With both, the compensating tag set can be
-> deleted outright.
+> **Three corrections from the server team, 2026-07-31 — all three are ours, and one changes the ask.**
+>
+> **The count was three, not four.** `qa_tier1` *does* log, as **`qa_tier1.poll`** — 9 records. My
+> check used an exact-name match, so a suffixed tag read as absent. The three that genuinely never
+> appear under their own names are `get_view_state`, `get_status` and `get_focuser_position`.
+> Anyone building a filter on this should expect the suffix. **Our own classifier had it right** —
+> `qa_tier1.poll` is in its tag set and classifies as `ambiguous`; only this write-up was wrong.
+>
+> **`response_code` already exists**, on transport records. Asking for it as new was wrong: it is
+> the *name* that is lost between layers, not the outcome. Withdrawn as a request.
+>
+> **`elapsed_ms` is deliberately absent from tool-layer records, and that is correct.** Most tool
+> records are written **before** the work runs, so a duration there would be fabricated. It lives on
+> transport records, where the time actually goes. **We do not need end-to-end tool duration** — no
+> current or specified surface uses it, and no number is better than one that does not mean what it
+> says. Withdrawn; please do not make that change on our account.
+>
+> A consequence worth recording, which I should have inferred from the same fact: because tool
+> records are written on entry, **the timestamps in our activity feed are call-start times, not
+> completions.** A slow call appears at the moment it began.
+
+> **So the ask, after those corrections, is one thing:** a stable client identifier per record.
+> The tool-tag point stands as a separate, smaller observation — `invoke_action()` logging a fixed
+> `alpaca.put.action` means the log cannot say which native method ran — but it is not blocking us,
+> and `response_code` and `elapsed_ms` are both withdrawn. With a client id, the compensating tag
+> set can be deleted outright.
 
 ---
 
