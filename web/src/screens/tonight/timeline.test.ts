@@ -96,3 +96,31 @@ describe('zoneLabel', () => {
     expect(zoneLabel(ms)).toMatch(/^UTC([+-]\d{1,2}(:\d{2})?)?$/)
   })
 })
+
+describe('parse — zone handling', () => {
+  it('treats a zone-less timestamp as UTC, which is what plan_targets emits', () => {
+    expect(parse('2026-09-27T19:42:11.660')).toBe(Date.parse('2026-09-27T19:42:11.660Z'))
+  })
+
+  it('respects an offset that is already present, instead of appending Z to it', () => {
+    // Regression: /api/live_preview and /api/last_stack return
+    // "2026-07-31T07:09:54.280000+00:00". The old helper appended Z to
+    // anything not ending in Z, producing "...+00:00Z" — not a date. Both
+    // preview panels rendered "Invalid Date" / "unknown date" on live
+    // hardware, losing the timestamps that stop a stale frame posing as a
+    // current one.
+    const withOffset = '2026-07-31T07:09:54.280000+00:00'
+    expect(Number.isNaN(parse(withOffset))).toBe(false)
+    expect(parse(withOffset)).toBe(Date.parse('2026-07-31T07:09:54.280Z'))
+  })
+
+  it('accepts a non-UTC offset and a compact one', () => {
+    expect(parse('2026-07-31T03:09:54.280-04:00')).toBe(Date.parse('2026-07-31T07:09:54.280Z'))
+    expect(Number.isNaN(parse('2026-07-31T07:09:54.280+0000'))).toBe(false)
+  })
+
+  it('still accepts a trailing Z unchanged', () => {
+    expect(parse('2026-07-31T07:09:54.280Z')).toBe(Date.parse('2026-07-31T07:09:54.280Z'))
+  })
+})
+

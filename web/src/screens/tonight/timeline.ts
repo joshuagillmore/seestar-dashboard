@@ -17,8 +17,27 @@ export interface Scale {
  * needs it too — an inline `Date.parse(`${x}Z`)` would append a second `Z` to
  * an already-suffixed string and yield NaN, rendering "Invalid Date".
  */
+/** Matches an explicit zone already on the string: a trailing `Z`, or a
+ * `±HH:MM` / `±HHMM` offset. */
+const HAS_EXPLICIT_ZONE = /(?:Z|[+-]\d{2}:?\d{2})$/
+
+/**
+ * Parse an ISO timestamp to epoch ms, treating a zone-less string as UTC.
+ *
+ * The `Z` is appended only when the string does not already carry a zone.
+ * It used to be appended whenever the string merely failed to end in `Z`,
+ * which was correct for the producer this was written against — `plan_targets`
+ * emits naive timestamps like `2026-09-27T19:42:11.660` — and silently wrong
+ * for every other one. `/api/live_preview` and `/api/last_stack` return
+ * `2026-07-31T07:09:54.280000+00:00`, and appending `Z` to that yields
+ * `...+00:00Z`, which is not a date at all.
+ *
+ * Caught on live hardware: both preview panels rendered "Invalid Date" and
+ * "unknown date" — the timestamps that exist precisely so a stale frame cannot
+ * pose as a current one.
+ */
 export const parse = (iso: string): number =>
-  Date.parse(iso.endsWith('Z') ? iso : `${iso}Z`)
+  Date.parse(HAS_EXPLICIT_ZONE.test(iso) ? iso : `${iso}Z`)
 
 /** Whole minutes spanned by an ISO pair. */
 export const minutesBetween = ([from, to]: [string, string]): number =>
