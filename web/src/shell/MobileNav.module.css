@@ -1,0 +1,21 @@
+.nav { display: flex; gap: 8px; padding: 8px 0; }
+
+/* The design's own hard requirement (README.md:723-724) — every interactive
+   element on mobile is >= 44px tall. */
+.tab {
+  flex: 1;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-dimmer);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tab:hover { border-color: var(--border-control-hover); color: var(--text-primary); }
+.tabActive { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent-text); }

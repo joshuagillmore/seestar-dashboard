@@ -1,6 +1,7 @@
 import type { Conditions, PlanTarget, SiteProfile } from '../../api/schemas'
 import { dewRiskTone, verdictFor, verdictTone } from '../../api/verdict'
 import { TargetThumb } from '../../ui/TargetThumb'
+import { shortlistOrderLabel } from './shortlist'
 import { localHhMm, parse, zoneLabel } from './timeline'
 import styles from './MobileTonightView.module.css'
 
@@ -44,11 +45,18 @@ export interface MobileTonightViewProps {
  *   it would read as "the decisive reason" when nothing has actually ranked
  *   the reasons against each other.
  *
- * The footer note the design shows ("Order: … NGC 7000 dropped — behind
- * horizon mask") is omitted outright, not partially reconstructed — the
- * exclusion clause needs excluded-target data the server does not return
- * (handback item 4), and the design presents it as one integrated sentence
- * rather than two independent facts.
+ * The design's footer note is one sentence ("Order: SH2-142 → M31 → M45
+ * (earliest-setting first, 2 slews). NGC 7000 dropped — behind horizon
+ * mask.") built from two independent facts with different provenance. Only
+ * the second — which targets the ranker dropped, and why — needs
+ * excluded-target data no tool returns (handback item 4), so only that half
+ * is omitted. The order clause is real, already computed, and shared
+ * verbatim with desktop via `shortlistOrderLabel` (see ./shortlist) rather
+ * than recomposed — it happens to already cap at three ids with `+N more`,
+ * which suits a phone better than the desktop grid it was built for. On a
+ * NO-GO night it is replaced by the same "ranked for reference" caption
+ * desktop shows, for the same reason: a stated slew order reads as a plan,
+ * which a no-go night is not.
  */
 export function MobileTonightView({ conditions, targets, site }: MobileTonightViewProps) {
   const verdict = verdictFor(conditions.go)
@@ -92,11 +100,21 @@ export function MobileTonightView({ conditions, targets, site }: MobileTonightVi
       <div className={styles.shortlistEyebrow}>Ranked shortlist</div>
 
       {shortlist.length > 0 ? (
-        <div className={styles.rows} data-testid="mobile-shortlist">
-          {shortlist.map((target) => (
-            <MobileShortlistRow key={target.id} target={target} />
-          ))}
-        </div>
+        <>
+          <div className={styles.rows} data-testid="mobile-shortlist">
+            {shortlist.map((target) => (
+              <MobileShortlistRow key={target.id} target={target} />
+            ))}
+          </div>
+          {/* Full `targets`, not the capped `shortlist` — the slew count is
+              `targets.length - 1` over the whole plan, not just the three
+              rows shown above (see shortlistOrderLabel's own doc comment). */}
+          {verdict === 'NO-GO' ? (
+            <div className={styles.footer}>Ranked for reference — tonight is a no-go.</div>
+          ) : (
+            <div className={styles.footer}>{shortlistOrderLabel(targets)}</div>
+          )}
+        </>
       ) : (
         <div className={styles.empty}>No target clears the sweet band tonight.</div>
       )}

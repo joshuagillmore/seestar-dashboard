@@ -252,9 +252,22 @@ describe('TonightScreen', () => {
       expect(screen.queryByTestId('fact-row')).not.toBeInTheDocument()
       expect(screen.queryByText(/sweet-band windows/i)).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Hand to run-session/ })).not.toBeInTheDocument()
-      // No Sidebar nav, no TopBar wordmark.
+      // No Sidebar nav (no Projects/Review rows, no site profile block), no
+      // TopBar wordmark — MobileNav's own two tabs are the one exception.
       expect(screen.queryByRole('button', { name: /Projects/ })).not.toBeInTheDocument()
       expect(screen.queryByText('seestar')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Tonight' })).toHaveAttribute('aria-current', 'page')
+      expect(screen.getByRole('button', { name: 'Live' })).toBeInTheDocument()
+    })
+
+    it('gives mobile a working nav — switching to Live actually calls onNavigate', async () => {
+      stubMatchMedia(true)
+      stubApi()
+      const onNavigate = vi.fn()
+      render(<TonightScreen view="tonight" onNavigate={onNavigate} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('mobile-shortlist')).toBeInTheDocument())
+      fireEvent.click(screen.getByRole('button', { name: 'Live' }))
+      expect(onNavigate).toHaveBeenCalledWith('live')
     })
 
     it('keeps the ordinary desktop layout, chrome included, when the mobile breakpoint does not match', async () => {

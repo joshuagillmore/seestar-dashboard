@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { ConditionsSchema, PlanTargetsSchema, SiteProfileSchema } from '../../api/schemas'
 import { goConditions, recordedConditions, recordedPlan, recordedSite } from '../../test/fixtures'
 import { MobileTonightView } from './MobileTonightView'
+import { shortlistOrderLabel } from './shortlist'
 import { localHhMm, parse } from './timeline'
 
 const recorded = ConditionsSchema.parse(recordedConditions())
@@ -102,10 +103,32 @@ describe('MobileTonightView', () => {
     expect(screen.getByTestId('survey-badge')).toBeInTheDocument()
   })
 
-  it('omits the design mockup\'s footer note entirely — it needs excluded-target data no tool returns (handback item 4)', () => {
-    render(<MobileTonightView conditions={recorded} targets={plan.targets} site={site} />)
+  it('never shows the design mockup\'s excluded-target clause — it needs data no tool returns (handback item 4)', () => {
+    const go = ConditionsSchema.parse(goConditions())
+    render(<MobileTonightView conditions={go} targets={plan.targets} site={site} />)
     expect(screen.queryByText(/dropped — behind horizon mask/)).not.toBeInTheDocument()
+  })
+
+  it('reinstates the real order clause on a GO night, shared verbatim with desktop via shortlistOrderLabel', () => {
+    const go = ConditionsSchema.parse(goConditions())
+    render(<MobileTonightView conditions={go} targets={plan.targets} site={site} />)
+    // Built from the FULL targets array, not just the 3 rows shown — the
+    // slew count and "+N more" folding both depend on the whole plan.
+    expect(screen.getByText(shortlistOrderLabel(plan.targets))).toBeInTheDocument()
+    expect(screen.queryByText(/ranked for reference/i)).not.toBeInTheDocument()
+  })
+
+  it('replaces the order clause with the no-go caption on the recorded NO-GO night — the two never both show', () => {
+    render(<MobileTonightView conditions={recorded} targets={plan.targets} site={site} />)
+    expect(screen.getByText(/ranked for reference — tonight is a no-go/i)).toBeInTheDocument()
+    expect(screen.queryByText(shortlistOrderLabel(plan.targets))).not.toBeInTheDocument()
     expect(screen.queryByText(/^Order:/)).not.toBeInTheDocument()
+  })
+
+  it('renders no footer line at all when there is no shortlist to caption', () => {
+    render(<MobileTonightView conditions={recorded} targets={[]} site={site} />)
+    expect(screen.queryByText(/^Order:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ranked for reference/i)).not.toBeInTheDocument()
   })
 
   it('renders normally with no site profile — a null prop must not crash the eyebrow', () => {

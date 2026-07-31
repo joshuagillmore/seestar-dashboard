@@ -1,6 +1,7 @@
 import type { Health, SiteProfile } from '../../api/schemas'
 import { AppShell } from '../../shell/AppShell'
 import { MOBILE_QUERY } from '../../shell/breakpoints'
+import { MobileNav } from '../../shell/MobileNav'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
 import { useMediaQuery } from '../../shell/useMediaQuery'
@@ -81,14 +82,18 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
  * `MOBILE_QUERY` (600px), this screen skips `AppShell` entirely rather than
  * squeezing Sidebar/TopBar next to narrowed content — the design's own phone
  * frame shows zero chrome, just the screen content padded `8px 16px 0` on
- * `bg/root` (`.mobileRoot` below), and there is no mobile nav design to
- * adapt Sidebar into (the design covers exactly two mobile screens with no
- * stated way to move between them on a real phone — a gap in the source
- * design, flagged rather than invented around, the same posture this repo
- * takes toward missing server data). `MobileLiveView` replaces the desktop
+ * `bg/root` (`.mobileRoot` below). `MobileLiveView` replaces the desktop
  * three-column composition only for the `'active'` phase, which is the only
  * one the design actually specifies; `loading`/`bridge-down`/`idle` render
- * their ordinary desktop markup unchanged; just full-width.
+ * their ordinary desktop markup unchanged, just full-width.
+ *
+ * Dropping AppShell also drops the only thing that ever called `onNavigate`
+ * (Sidebar) — the design's phone frames show both mobile screens at once in
+ * one static mockup, so it never had to answer how a phone user moves
+ * between them. `MobileNav` is this repo's own answer, not a design spec:
+ * two targets at the 44px minimum, added so the two mobile screens aren't
+ * mutually unreachable — see its own doc comment. This is a design
+ * divergence worth tracking, not a gap to leave silent.
  */
 export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) {
   const state = useLiveSession()
@@ -212,7 +217,12 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
   )
 
   if (isMobile) {
-    return <div className={styles.mobileRoot}>{content}</div>
+    return (
+      <div className={styles.mobileRoot}>
+        <MobileNav view={view} onNavigate={onNavigate} />
+        {content}
+      </div>
+    )
   }
 
   return (
