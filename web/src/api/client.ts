@@ -4,6 +4,7 @@ import {
   FocuserPositionSchema,
   GuardrailsSchema,
   HealthSchema,
+  LastStackSchema,
   ListProjectsSchema,
   LivePreviewSchema,
   PlanTargetsSchema,
@@ -19,6 +20,7 @@ import {
   type FocuserPosition,
   type Guardrails,
   type Health,
+  type LastStack,
   type ListProjects,
   type LivePreview,
   type PlanTargets,
@@ -169,6 +171,16 @@ export const fetchTargetObservability = (target: string): Promise<TargetObservab
  * an `<img>` at (see PreviewCard). Never fetches the image bytes itself. */
 export const fetchLivePreview = (): Promise<LivePreview> =>
   get('/api/live_preview', LivePreviewSchema)
+
+/** `target` is a required query param — the catalogue id, same value
+ * `fetchTargetObservability` takes (see useLiveSession's `currentTarget`).
+ * Metadata only, same convention as `fetchLivePreview` above: `url` points
+ * at the image bytes (a full-resolution JPEG, ~730 KB — see LastStackCard's
+ * own doc comment on why that is fetched on target change, not on the
+ * telemetry poll). Never call this on the 60 s cadence the rest of the
+ * active-session fetchers use. */
+export const fetchLastStack = (target: string): Promise<LastStack> =>
+  get(`/api/last_stack?target=${encodeURIComponent(target)}`, LastStackSchema)
 
 /** Newest-first tail of provenance.jsonl (routes.py's `session_activity`
  * handler) — an activity feed, not a tool call itself, and not gated behind

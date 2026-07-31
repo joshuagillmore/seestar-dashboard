@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "target": null,
+  "captured_at": null,
+  "frame_count": null,
+  "url": "/api/last_stack/image",
+  "reason": "no_stack"
+}

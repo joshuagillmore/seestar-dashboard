@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   fetchFocuserPosition,
   fetchGuardrails,
+  fetchLastStack,
   fetchLivePreview,
   fetchSessionActivity,
   fetchStatus,
@@ -12,6 +13,7 @@ import {
 import type {
   FocuserPosition,
   Guardrails,
+  LastStack,
   LivePreview,
   SessionActivity,
   Status,
@@ -20,6 +22,7 @@ import type {
   ViewState,
 } from '../../api/schemas'
 import { appendTelemetryEntry, type TelemetryEntry } from './telemetryLog'
+import { shouldFetchLastStack } from './lastStack'
 
 /**
  * How often the screen re-checks scope/session state and re-polls the
@@ -50,6 +53,17 @@ export type LiveSessionState =
       focuser: FocuserPosition | null
       observability: TargetObservability | null
       preview: LivePreview | null
+      /** The previous session's stacked master for the current target — see
+       * LastStackCard's own doc comment for the whole honesty rule this
+       * carries. Fetched only when `currentTarget` actually changes, never
+       * on the ordinary 60 s poll cadence (see `shouldFetchLastStack` and
+       * this hook's own doc comment on why: it is a ~730 KB full-resolution
+       * JPEG, not a cheap telemetry field). `null` covers "no target
+       * resolved yet" and "the fetch failed", same soft-fail convention as
+       * `guardrails`/`tier1`/`focuser` above — a response with `target:
+       * null` inside is the distinct, normal "nothing completed yet for
+       * this target" state, not this. */
+      lastStack: LastStack | null
       /** Not gated on `viewState`/`status` the way the rest of this state is
        * — `session_activity` reads a local file on the sidecar's own disk,
        * unrelated to whether the MCP bridge is up or the scope is
@@ -121,6 +135,12 @@ export function useLiveSession(): LiveSessionState {
   const stageHistoryRef = useRef<string[]>([])
   const currentTargetRef = useRef<string | null>(null)
   const sessionStartedAtRef = useRef<string | null>(null)
+  // Carries the last_stack result forward across polls where the target
+  // hasn't changed, alongside which target it was actually fetched for —
+  // see shouldFetchLastStack's own doc comment for why this is gated on the
+  // target changing, not the poll interval.
+  const lastStackRef = useRef<LastStack | null>(null)
+  const lastStackTargetRef = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -176,6 +196,16 @@ export function useLiveSession(): LiveSessionState {
         ? await fetchTargetObservability(currentTargetRef.current).catch(() => null)
         : null
 
+      // Target-gated, not poll-gated — see shouldFetchLastStack's own doc
+      // comment. A poll where the target hasn't changed reuses whatever is
+      // already in lastStackRef rather than re-requesting a ~730 KB image.
+      if (shouldFetchLastStack(currentTargetRef.current, lastStackTargetRef.current)) {
+        lastStackTargetRef.current = currentTargetRef.current
+        lastStackRef.current = currentTargetRef.current
+          ? await fetchLastStack(currentTargetRef.current).catch(() => null)
+          : null
+      }
+
       if (cancelled) return
       if (tier1) logRef.current = appendTelemetryEntry(logRef.current, tier1)
       const stage = viewState.view_state?.result?.View?.stage
@@ -191,6 +221,7 @@ export function useLiveSession(): LiveSessionState {
         focuser,
         observability,
         preview,
+        lastStack: lastStackRef.current,
         sessionActivity,
         log: logRef.current,
         stageHistory: stageHistoryRef.current,

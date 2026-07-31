@@ -11,6 +11,11 @@
    here; see LiveScreen.tsx's own doc comment for why the third column
    exists at all. */
 .columns { display: flex; align-items: flex-start; gap: 16px; }
+/* PreviewCard (the live sub) stacked above LastStackCard (the dated prior
+   stack) — both own their own 286px width, this just stacks them in the
+   same column with the same gap the centre column uses. See LiveScreen.tsx's
+   own doc comment on why the last-completed-stack panel lives here. */
+.previewColumn { display: flex; flex-direction: column; gap: 14px; flex: 0 0 auto; }
 .center { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .row { display: flex; gap: 14px; align-items: stretch; }
 

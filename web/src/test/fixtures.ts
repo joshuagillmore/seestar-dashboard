@@ -47,6 +47,20 @@ export const livePreviewSub = () => loadFixture('synthetic/live_preview_sub')
 export const livePreviewStale = () => loadFixture('synthetic/live_preview_stale')
 export const livePreviewNone = () => loadFixture('synthetic/live_preview_none')
 
+/** `/api/last_stack` still has no fixture recorded off live hardware — the
+ * sidecar route (handback item 23's workaround) was built in parallel with
+ * this task — but both files below are shaped from the real, committed
+ * route source (`sidecar/seestar_sidecar/routes.py`'s `_last_stack_payload`/
+ * `_last_stack_absent`), not guessed: `reason: null` / a literal
+ * `"/api/last_stack/image"` url on success, `target: null` with the real
+ * `no_stack` wire token (never a hand-written sentence — see
+ * lastStack.ts's own `lastStackReasonLabel`) on the absent branch.
+ * `lastStackFound` mirrors the team's own worked example (M27, 12 Jul, 178
+ * frames); `lastStackAbsent` is the normal "nothing completed yet for this
+ * target" state, same discriminator convention as `livePreviewNone` above. */
+export const lastStackFound = () => loadFixture('synthetic/last_stack_found')
+export const lastStackAbsent = () => loadFixture('synthetic/last_stack_absent')
+
 /** `/api/session_activity` also has no recorded fixture — hand-built to
  * mirror the three `origin` states `session_activity.py`'s own tests use as
  * worked examples: a tool with no dashboard route at all (`agent`), the
