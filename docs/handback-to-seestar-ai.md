@@ -18,7 +18,14 @@ Each one forces the dashboard to choose between an absent state and parsing Engl
 convention — *if a tool names a quantity in prose, return it as a field too* — would be worth more
 than three separate fixes.
 
-Line references are to `OrangeAgente/SeeStar-AI` @ `main` as of 2026-07-30.
+Line references were taken against `OrangeAgente/SeeStar-AI` @ `main` as of 2026-07-30.
+
+> **The repository has since moved (2026-07-31).** The public repo is now
+> **`github.com/OrangeAgente/seestar-mcp`**; the old `OrangeAgente/SeeStar-AI` is **private** and
+> will 404. History was rewritten to remove personal data — site coordinates, a LAN address, local
+> paths — and although all 106 commits are preserved, **every SHA changed**. Any pinned commit will
+> not resolve; re-clone rather than fetch. Line numbers cited below may have drifted; treat them as
+> a pointer to the right function, not an address.
 
 ---
 
@@ -66,8 +73,13 @@ Items **2**, **4**, **6**, **7**, **9**, **11**, **12**, **15**. The dashboard r
 absent state for each and nothing is blocked. Two are worth a second look regardless, because they
 may indicate real defects rather than missing fields:
 
-- **Item 7** — `median_fwhm` is `null` on *every* session record. That looks like a write-path bug,
-  not an omission.
+- ~~**Item 7** — `median_fwhm` is `null` on every session record.~~ **Diagnosed and shipped
+  2026-07-31, and our guess was wrong.** Not a write-path bug: `log_session_result` takes it as an
+  optional parameter defaulting to `None` and no caller ever passes it — nor *can* one, because
+  Tier-2 scores FITS in the local directory and so needs `download_subs`, which the run-books forbid
+  mid-session. The write path was fine; nothing called it with a value. Now backfilled from the
+  newest QA report. **Treat it as nullable forever** — a session never scored still cannot report
+  one, and pre-fix records are not backfilled.
 - **Item 15** — `recommend_projects` sorts on a field that is zero for every real project, so its
   ranking is a no-op and its output is `list_projects` truncated. It is not returning a wrong
   answer; it is returning an unranked one while appearing ranked.
@@ -744,6 +756,22 @@ from there previously caused false "battery unknown" guardrail trips server-side
 
 So a value the guardrails logic depends on cannot be displayed at all, and the design shows it in
 two places.
+
+> **WITHDRAWN 2026-07-31 — our premise was wrong, and the real answer is cheaper.**
+>
+> This item said battery was "confirmed *not* to be in `get_device_state`". That came from our own
+> reference notes, which had been wrong since 2026-07-12 — and self-contradictory, listing
+> `pi_status.battery_capacity` under `get_device_state` while asserting it was absent.
+>
+> **Battery is in `get_device_state`**, nested at `pi_status.battery_capacity` — 8 occurrences in a
+> real bridge log against 4 under `pi_get_info`. The original diagnosis found it absent from the
+> *top level* and wrongly concluded it was absent altogether.
+>
+> So no new accessor is needed. Battery folds into item 17's per-check results from a call already
+> being made, which also removes a redundant device round-trip per guardrail check — and guardrails
+> now run roughly every 10 minutes inside a slot, so that saving is real.
+>
+> Corrected in our notes at source so it cannot propagate again.
 
 **Asked for:** a read-only accessor exposing the battery percentage and charger status — either a
 thin `pi_get_info` wrapper, or the value folded into item 17's per-check results, which would
