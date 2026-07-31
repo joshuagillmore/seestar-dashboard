@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "summary": {
+    "target": null,
+    "total": 0,
+    "kept": 0,
+    "wfwhm": null,
+    "medians": {
+      "fwhm": null,
+      "fwhm_sigma": null,
+      "snr": null,
+      "star_count": null,
+      "hfr": null,
+      "eccentricity": null,
+      "scattered_light": null,
+      "scattered_light_sigma": null,
+      "n_analyzed": 0
+    },
+    "dominant_reject_cause": null,
+    "subs": []
+  },
+  "keep_list": []
+}

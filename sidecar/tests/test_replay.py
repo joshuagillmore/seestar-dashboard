@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from seestar_sidecar.allowlist import ALLOWED_TOOLS
+from seestar_sidecar.allowlist import ALLOWED_TOOLS, NO_DIRECT_ROUTE_TOOLS
 from seestar_sidecar.main import create_app
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
@@ -49,8 +49,15 @@ def client(monkeypatch, tmp_path):
 #: param(s) — replay mode ignores the actual arguments regardless (see
 #: routes._fetch), so the exact values only matter for making the request
 #: valid, not for which fixture comes back.
+#:
+#: NO_DIRECT_ROUTE_TOOLS (qa_tier2, slice 4) has no `/api/{tool}` route at
+#: all — see allowlist.py's own comment — so `GET /api/qa_tier2` 404s before
+#: ever reaching replay, the same "can't exercise it here" reason as the
+#: three named above, for a different cause.
 _PASSTHROUGH_TOOLS = sorted(
-    ALLOWED_TOOLS - {"plan_targets", "check_night_guardrails", "get_target_observability"}
+    ALLOWED_TOOLS
+    - {"plan_targets", "check_night_guardrails", "get_target_observability"}
+    - NO_DIRECT_ROUTE_TOOLS
 )
 
 

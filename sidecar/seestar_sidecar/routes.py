@@ -45,6 +45,8 @@ from seestar_sidecar.live_preview import (
 )
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
+from seestar_sidecar import qa_analysis
+from seestar_sidecar.qa_analysis import DEFAULT_QA_CACHE_DIR, QaJobRegistry
 from seestar_sidecar.replay import load_fixture
 from seestar_sidecar.session_activity import DEFAULT_PROVENANCE_PATH, read_recent_activity
 
@@ -55,11 +57,18 @@ def replay_enabled() -> bool:
     return os.environ.get("SEESTAR_REPLAY") == "1"
 
 
-async def call_tool(request: Request, tool: str, arguments: dict) -> dict:
-    """Indirection so tests can substitute a failing transport.
+async def _call_tool_on_app(app, tool: str, arguments: dict) -> dict:
+    """The actual allowlist-guarded call, keyed off the FastAPI `app`
+    directly rather than a live per-request `Request` — see call_tool()
+    below for the normal, request-scoped entry point every other route uses.
 
-    The connection lives on app.state, not a module global: one per app
-    instance, so two apps in a process cannot clobber each other.
+    This exists for qa_analysis.start_analysis()'s background asyncio.Task
+    (see routes.py's qa_analysis_start handler): that task is created inside
+    a request handler but keeps running after the handler has already
+    returned a response, so it must not depend on the original Request
+    object still being meaningfully "live" — `app` is a plain, long-lived
+    attribute of the whole process, unlike a Request's own receive/send
+    channel, which is scoped to one HTTP exchange.
 
     The tool check is a second, independent guard on top of the literal
     routes below it: those only guarantee an unlisted tool has no *route* to
@@ -82,16 +91,36 @@ async def call_tool(request: Request, tool: str, arguments: dict) -> dict:
     """
     if tool not in ALLOWED_TOOLS:
         raise ProxyTransportError(f"call_tool invoked for a non-allowlisted tool: {tool!r}")
-    connection = getattr(request.app.state, "connection", None)
+    connection = getattr(app.state, "connection", None)
     if connection is None:
         # Two distinct reasons land here with the same symptom: the lifespan
         # simply never ran (a bare TestClient(create_app())), or it ran but
         # SEESTAR_AI_DIR wasn't set — main.py sets the latter's reason on
         # app.state so this 502 names the actual fix instead of reading like
         # an internal bug either way.
-        reason = getattr(request.app.state, "connection_unavailable_reason", None)
+        reason = getattr(app.state, "connection_unavailable_reason", None)
         raise ProxyTransportError(reason or "MCP connection not started")
     return await connection.call(tool, arguments)
+
+
+async def call_tool(request: Request, tool: str, arguments: dict) -> dict:
+    """Indirection so tests can substitute a failing transport. See
+    _call_tool_on_app() for the actual guard/dispatch — this is the plain
+    request-scoped entry point every ordinary route uses.
+
+    The allowlist check is repeated here, before `request.app` is ever
+    touched, so it still fires for a bare `call_tool(None, tool, args)` with
+    no request at all — test_call_tool_refuses_a_non_allowlisted_tool_name
+    and test_call_tool_guard_survives_python_dash_o (test_allowlist.py) both
+    rely on exactly that to prove the guard fires "before call_tool ever
+    touches request.app.state". `_call_tool_on_app` repeats the same check
+    for its own callers (qa_analysis_start's background task, which never
+    goes through this function at all) — belt and suspenders, not a gap in
+    either.
+    """
+    if tool not in ALLOWED_TOOLS:
+        raise ProxyTransportError(f"call_tool invoked for a non-allowlisted tool: {tool!r}")
+    return await _call_tool_on_app(request.app, tool, arguments)
 
 
 async def _fetch(request: Request, tool: str, arguments: dict) -> dict:
@@ -578,3 +607,150 @@ async def session_activity(
             "source_configured": True,
         }
     )
+
+
+# --- QA review (slice 4) ----------------------------------------------------
+#
+# See docs/superpowers/specs/2026-07-31-slice-4-review-qa.md and
+# qa_analysis.py's module docstring for the full design ("Option A": on-demand,
+# explicitly triggered, disk-cached analysis, never run implicitly). None of
+# the three routes below is a literal tool call — see allowlist.SIDECAR_ROUTES
+# — and `qa_tier2`, the one tool any of them ever reaches, is only ever
+# called from qa_analysis_start's background asyncio.Task, never awaited
+# inline in a request handler (see allowlist.NO_DIRECT_ROUTE_TOOLS).
+#
+# Same "was this ever set on app.state at all" sentinel as
+# _archive_dir_and_tz / _live_share_dir / _provenance_path above.
+_QA_CACHE_DIR_UNSET = object()
+
+
+def _qa_cache_dir(request: Request) -> Path:
+    cache_dir = getattr(request.app.state, "qa_cache_dir", _QA_CACHE_DIR_UNSET)
+    if cache_dir is _QA_CACHE_DIR_UNSET:
+        cache_dir = DEFAULT_QA_CACHE_DIR
+    return Path(cache_dir)
+
+
+def _qa_job_registry(request: Request) -> QaJobRegistry:
+    """create_app() always sets app.state.qa_job_registry (see main.py) —
+    the fallback here only guards a bare, non-create_app() app, the same
+    defensive style every other app.state accessor in this file already
+    holds itself to.
+    """
+    registry = getattr(request.app.state, "qa_job_registry", None)
+    if registry is None:
+        registry = QaJobRegistry()
+        request.app.state.qa_job_registry = registry
+    return registry
+
+
+@router.get("/qa_targets")
+async def qa_targets(request: Request) -> JSONResponse:
+    """Every target the archive scan knows about, each with its Tier-2
+    analysis status (see qa_analysis.resolve_status) and raw `sub_count` —
+    so the screen can show scale ("842 subs") before the user opts into a
+    multi-minute analysis, per the spec's honesty requirement. Reports never
+    include the full per-sub report here (`include_report=False`): with N
+    targets each carrying up to ~412 KB of per-sub metrics (measured at 1400
+    subs — see the spec), embedding every one in a listing response would be
+    exactly the bloat qa_analysis_status exists to avoid; that route is
+    the one place a single target's full report is ever returned.
+
+    NEVER triggers analysis — this only ever reads the archive scan, the
+    in-memory job registry and the on-disk cache. See qa_analysis_start for
+    the one route that can start a job.
+    """
+    archive_dir, local_tz = _archive_dir_and_tz(request)
+    scan = scan_archive(archive_dir, local_tz=local_tz)
+    cache_dir = _qa_cache_dir(request)
+    registry = _qa_job_registry(request)
+
+    targets = []
+    for target in scan.targets.values():
+        signature = qa_analysis.compute_signature(target.sub_paths)
+        status = qa_analysis.resolve_status(
+            registry, cache_dir, target.target_id, signature, include_report=False
+        )
+        targets.append(
+            {
+                "target_id": target.target_id,
+                "display_name": target.display_name,
+                "sub_count": len(target.sub_paths),
+                **status,
+            }
+        )
+    return JSONResponse(
+        {"ok": True, "targets": targets, "archive_status": asdict(scan.status)}
+    )
+
+
+@router.get("/qa_analysis_start")
+async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
+    """Explicitly trigger Tier-2 QA analysis for `target` — see
+    qa_analysis.start_analysis(). Only ever reached from a deliberate user
+    action on the client; never called on a page load (see CLAUDE.md and the
+    spec's "Do not start an analysis on a page load, ever").
+
+    Idempotent: a target already running, or already cached/analysed for its
+    CURRENT sub set, returns that status without starting a second job or
+    recomputing anything — see start_analysis()'s own docstring for exactly
+    which cases short-circuit before `qa_tier2` is ever called.
+
+    A target the archive scan has never heard of, or one with no subs on
+    disk (an archive target directory that exists but is currently empty),
+    is an honest 404 — there is nothing to analyse, not a transport failure.
+    """
+    archive_dir, local_tz = _archive_dir_and_tz(request)
+    scan = scan_archive(archive_dir, local_tz=local_tz)
+    archive_target = scan.targets.get(target)
+    if archive_target is None or not archive_target.sub_paths:
+        return JSONResponse(
+            {"ok": False, "error": f"no subs found on disk for {target!r}"}, status_code=404
+        )
+
+    cache_dir = _qa_cache_dir(request)
+    registry = _qa_job_registry(request)
+    app = request.app  # captured now; the background task must not depend
+    # on this Request object staying meaningfully "live" past this handler's
+    # own return — see _call_tool_on_app()'s docstring.
+
+    async def call_qa_tier2(paths: list[str]) -> dict:
+        return await _call_tool_on_app(app, "qa_tier2", {"paths": paths})
+
+    status = qa_analysis.start_analysis(
+        registry, cache_dir, target, archive_target.sub_paths, call_qa_tier2, include_report=False
+    )
+    return JSONResponse({"ok": True, "target_id": target, **status})
+
+
+@router.get("/qa_analysis_status")
+async def qa_analysis_status(request: Request, target: str) -> JSONResponse:
+    """Poll — and, once complete, retrieve — one target's Tier-2 report.
+    NEVER triggers analysis itself; see qa_analysis_start for that.
+
+    `report`, present only when `status` is "complete" or "stale", is
+    qa_tier2's own `summary`/`keep_list` shape verbatim — every per-sub
+    `verdict`/`reasons`/`metrics` entry passed through exactly as the tool
+    returned it. Per CLAUDE.md and the spec §2, this sidecar never recomputes
+    or reshapes a verdict, never filters out a sub whose `metrics.error` is
+    set, and never hardcodes a QA threshold — that discipline holds here
+    just as much as it does in the browser.
+
+    A target unknown to the archive scan still gets a real answer
+    (`sub_count: 0`, whatever status the cache/registry independently know —
+    ordinarily "not_analysed") rather than a 404: unlike qa_analysis_start,
+    polling status is not an action that needs subs to exist on disk right
+    now to make sense of.
+    """
+    archive_dir, local_tz = _archive_dir_and_tz(request)
+    scan = scan_archive(archive_dir, local_tz=local_tz)
+    archive_target = scan.targets.get(target)
+    sub_paths = archive_target.sub_paths if archive_target is not None else []
+
+    signature = qa_analysis.compute_signature(sub_paths)
+    cache_dir = _qa_cache_dir(request)
+    registry = _qa_job_registry(request)
+    status = qa_analysis.resolve_status(
+        registry, cache_dir, target, signature, include_report=True
+    )
+    return JSONResponse({"ok": True, "target_id": target, "sub_count": len(sub_paths), **status})

@@ -187,6 +187,69 @@ def test_underscore_sub_suffix_is_recognised(tmp_path):
     assert scan.targets["M27"].display_name == "M27 Dumbbell Nebula"
 
 
+# --- ArchiveTarget.sub_paths — qa_analysis.py's one way to resolve a
+# target to the FITS paths qa_tier2 needs (see docs/superpowers/specs/
+# 2026-07-31-slice-4-review-qa.md §1: "reuse archive.py's existing scan, not
+# a second walk of the same tree"). Both directory-naming conventions are
+# tested independently, exactly as the sub-counting tests above already do,
+# because a resolver that only walked "-sub" would silently see zero subs
+# for the two live "_sub" targets.
+
+
+def test_sub_paths_lists_every_light_fit_in_a_dash_sub_directory(tmp_path):
+    subs = tmp_path / "M 31-sub"
+    subs.mkdir()
+    for i in range(3):
+        _light_fit(subs, "M 31", "20240104", f"20014{i}", i)
+
+    scan = scan_archive(tmp_path, local_tz=EDT)
+
+    sub_paths = scan.targets["M31"].sub_paths
+    assert len(sub_paths) == 3
+    assert all(p.name.startswith("Light_M 31_") and p.suffix == ".fit" for p in sub_paths)
+    # Every path is real and lives in the "-sub" directory, not its plain
+    # stacked-master sibling.
+    assert all(p.is_file() and p.parent == subs for p in sub_paths)
+
+
+def test_sub_paths_recognises_the_underscore_sub_convention_too(tmp_path):
+    subs = tmp_path / "M27 Dumbbell Nebula_sub"
+    subs.mkdir()
+    for i in range(2):
+        _light_fit(subs, "M27 Dumbbell Nebula", "20260705", f"01073{i}", i)
+
+    scan = scan_archive(tmp_path, local_tz=EDT)
+
+    sub_paths = scan.targets["M27"].sub_paths
+    assert len(sub_paths) == 2
+    assert all(p.parent == subs for p in sub_paths)
+
+
+def test_sub_paths_includes_a_file_whose_name_did_not_parse(tmp_path):
+    # qa_tier2 doesn't care about a filename's shape — only the pixels — so
+    # a sub whose name fails _parse_light_filename (see the "unparseable
+    # filename" test elsewhere in this file) must still be a candidate for
+    # analysis, even though it can't be attributed to any observing night.
+    subs = tmp_path / "M 45-sub"
+    subs.mkdir()
+    (subs / "Light_totally_unexpected_shape.fit").write_text("x", encoding="utf-8")
+
+    scan = scan_archive(tmp_path, local_tz=EDT)
+
+    assert [p.name for p in scan.targets["M45"].sub_paths] == [
+        "Light_totally_unexpected_shape.fit"
+    ]
+
+
+def test_sub_paths_is_empty_for_a_target_with_no_subs_captured_yet(tmp_path):
+    subs = tmp_path / "NGC 281-sub"
+    subs.mkdir()  # no Light_*.fit written at all
+
+    scan = scan_archive(tmp_path, local_tz=EDT)
+
+    assert scan.targets["NGC281"].sub_paths == []
+
+
 def test_groups_by_night_and_sums_across_nights(tmp_path):
     subs = tmp_path / "NGC 281-sub"
     subs.mkdir()

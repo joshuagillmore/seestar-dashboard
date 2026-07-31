@@ -44,6 +44,15 @@ ARGUMENTS: dict[str, dict] = {
     # capturing the tool's real response *shape*, not a live guardrail
     # verdict for an actual session.
     "check_night_guardrails": {"session_start_utc": "2026-07-30T02:00:00+00:00"},
+    # --- slice 4 (Review & QA screen) --------------------------------------
+    # Explicit `paths: []`, not `target`: qa_tier2 is minutes-long over a
+    # real target's subs (see qa_analysis.py's module docstring), and this
+    # script is meant to be safe to re-run to refresh every fixture's SHAPE.
+    # An empty path list still exercises the real "ok"/"summary"/"keep_list"
+    # response shape (see fixtures/qa_tier2.json) with zero FITS analysis
+    # cost — the sidecar's own qa_analysis_start route is what a real
+    # analysis goes through, deliberately never this script.
+    "qa_tier2": {"paths": []},
 }
 
 
