@@ -49,6 +49,7 @@ from seestar_sidecar.live_preview import (
     is_frame_stale,
 )
 from seestar_sidecar.mcp_proxy import ProxyTransportError
+from seestar_sidecar.redaction import redact_payload, redact_secrets
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar import qa_analysis
 from seestar_sidecar.qa_analysis import DEFAULT_QA_CACHE_DIR, QaJobRegistry
@@ -146,13 +147,18 @@ async def _serve(request: Request, tool: str, arguments: dict) -> JSONResponse:
     # themselves use, so the client parses one error format regardless of which
     # layer failed. A tool RETURNING {"ok": false, ...} is not a failure — that
     # is a valid response and forwards at 200.
+    # Every error leaving here is redacted first. An upstream exception string
+    # is untrusted input: httpx embeds the full request URL in HTTPStatusError,
+    # and a meteoblue API key reached the DOM that way. See redaction.py.
     try:
-        return JSONResponse(await _fetch(request, tool, arguments))
+        return JSONResponse(redact_payload(await _fetch(request, tool, arguments)))
     except (ProxyTransportError, FileNotFoundError) as exc:
         # FileNotFoundError carries a "run record.py" pointer (replay, fixture
         # missing). Letting either escape turns a diagnosable message into a
         # generic 500.
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
+        return JSONResponse(
+            {"ok": False, "error": redact_secrets(str(exc))}, status_code=502
+        )
 
 
 @router.get("/health")
