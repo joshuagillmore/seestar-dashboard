@@ -136,6 +136,29 @@ The `above_floor` boolean mask already exists one line earlier (`astro.py:279`).
 **Asked for:** `above_floor_window_utc = _longest_run(above_floor, times)` and a corresponding
 field. Same helper, same data, adjacent line.
 
+> **Reinforced 2026-07-31 by user feedback**, with a worked example. The user asked whether M15 is
+> in the sweet band all night, and said that where a target falls outside it the timeline should
+> show the design's line treatment for that stretch.
+>
+> Checked against live data. **M15 peaks under the 60° ceiling**, so it genuinely is in
+> the band for its whole pass, and its bar is correct. But tonight's plan also contains **M13**, M76 and
+> M103, all of which climb out of the band around transit.
+>
+> M13 is the clear case, and the server is entirely right about it: `transits_above_ceiling: true`,
+> `best_window_utc` starting **after transit** — the span correctly begins only
+> once the target has descended back below the ceiling. The gap between `dark_minutes_above_floor` and
+> `dark_minutes_in_sweet_band` puts **about an hour above the floor but too high to use**.
+>
+> So the numbers are correct and the *timeline cannot express them*. Those minutes render as
+> bare track — visually identical to the target being below the horizon. A user reasonably reads
+> the gap as "not up yet" when it actually means "up, but rotating too fast to use", which is a
+> completely different reason and points at a different decision.
+>
+> Two things follow. The rail needs this item's start/end timestamps, as already asked. But
+> **`transits_above_ceiling` and the above-floor/sweet-band minute gap are both already returned**,
+> so the dashboard can say *that* a target leaves the band and *for how long*, even before it can
+> show *when*. That is being built now as an interim.
+
 ---
 
 ## 3. Precipitation probability is computed but not returned
@@ -748,6 +771,46 @@ The server knows: a session has a start, and `SessionManifest` already carries a
 **Asked for:** expose the current session's start time on a read-only tool — `get_view_state` or
 `get_status` would both be reasonable — so a client can report elapsed time correctly however late
 it connects, and pass a truthful `session_start_utc` back into the guardrail check.
+
+---
+
+## 21. The hourly weather series is fetched, reduced to a maximum, and discarded
+
+**Affects:** a requested cloud/precipitation band under the Tonight verdict card — and, more
+seriously, the honesty of the single `cloud_cover_pct` figure already on screen.
+
+**Raised 2026-07-31**, from direct user feedback:
+
+> *"I still have to check my phone to see if it's going to rain or whether cloud cover will
+> appear later in the evening and if it's only temporary."*
+
+That is the dashboard failing at its stated job. The user opens it to avoid opening something
+else, and for weather they still reach for the phone.
+
+**The data is already in the process.** `planning/weather.py` requests hourly arrays —
+`cloudcover_low`, `cloudcover_mid`, `cloudcover_high`, `precipitation_probability`
+(`_HOURLY_VARS`, ~line 44) — and `_window_rows()` (line 109) selects the rows inside the dark
+window. Those per-hour values are then collapsed to a single worst-case number and thrown away.
+`ConditionsAssessment` exposes one `cloud_cover_pct`, documented as *"the worst-case cloud over
+the dark window: the max"*.
+
+**A maximum cannot answer the question that matters.** `cloud 86%` is the same figure whether the
+night is solidly overcast or clear until 02:00 with one bad hour. Those are completely different
+nights — one is a write-off, the other is a four-hour session with a late start — and the current
+payload cannot distinguish them. So the figure is not merely incomplete; it makes a recoverable
+night look identical to a lost one.
+
+**Asked for:** the per-hour series over the dark window, alongside the existing aggregates —
+timestamps plus cloud and precipitation probability per hour. `cloud_cover_pct` and the `go`
+verdict stay exactly as they are; this is additive.
+
+With it the dashboard can render a band showing when cloud arrives, how long it lasts and whether
+it clears — which is the actual decision the user is making. Without it, no amount of UI work can
+show the shape of the night, because the shape has already been averaged away before it leaves the
+server.
+
+**Related:** the same pattern as items 3, 13, 14, 17, 18 and 20, and the largest instance of it —
+here an entire time series is reduced to one scalar.
 
 ---
 
