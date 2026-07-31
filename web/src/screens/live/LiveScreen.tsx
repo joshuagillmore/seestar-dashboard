@@ -9,6 +9,7 @@ import type { View } from '../../shell/view'
 import type { DotTone } from '../../ui/Dot'
 import { Dot } from '../../ui/Dot'
 import { GuardrailsCard } from './GuardrailsCard'
+import { LastStackCard } from './LastStackCard'
 import { MobileLiveView } from './MobileLiveView'
 import { PreviewCard } from './PreviewCard'
 import { SessionActivityCard } from './SessionActivityCard'
@@ -50,6 +51,16 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
  * (the six-cell grid, guardrails, sweet-band gauge, telemetry log) all
  * stay — the distinction is actionable-vs-informational, not which card
  * something sits in.
+ *
+ * The preview column (`.previewColumn`) is two cards stacked, not one, as of
+ * handback item 23's workaround: `PreviewCard` (the live 10 s sub) above
+ * `LastStackCard` (the previous session's dated stacked master for the same
+ * target, since the scope only ever writes that file at session end — see
+ * LastStackCard's own doc comment for the whole honesty rule this carries).
+ * Desktop only — the mobile phone-frame design (README.md:698-711) has no
+ * second preview element, and MobileLiveView already drops several things
+ * for the same "not in that spec" reason, so this doesn't add one there
+ * either.
  *
  * The third column was briefly built as two columns with the operator panel
  * deferred entirely, then reinstated at the user's request ("keep a
@@ -156,11 +167,14 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
       )}
 
       {state.phase === 'active' && (() => {
-        // get_view_state carries no target name at all (confirmed against
-        // the real fixture) — observability's own target.name is the
-        // richest source once it resolves; the catalogue id useLiveSession
-        // sourced from live_preview's `target` field is the bootstrap value
-        // shown before that.
+        // get_view_state's View block DOES carry a target_name (confirmed on
+        // hardware 2026-07-31 — see ViewSchema's own doc comment), but it is
+        // a catalogue id ("NGC7380"), not a resolved common name —
+        // observability's own target.name ("Wizard Nebula") is still the
+        // richest source once it resolves. view.target_name sits ahead of
+        // the bootstrap value useLiveSession sourced from live_preview's
+        // `target` field (currentTarget), since it comes from the scope's
+        // own live telemetry rather than a directory-name parse.
         const liveView = state.viewState.view_state?.result?.View ?? null
 
         if (isMobile) {
@@ -177,13 +191,21 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
           )
         }
 
-        const targetName = state.observability?.target?.name ?? state.currentTarget
+        const targetName =
+          state.observability?.target?.name ?? liveView?.target_name ?? state.currentTarget
         return (
           <div className={styles.columns}>
-            <PreviewCard preview={state.preview} annotate={liveView?.Stack?.Annotate ?? null} />
+            <div className={styles.previewColumn}>
+              <PreviewCard preview={state.preview} annotate={liveView?.Stack?.Annotate ?? null} />
+              <LastStackCard lastStack={state.lastStack} />
+            </div>
 
             <div className={styles.center}>
-              <TargetHeader targetName={targetName} stage={liveView?.stage ?? null} />
+              <TargetHeader
+                targetName={targetName}
+                stage={liveView?.stage ?? null}
+                lpFilter={liveView?.lp_filter}
+              />
 
               <TelemetryGrid
                 stack={liveView?.Stack ?? null}
