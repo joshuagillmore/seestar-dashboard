@@ -1,0 +1,69 @@
+.root { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-fainter);
+}
+
+.verdictRow { display: flex; align-items: baseline; gap: 10px; }
+.verdict { font-family: var(--font-sans); font-weight: 600; font-size: 34px; line-height: 1; }
+.verdict.pass { color: var(--pass); }
+.verdict.marginal { color: var(--marginal); }
+.verdict.reject { color: var(--reject); }
+.summary { margin: 0; font-family: var(--font-sans); font-size: 12.5px; line-height: 1.5; color: var(--text-dimmer); }
+
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.tile { padding: 9px 10px; background: var(--bg-cell); border-radius: 8px; min-width: 0; }
+.tileLabel { font-family: var(--font-mono); font-weight: 500; font-size: 9px; letter-spacing: 0.1em; color: var(--text-fainter); }
+.tileValue {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tileValue.pass { color: var(--pass); }
+.tileValue.marginal { color: var(--marginal); }
+.tileValue.reject { color: var(--reject); }
+
+.shortlistEyebrow {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-fainter);
+}
+
+.rows { display: flex; flex-direction: column; gap: 8px; }
+
+/* The design's own hard requirement (README.md:723-724): shortlist rows
+   carry an explicit min-height of 44px — cold hands in the dark. This is a
+   presentational row (no destination screen exists yet, the same reason
+   PlanCard's own "Detail" button is enabled and does nothing today), so it
+   is a plain div, not a button — but it is still sized as a real touch
+   target. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 44px;
+  padding: 10px;
+  background: var(--bg-cell);
+  border-radius: 9px;
+}
+.thumb { width: 42px; height: 56px; border-radius: 6px; flex: 0 0 auto; }
+.rowBody { flex: 1; min-width: 0; }
+.rowName { font-family: var(--font-sans); font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rowMeta { margin-top: 3px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dimmer); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rowScore { flex: 0 0 auto; font-family: var(--font-mono); font-weight: 500; font-size: 16px; color: var(--accent); }
+
+.empty { padding: 14px; border-radius: 9px; background: var(--bg-cell); color: var(--text-dimmer); font-family: var(--font-sans); font-size: 12.5px; }

@@ -1,11 +1,14 @@
 import type { Health, SiteProfile } from '../../api/schemas'
 import { AppShell } from '../../shell/AppShell'
+import { MOBILE_QUERY } from '../../shell/breakpoints'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
+import { useMediaQuery } from '../../shell/useMediaQuery'
 import type { View } from '../../shell/view'
 import type { DotTone } from '../../ui/Dot'
 import { Dot } from '../../ui/Dot'
 import { GuardrailsCard } from './GuardrailsCard'
+import { MobileLiveView } from './MobileLiveView'
 import { PreviewCard } from './PreviewCard'
 import { SessionActivityCard } from './SessionActivityCard'
 import { SweetBandGauge } from './SweetBandGauge'
@@ -73,10 +76,144 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
  * is what keeps that honest — the feed's own timestamps already say when
  * each entry is from, but the card adds a plain-language note too, so a
  * three-nights-old entry can't read as something happening right now.
+ *
+ * **Mobile breakpoint** (slice added later, design README.md:685-711): below
+ * `MOBILE_QUERY` (600px), this screen skips `AppShell` entirely rather than
+ * squeezing Sidebar/TopBar next to narrowed content — the design's own phone
+ * frame shows zero chrome, just the screen content padded `8px 16px 0` on
+ * `bg/root` (`.mobileRoot` below), and there is no mobile nav design to
+ * adapt Sidebar into (the design covers exactly two mobile screens with no
+ * stated way to move between them on a real phone — a gap in the source
+ * design, flagged rather than invented around, the same posture this repo
+ * takes toward missing server data). `MobileLiveView` replaces the desktop
+ * three-column composition only for the `'active'` phase, which is the only
+ * one the design actually specifies; `loading`/`bridge-down`/`idle` render
+ * their ordinary desktop markup unchanged; just full-width.
  */
 export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) {
   const state = useLiveSession()
+  const isMobile = useMediaQuery(MOBILE_QUERY)
   const { tone: liveTone, meta: liveMeta } = sidebarStatus(state.phase)
+
+  // Mobile — Live (design README.md:698-711) only has a dedicated
+  // composition for the 'active' phase — there's no mobile design for
+  // loading/idle/bridge-down at all, so those three keep the exact desktop
+  // markup below (LiveScreen.module.css's own `.idleColumns`/`.stateCard`),
+  // just rendered full-width outside AppShell rather than squeezed beside a
+  // hidden sidebar. See this component's own doc comment addendum below for
+  // why AppShell (Sidebar/TopBar chrome) is skipped entirely at this
+  // breakpoint rather than made responsive itself.
+  const mobileActive = isMobile && state.phase === 'active'
+
+  const content = (
+    <div className={styles.screen}>
+      {!mobileActive && (
+        <div className={styles.header}>
+          <div className={styles.eyebrow}>Live session</div>
+          <h1 className={styles.heading}>Watch the current stack</h1>
+        </div>
+      )}
+
+      {state.phase === 'loading' && (
+        <div data-testid="live-loading">
+          <div className={styles.skeleton} />
+        </div>
+      )}
+
+      {state.phase === 'bridge-down' && (
+        <div className={styles.idleColumns}>
+          <div className={styles.stateCard} data-testid="live-bridge-down">
+            <Dot tone="reject" />
+            <div>
+              <div className={styles.stateTitle}>Bridge unreachable</div>
+              <p className={styles.stateBody}>{state.error}</p>
+            </div>
+          </div>
+          <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
+        </div>
+      )}
+
+      {state.phase === 'idle' && (
+        <div className={styles.idleColumns}>
+          <div className={styles.stateCard} data-testid="live-idle">
+            <Dot tone="idle" />
+            <div>
+              <div className={styles.stateTitle}>Scope idle — not observing</div>
+              <p className={styles.stateBody}>
+                The bridge answered, but `get_view_state` timed out, which means there is no
+                active session right now rather than a fault. This is the normal state for most of
+                the day, and most of the night.
+              </p>
+            </div>
+          </div>
+          <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
+        </div>
+      )}
+
+      {state.phase === 'active' && (() => {
+        // get_view_state carries no target name at all (confirmed against
+        // the real fixture) — observability's own target.name is the
+        // richest source once it resolves; the catalogue id useLiveSession
+        // sourced from live_preview's `target` field is the bootstrap value
+        // shown before that.
+        const liveView = state.viewState.view_state?.result?.View ?? null
+
+        if (isMobile) {
+          return (
+            <MobileLiveView
+              targetId={state.observability?.target?.id ?? state.currentTarget}
+              targetName={state.observability?.target?.name ?? null}
+              stack={liveView?.Stack ?? null}
+              tier1={state.tier1}
+              focuser={state.focuser}
+              preview={state.preview}
+              log={state.log}
+            />
+          )
+        }
+
+        const targetName = state.observability?.target?.name ?? state.currentTarget
+        return (
+          <div className={styles.columns}>
+            <PreviewCard preview={state.preview} annotate={liveView?.Stack?.Annotate ?? null} />
+
+            <div className={styles.center}>
+              <TargetHeader targetName={targetName} stage={liveView?.stage ?? null} />
+
+              <TelemetryGrid
+                stack={liveView?.Stack ?? null}
+                tier1={state.tier1}
+                focuser={state.focuser}
+                stage={liveView?.stage ?? null}
+                stageHistory={state.stageHistory}
+              />
+
+              {site?.profile ? (
+                <div className={styles.row}>
+                  <SweetBandGauge
+                    rotationCeilingDeg={site.profile.field_rotation_ceiling_deg}
+                    altitudeFloorDeg={site.profile.min_altitude_deg}
+                    observability={state.observability?.observability ?? null}
+                  />
+                  <GuardrailsCard guardrails={state.guardrails} />
+                </div>
+              ) : (
+                <GuardrailsCard guardrails={state.guardrails} />
+              )}
+
+              <TelemetryLogCard log={state.log} />
+            </div>
+
+            <SessionActivityCard activity={state.sessionActivity} sessionRunning={true} />
+          </div>
+        )
+      })()}
+    </div>
+  )
+
+  if (isMobile) {
+    return <div className={styles.mobileRoot}>{content}</div>
+  }
 
   return (
     <AppShell
@@ -93,92 +230,7 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
         />
       }
     >
-      <div className={styles.screen}>
-        <div className={styles.header}>
-          <div className={styles.eyebrow}>Live session</div>
-          <h1 className={styles.heading}>Watch the current stack</h1>
-        </div>
-
-        {state.phase === 'loading' && (
-          <div data-testid="live-loading">
-            <div className={styles.skeleton} />
-          </div>
-        )}
-
-        {state.phase === 'bridge-down' && (
-          <div className={styles.idleColumns}>
-            <div className={styles.stateCard} data-testid="live-bridge-down">
-              <Dot tone="reject" />
-              <div>
-                <div className={styles.stateTitle}>Bridge unreachable</div>
-                <p className={styles.stateBody}>{state.error}</p>
-              </div>
-            </div>
-            <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
-          </div>
-        )}
-
-        {state.phase === 'idle' && (
-          <div className={styles.idleColumns}>
-            <div className={styles.stateCard} data-testid="live-idle">
-              <Dot tone="idle" />
-              <div>
-                <div className={styles.stateTitle}>Scope idle — not observing</div>
-                <p className={styles.stateBody}>
-                  The bridge answered, but `get_view_state` timed out, which means there is no
-                  active session right now rather than a fault. This is the normal state for most of
-                  the day, and most of the night.
-                </p>
-              </div>
-            </div>
-            <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
-          </div>
-        )}
-
-        {state.phase === 'active' && (() => {
-          // get_view_state carries no target name at all (confirmed against
-          // the real fixture) — observability's own target.name is the
-          // richest source once it resolves; the catalogue id useLiveSession
-          // sourced from live_preview's `target` field is the bootstrap
-          // value shown before that.
-          const view = state.viewState.view_state?.result?.View ?? null
-          const targetName = state.observability?.target?.name ?? state.currentTarget
-          return (
-            <div className={styles.columns}>
-              <PreviewCard preview={state.preview} annotate={view?.Stack?.Annotate ?? null} />
-
-              <div className={styles.center}>
-                <TargetHeader targetName={targetName} stage={view?.stage ?? null} />
-
-                <TelemetryGrid
-                  stack={view?.Stack ?? null}
-                  tier1={state.tier1}
-                  focuser={state.focuser}
-                  stage={view?.stage ?? null}
-                  stageHistory={state.stageHistory}
-                />
-
-                {site?.profile ? (
-                  <div className={styles.row}>
-                    <SweetBandGauge
-                      rotationCeilingDeg={site.profile.field_rotation_ceiling_deg}
-                      altitudeFloorDeg={site.profile.min_altitude_deg}
-                      observability={state.observability?.observability ?? null}
-                    />
-                    <GuardrailsCard guardrails={state.guardrails} />
-                  </div>
-                ) : (
-                  <GuardrailsCard guardrails={state.guardrails} />
-                )}
-
-                <TelemetryLogCard log={state.log} />
-              </div>
-
-              <SessionActivityCard activity={state.sessionActivity} sessionRunning={true} />
-            </div>
-          )
-        })()}
-      </div>
+      {content}
     </AppShell>
   )
 }

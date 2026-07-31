@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LiveScreen } from './LiveScreen'
 import { SiteProfileSchema, type Health } from '../../api/schemas'
+import { stubMatchMedia } from '../../test/matchMedia'
 import {
   livePreviewStale,
   livePreviewStacked,
@@ -363,6 +364,42 @@ describe('LiveScreen', () => {
     await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
     expect(screen.getByTestId('session-activity-unavailable')).toBeInTheDocument()
     expect(screen.getByText('Session activity')).toBeInTheDocument()
+  })
+
+  describe('mobile breakpoint', () => {
+    it('renders MobileLiveView and drops the AppShell chrome once the mobile breakpoint matches', async () => {
+      stubMatchMedia(true)
+      stubApi()
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('mobile-live-tiles')).toBeInTheDocument())
+      // The desktop three-column composition (telemetry grid, sweet-band
+      // gauge, guardrails card, session activity feed) must not also render
+      // — this is a swap, not an addition.
+      expect(screen.queryByTestId('telemetry-grid')).not.toBeInTheDocument()
+      expect(screen.queryByText('check_night_guardrails')).not.toBeInTheDocument()
+      // No Sidebar nav, no TopBar wordmark — the design's phone frame has
+      // zero chrome (see LiveScreen.tsx's own doc comment on why).
+      expect(screen.queryByRole('button', { name: /Tonight/ })).not.toBeInTheDocument()
+      expect(screen.queryByText('seestar')).not.toBeInTheDocument()
+    })
+
+    it('keeps the ordinary desktop layout, chrome included, when the mobile breakpoint does not match', async () => {
+      stubMatchMedia(false)
+      stubApi()
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
+      expect(screen.queryByTestId('mobile-live-tiles')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Tonight/ })).toBeInTheDocument()
+      expect(screen.getByText('seestar')).toBeInTheDocument()
+    })
+
+    it('renders the idle state full-width, without AppShell chrome, at the mobile breakpoint too — the design has no dedicated mobile idle screen, so this keeps the ordinary idle card rather than inventing one', async () => {
+      stubMatchMedia(true)
+      stubIdle()
+      render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+      await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+      expect(screen.queryByRole('button', { name: /Tonight/ })).not.toBeInTheDocument()
+    })
   })
 
   it('the telemetry grid uses minmax(0,1fr), not a bare 1fr, so a label cannot overflow the container', () => {
