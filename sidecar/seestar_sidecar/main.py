@@ -149,6 +149,17 @@ def create_app(
     # Lives on app.state for the same reason app.state.connection does: one
     # per app instance, so two apps in one process don't share a cache.
     app.state.live_preview_cache = None
+    # Holds the last successfully discovered LastStack (see last_stack.py),
+    # so /api/last_stack/image can serve the same bytes /api/last_stack most
+    # recently found. Unlike live_preview_cache above, routes.py clears this
+    # to None whenever a /api/last_stack call does NOT find a stack matching
+    # the CURRENTLY active target — this route has no "stale but still show
+    # it" degrade (see last_stack.py's module docstring: there is no polling
+    # interval to be stale relative to, only a one-off fetch per target
+    # change), and serving a previous target's cached image after being told
+    # "no stack for this target" would be exactly the wrong-target mistake
+    # the scoping rule exists to prevent.
+    app.state.last_stack_cache = None
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[VITE_DEV_ORIGIN],

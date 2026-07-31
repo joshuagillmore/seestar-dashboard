@@ -29,6 +29,11 @@ from seestar_sidecar.imagery import (
     is_plausible_target_id,
     resolve_image_pointer,
 )
+from seestar_sidecar.last_stack import (
+    REASON_NO_STACK,
+    LastStack,
+    discover_last_stack_within_timeout,
+)
 from seestar_sidecar.live_preview import (
     DEFAULT_LIVE_SHARE_DIR,
     REASON_BRIDGE_DOWN,
@@ -553,6 +558,117 @@ async def live_preview_image(request: Request) -> Response:
     if cache is None or not cache.path.is_file():
         return JSONResponse(
             {"ok": False, "error": "no live preview frame available yet"}, status_code=404
+        )
+    return FileResponse(cache.path, media_type="image/jpeg")
+
+
+# --- last completed stack (slice 3 follow-up) ------------------------------
+#
+# Sibling of live_preview above: same share (_live_share_dir(), not a new
+# variable), same get_view_state-first idle/bridge-down check, same
+# never-touch-the-share-while-idle discipline. The question is different —
+# "what did the LAST completed session leave for the target the scope is on
+# NOW" rather than "what's newest anywhere" — and this is a one-off fetch on
+# target change, not a poll: see last_stack.py's module docstring for why
+# that changes which file gets served (full-resolution `.jpg`, never the
+# `_thn` thumbnail live_preview.py insists on) and why there is no
+# stale-cache degrade here the way live_preview has one.
+
+
+def _last_stack_absent(reason: str) -> dict:
+    return {
+        "ok": True,
+        "target": None,
+        "captured_at": None,
+        "frame_count": None,
+        "reason": reason,
+        "url": "/api/last_stack/image",
+    }
+
+
+def _last_stack_payload(stack: LastStack) -> dict:
+    return {
+        "ok": True,
+        "target": stack.target,
+        "captured_at": stack.captured_at.isoformat(),
+        "frame_count": stack.frame_count,
+        "reason": None,
+        "url": "/api/last_stack/image",
+    }
+
+
+@router.get("/last_stack")
+async def last_stack(request: Request) -> JSONResponse:
+    """Metadata only — no image bytes; see last_stack.py's module docstring.
+
+    Never touches SEESTAR_LIVE_SHARE_DIR unless get_view_state confirms the
+    scope is observing AND names a target, matching live_preview's "a
+    timeout means not observing; there is nothing to fetch" rule. `reason`
+    values: REASON_BRIDGE_DOWN / REASON_IDLE / REASON_NOT_CONFIGURED /
+    REASON_SHARE_UNREACHABLE are the exact tokens live_preview.py defines for
+    the same underlying conditions, reused rather than duplicated;
+    REASON_NO_STACK is new to this route (see last_stack.py).
+
+    `app.state.last_stack_cache` is always overwritten to match THIS call's
+    outcome — set on success, cleared to `None` on every absent branch below
+    — never left holding a previous target's stack once a newer call has run
+    for a different (or no) target. Unlike live_preview_cache, there is no
+    "serve the old one anyway, marked stale" path: this route has no polling
+    interval to be stale relative to, and serving a previous target's image
+    after this call just reported "no stack for the current target" would be
+    exactly the wrong-target mistake target-scoping exists to rule out.
+    """
+    try:
+        view = await _fetch(request, "get_view_state", {})
+    except (ProxyTransportError, FileNotFoundError):
+        request.app.state.last_stack_cache = None
+        return JSONResponse(_last_stack_absent(REASON_BRIDGE_DOWN))
+    if not view.get("ok"):
+        request.app.state.last_stack_cache = None
+        return JSONResponse(_last_stack_absent(REASON_IDLE))
+
+    # Scope to the active target — never fall back to an unscoped "newest
+    # across the whole share" scan. Without a confirmed target there is no
+    # safe answer here: showing whatever happens to be newest risks serving
+    # a stack for a different object, which is exactly what this route must
+    # not do (see last_stack.py's module docstring).
+    active_target = extract_target_name(view)
+    if active_target is None:
+        request.app.state.last_stack_cache = None
+        return JSONResponse(_last_stack_absent(REASON_NO_STACK))
+
+    share_dir = _live_share_dir(request)
+    if share_dir is None:
+        request.app.state.last_stack_cache = None
+        return JSONResponse(_last_stack_absent(REASON_NOT_CONFIGURED))
+
+    try:
+        stack = await discover_last_stack_within_timeout(share_dir, active_target)
+    except ShareUnreachableError:
+        request.app.state.last_stack_cache = None
+        return JSONResponse(_last_stack_absent(REASON_SHARE_UNREACHABLE))
+
+    if stack is None:
+        request.app.state.last_stack_cache = None
+        return JSONResponse(_last_stack_absent(REASON_NO_STACK))
+
+    request.app.state.last_stack_cache = stack
+    return JSONResponse(_last_stack_payload(stack))
+
+
+@router.get("/last_stack/image")
+async def last_stack_image(request: Request) -> Response:
+    """The bytes /api/last_stack's `url` points at — always whatever the
+    metadata route most recently found for the then-active target (see
+    app.state.last_stack_cache), never a path built from anything the client
+    sent. A cold cache — this hit before /api/last_stack ever succeeded, or
+    after a call that found nothing for the current target — is an honest
+    404, same shape as live_preview_image's and target_image's absent states.
+    """
+    cache: LastStack | None = getattr(request.app.state, "last_stack_cache", None)
+    if cache is None or not cache.path.is_file():
+        return JSONResponse(
+            {"ok": False, "error": "no last stack available yet"}, status_code=404
         )
     return FileResponse(cache.path, media_type="image/jpeg")
 

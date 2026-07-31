@@ -131,6 +131,14 @@ NO_DIRECT_ROUTE_TOOLS = frozenset({"qa_tier2"})
 #: start_analysis()). It is also never called on a page load — only from an
 #: explicit user action on the client, per CLAUDE.md and the spec's "Do not
 #: start an analysis on a page load, ever."
+#: "last_stack" and "last_stack/image" (the Live screen's second panel) are
+#: the same shape as "live_preview"/"live_preview/image": no MCP tool by
+#: either name exists — last_stack.py's own directory scan of
+#: SEESTAR_LIVE_SHARE_DIR (the SAME share live_preview.py reads, not a new
+#: variable) is the only thing either route reads, plus (for the metadata
+#: route only) the same already-allowlisted get_view_state call to find the
+#: active target and confirm the scope is observing. Neither route accepts a
+#: path from the client either — see last_stack.py's module docstring.
 SIDECAR_ROUTES = frozenset(
     {
         "projects_combined",
@@ -141,6 +149,8 @@ SIDECAR_ROUTES = frozenset(
         "qa_targets",
         "qa_analysis_start",
         "qa_analysis_status",
+        "last_stack",
+        "last_stack/image",
     }
 )
 
