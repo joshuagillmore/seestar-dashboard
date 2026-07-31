@@ -87,6 +87,15 @@ ALLOWED_TOOLS = frozenset(
 #: there is no client field in provenance.jsonl) — see session_activity.py's
 #: module docstring for why that classification is deliberately NOT a
 #: mechanical function of ALLOWED_TOOLS's tool-name strings alone.
+#:
+#: "last_stack" and "last_stack/image" (the Live screen's second panel) are
+#: the same shape as "live_preview"/"live_preview/image": no MCP tool by
+#: either name exists — last_stack.py's own directory scan of
+#: SEESTAR_LIVE_SHARE_DIR (the SAME share live_preview.py reads, not a new
+#: variable) is the only thing either route reads, plus (for the metadata
+#: route only) the same already-allowlisted get_view_state call to find the
+#: active target and confirm the scope is observing. Neither route accepts a
+#: path from the client either — see last_stack.py's module docstring.
 SIDECAR_ROUTES = frozenset(
     {
         "projects_combined",
@@ -94,6 +103,8 @@ SIDECAR_ROUTES = frozenset(
         "live_preview",
         "live_preview/image",
         "session_activity",
+        "last_stack",
+        "last_stack/image",
     }
 )
 
