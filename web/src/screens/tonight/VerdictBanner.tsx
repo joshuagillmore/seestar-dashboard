@@ -46,7 +46,7 @@ function Fact({ id, label, value, tone }: {
  *
  *   NO-GO   |  <headline sentence, only once the server sends one>
  *   verdict |  cloud 85%   dew high   wind 7 kph   moon 100%
- *           |  ● GPS unverified — assuming saved site 'Example Observatory (scope GPS)'
+ *           |  ● GPS unverified — assuming saved site 'Example Observatory'
  *
  * The headline is a slot, not a composition: `conditions.summary` renders
  * verbatim when present and nothing renders in its place otherwise. This

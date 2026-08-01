@@ -20,7 +20,7 @@ import {
   recordedViewState,
   sessionActivity,
 } from '../../test/fixtures'
-import { formatStackDate } from './lastStack'
+import { formatStackDate, lastStackReasonLabel } from './lastStack'
 
 const site = SiteProfileSchema.parse(recordedSite())
 const notReplaying: Health = { ok: true, replay: false }
@@ -398,10 +398,9 @@ describe('LiveScreen', () => {
       stubApi({ '/api/last_stack': lastStackAbsent() })
       render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
       await waitFor(() => expect(screen.getByTestId('last-stack-empty')).toBeInTheDocument())
-      // The card renders the mapped label, never the raw wire token. last_stack.py
-      // states the rule itself: reason is a short code and the wording a user
-      // reads is the UI's job.
-      expect(screen.getByText(/no completed stack yet for this target/i)).toBeInTheDocument()
+      // The fixture's real wire token is "no_stack" (see LastStackSchema's
+      // own doc comment) — translated to prose, never rendered raw.
+      expect(screen.getByText(lastStackReasonLabel('no_stack'))).toBeInTheDocument()
       expect(screen.queryByText('no_stack')).not.toBeInTheDocument()
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })

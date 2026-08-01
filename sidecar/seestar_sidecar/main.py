@@ -14,6 +14,7 @@ from seestar_sidecar.frontend import DEFAULT_WEB_DIST, mount_frontend
 from seestar_sidecar.imagery import DEFAULT_IMAGE_CACHE_DIR
 from seestar_sidecar.live_preview import DEFAULT_LIVE_SHARE_DIR
 from seestar_sidecar.mcp_proxy import McpConnection
+from seestar_sidecar.qa_analysis import DEFAULT_QA_CACHE_DIR, QaJobRegistry
 from seestar_sidecar.routes import replay_enabled, router
 from seestar_sidecar.session_activity import DEFAULT_PROVENANCE_PATH
 
@@ -75,6 +76,7 @@ def create_app(
     image_cache_dir: Path | str | None = None,
     live_share_dir: Path | str | None = None,
     provenance_path: Path | str | None = None,
+    qa_cache_dir: Path | str | None = None,
 ) -> FastAPI:
     """`web_dist` defaults to web/dist; `archive_dir` defaults to
     SEESTAR_ARCHIVE_DIR, or `None` — "not configured" — when that isn't set
@@ -108,6 +110,11 @@ def create_app(
     or `None` if neither is set — see session_activity.py and
     docs/configuration.md) and only needs overriding so a test can point at
     a synthetic file instead of the real, live-appended one.
+
+    `qa_cache_dir` defaults to `qa_analysis.DEFAULT_QA_CACHE_DIR`
+    (`sidecar/.cache/qa_analysis`, gitignored) and only needs overriding so a
+    test can point at `tmp_path` instead of writing into the real cache —
+    see qa_analysis.write_cached_report().
     """
     app = FastAPI(title="seestar-sidecar", version="0.1.0", lifespan=lifespan)
     # Safe default for callers that never run the lifespan — a bare
@@ -128,6 +135,14 @@ def create_app(
     app.state.provenance_path = (
         Path(provenance_path) if provenance_path is not None else DEFAULT_PROVENANCE_PATH
     )
+    app.state.qa_cache_dir = (
+        Path(qa_cache_dir) if qa_cache_dir is not None else DEFAULT_QA_CACHE_DIR
+    )
+    # One registry per app instance, same discipline as app.state.connection
+    # — two apps in a process must not share QA job state. See
+    # qa_analysis.QaJobRegistry and routes.py's qa_analysis_start/
+    # qa_analysis_status handlers.
+    app.state.qa_job_registry = QaJobRegistry()
     # Holds the last successfully discovered LiveFrame (see live_preview.py),
     # so a momentary share failure can degrade to "last known frame, marked
     # stale" instead of "nothing" — see routes.py's live_preview handler.

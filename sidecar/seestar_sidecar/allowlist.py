@@ -32,8 +32,32 @@ ALLOWED_TOOLS = frozenset(
         # Read-only." — reads, does not move, the focuser.
         "get_target_observability",  # "Read-only, offline (deterministic
         # astropy ephemeris)" — the sweet-band gauge's altitude/rotation data.
+        # --- slice 4 (Review & QA screen) — see docs/superpowers/specs/
+        # 2026-07-31-slice-4-review-qa.md.
+        "qa_tier2",  # "Read-only FITS analysis (photutils)" (server.py:1600)
+        # — scores RAW subs into PASS/MARGINAL/REJECT, no motion, no write.
+        # Verified against source, same as every entry above. UNLIKE every
+        # other tool in this set, it has NO literal `/api/qa_tier2` route —
+        # see NO_DIRECT_ROUTE_TOOLS immediately below for why, and
+        # qa_analysis.py for the only path allowed to call it.
     }
 )
+
+#: Allowlisted (so call_tool's guard permits it, and it IS read-only — see
+#: qa_tier2's own comment above) but deliberately given no literal
+#: `/api/<tool>` passthrough route, unlike every other ALLOWED_TOOLS member.
+#: `qa_tier2` is minutes-long over a real target's 200-1400 subs (measured;
+#: see the slice-4 spec §1c) — a direct 1:1 passthrough would be exactly the
+#: "synchronous route that takes four minutes" the spec calls unacceptable.
+#: The only caller allowed to invoke it is qa_analysis.start_analysis(),
+#: wired to /api/qa_analysis_start (see SIDECAR_ROUTES below), which runs it
+#: on a background asyncio.Task rather than awaiting it inline in a request
+#: handler. Kept out of the route-set invariant test via this set (see
+#: test_allowlist.py's `_expected_routes()`) rather than accepted into
+#: ALLOWED_TOOLS bare — the alternative would force a literal `/api/qa_tier2`
+#: route into existence just to satisfy that invariant, undoing the whole
+#: point of this carve-out.
+NO_DIRECT_ROUTE_TOOLS = frozenset({"qa_tier2"})
 
 #: Rejected, not merely unlisted: `pi_get_info` is NOT an MCP tool at all —
 #: there is no `@mcp.tool()` wrapper for it anywhere in server.py. It is a
@@ -88,6 +112,25 @@ ALLOWED_TOOLS = frozenset(
 #: module docstring for why that classification is deliberately NOT a
 #: mechanical function of ALLOWED_TOOLS's tool-name strings alone.
 #:
+#: "qa_targets" / "qa_analysis_start" / "qa_analysis_status" (slice 4,
+#: Review & QA screen — see docs/superpowers/specs/
+#: 2026-07-31-slice-4-review-qa.md) are none of them a literal tool call:
+#: each composes the archive scan (already read for projects_combined) with
+#: qa_analysis.py's on-disk cache and in-memory job registry. `qa_tier2` is
+#: the one tool any of them ever calls, and only via qa_analysis.
+#: start_analysis()'s background asyncio.Task — never awaited inline in a
+#: request handler (see NO_DIRECT_ROUTE_TOOLS above for why there is no
+#: bare `/api/qa_tier2`).
+#:
+#: "qa_analysis_start" is the one route in this app whose GET has a
+#: deliberate, expensive side effect (kicking off a multi-minute analysis)
+#: rather than being purely a read — the same precedent target_image's GET
+#: already sets for a cache-populating network fetch (see imagery.py). It is
+#: idempotent per target: a job already running, or a job/cache hit for the
+#: CURRENT sub set, is returned as-is, never re-run (see qa_analysis.
+#: start_analysis()). It is also never called on a page load — only from an
+#: explicit user action on the client, per CLAUDE.md and the spec's "Do not
+#: start an analysis on a page load, ever."
 #: "last_stack" and "last_stack/image" (the Live screen's second panel) are
 #: the same shape as "live_preview"/"live_preview/image": no MCP tool by
 #: either name exists — last_stack.py's own directory scan of
@@ -103,6 +146,9 @@ SIDECAR_ROUTES = frozenset(
         "live_preview",
         "live_preview/image",
         "session_activity",
+        "qa_targets",
+        "qa_analysis_start",
+        "qa_analysis_status",
         "last_stack",
         "last_stack/image",
     }

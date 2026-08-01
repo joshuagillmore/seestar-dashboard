@@ -168,6 +168,21 @@ class ArchiveTarget:
     display_name: str  # the raw directory name, spaces and all
     minutes: float
     nights: list[ArchiveNight] = field(default_factory=list)
+    #: Every `Light_*.fit` this scan found in the target's `-sub`/`_sub`
+    #: directory, unfiltered — including a file whose name didn't parse
+    #: cleanly (see `_parse_light_filename`'s `warning` case). qa_analysis.py
+    #: is the only consumer: it resolves a target to the FITS paths qa_tier2
+    #: needs from THIS scan (see docs/superpowers/specs/
+    #: 2026-07-31-slice-4-review-qa.md §1's "reuse archive.py's existing
+    #: scan, not a second walk of the same tree") rather than re-globbing the
+    #: tree itself. Deliberately NOT surfaced through projects_combined or
+    #: any other JSON response: combine_projects() (projects_union.py) only
+    #: ever reads `.nights`/`.display_name` off an ArchiveTarget by name, and
+    #: nothing in this app calls `asdict()` on one whole — see routes.py's
+    #: `asdict(scan.status)`, which serialises ArchiveStatus, never
+    #: ArchiveTarget. Adding this field must not change that: a local
+    #: filesystem path has no business leaving this process over HTTP.
+    sub_paths: list[Path] = field(default_factory=list)
 
 
 @dataclass
@@ -262,7 +277,9 @@ def scan_archive(root: Path | None, local_tz: timezone | None = None) -> Archive
         target_id = normalize_target_id(raw_name)
 
         nights: dict[str, int] = {}
-        for fit in entry.glob("Light_*.fit"):
+        sub_paths: list[Path] = []
+        for fit in sorted(entry.glob("Light_*.fit")):
+            sub_paths.append(fit)
             night, warning = _parse_light_filename(fit.name, local_tz)
             if warning is not None:
                 warnings.append(f"{entry.name}/{fit.name}: {warning}")
@@ -282,6 +299,7 @@ def scan_archive(root: Path | None, local_tz: timezone | None = None) -> Archive
             display_name=raw_name,
             minutes=round(sum(n.minutes for n in night_records), 4),
             nights=night_records,
+            sub_paths=sub_paths,
         )
 
     if warnings:

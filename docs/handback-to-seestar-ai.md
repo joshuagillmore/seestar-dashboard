@@ -101,6 +101,18 @@ further UI work in most cases.
 
 ## 1. Per-sub metrics are stripped from the `qa_tier2` payload
 
+> **Shipped 2026-07-31.** `qa_tier2` now returns `subs[].metrics` — `star_count`, `fwhm`, `hfr`,
+> `eccentricity`, `snr`, `background`, `scattered_light`, each nullable, with `metrics.error` set
+> when a sub could not be analyzed. Verified at source: `_compact_report` now carries
+> `"metrics": _compact_metrics(v.metrics)`. Measured payload from the built code: 298 B/PASS sub,
+> 320 B/REJECT — ~412 KB at 1400 subs, well within budget. The Review & QA screen's sidecar half is
+> built against this (docs/superpowers/specs/2026-07-31-slice-4-review-qa.md).
+>
+> **This did not fully unblock the screen — three follow-on gaps, below, are why "Option A" (an
+> on-demand, cached analysis triggered by the client) was needed instead of a direct passthrough.**
+> They are items 1a/1b/1c in that spec and are restated as their own hand-back asks here: **23**,
+> **24**, **25**.
+
 **Blocks:** the entire Review & QA screen — the per-sub eccentricity chart, the star-count chart,
 and every metric column of the per-sub table.
 
@@ -958,6 +970,69 @@ Two notes on cost, since the traffic hazard is real and we have measured it:
 **Until it exists** the dashboard shows the live sub, plus a clearly-dated "last completed stack"
 panel beneath it built from the share. That is honest and useful, but it is a workaround for a
 picture the device already has.
+## 24. No read-only getter for a written QA report
+
+**Affects:** the Review & QA screen's data cost — this is why slice 4 had to build an on-demand,
+client-cached analysis path (Option A, docs/superpowers/specs/2026-07-31-slice-4-review-qa.md §1)
+instead of simply reading back what a session already scored.
+
+**Verified 2026-07-31: there are zero `qa_report*.json` artifacts anywhere in the server's data
+directory.** So even where this getter to exist, there is currently nothing for it to read — but
+that's a separate, encouraging fact (nothing here is corrupted or lost; sessions simply have not
+been wound down with `qa_session_report` yet on this installation).
+
+`qa_session_report` **cannot** stand in for this: it writes a JSON+MD report and a manifest and
+winds down the session, so a dashboard calling it to display results would generate artifacts and
+end the session on every page refresh — ruled out outright by this repo's `CLAUDE.md`.
+
+**Asked for:** a read-only `get_session_report(target, date)` (or similar) that reads back an
+already-written report from `reports/qa_report_<slug>-<timestamp>.json` without re-scoring anything
+or touching the manifest/session state. With it, option B in the slice-4 spec (`§1`) replaces the
+dashboard's own on-disk cache outright, and the expensive photutils pass runs once, server-side,
+exactly where it already runs today for `qa_session_report`.
+
+---
+
+## 25. `qa_tier2`'s `_resolve_paths` cannot see the real archive layout
+
+**Affects:** the same screen — this is the other reason slice 4 resolves paths itself rather than
+calling `qa_tier2(target=...)` directly.
+
+`_resolve_paths` (`server.py:463`) globs `self.settings.data_dir` **non-recursively** for
+`*.fit`/`*.fits`. The user's real archive is nested one level down per target —
+`…/SeeStar/<Target>_sub/Light_*.fit` (or `<Target>-sub/`, both conventions seen live) — so a bare
+`qa_tier2(target="M31")` against that layout matches nothing; the glob never descends into
+`<Target>_sub/`.
+
+It does accept explicit `paths`, which is what the sidecar now does — resolving a target to its
+FITS files from its own archive scan (`sidecar/seestar_sidecar/archive.py`, which already handles
+both directory-naming conventions) and passing them in directly.
+
+**Asked for:** a recursive option for `_resolve_paths` — `sorted(data_dir.rglob(pattern))` in place
+of `data_dir.glob(pattern)`, or a documented `<target>[-_]sub/` convention it walks explicitly —
+would make the `target` argument actually usable against a real archive, rather than only ever
+working via explicit `paths`.
+
+---
+
+## 26. `qa_tier2`'s own docstring says it strips metrics it no longer strips
+
+**Affects:** nothing on screen — a documentation-only item, raised because the server team's own
+closing note on item 10 applies here too: *"a comment is evidence about what someone believed, not
+about what the code does."*
+
+`qa_tier2`'s docstring at `server.py:511` (the controller method) still reads:
+
+> *"Returns a compact per-sub verdict summary + keep-list; does not dump full metrics for every
+> sub."*
+
+That was true before item 1 shipped and is no longer true now: `_compact_report` does include
+`metrics` per sub today (verified at source, and directly exercised by slice 4's tests against a
+real recorded payload). The `@mcp.tool()` wrapper's own docstring at `server.py:1598` was already
+updated to match; only the controller method's copy was missed.
+
+**Asked for:** drop the "does not dump full metrics" clause from the controller method's docstring
+— one line, no behaviour change.
 
 ---
 
@@ -986,6 +1061,9 @@ picture the device already has.
 | 19 | Battery has no read-only route (`pi_get_info` is not a tool) | Guardrails Battery row; top-bar `batt` fact | Yes — the guardrail logic reads it natively to decide |
 | 20 | No way to learn when the current session started | Elapsed time on Live; the Max-duration guardrail understates on a mid-session connect | Yes — the session has a start and `SessionManifest` carries an id |
 | 16 | `SiteProfile` has coordinates but no IANA timezone | Every clock on Tonight can name the browser's own zone but not the site's, or detect whether the two agree | No — nothing computes or stores one today |
+| 23 | No read-only getter for a written QA report | Forces the Review screen's on-demand client cache (Option A) instead of reading back a real report | No — `qa_session_report` writes reports today, but nothing reads them back |
+| 24 | `_resolve_paths` is non-recursive | `qa_tier2(target=...)` cannot see the real, nested archive layout | No — needs a recursive glob or a documented sub-dir convention |
+| 25 | `qa_tier2`'s controller-method docstring is stale | Nothing on screen — documentation only | N/A — one-line docstring fix, no behaviour change |
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
 explicit absent state for each rather than a plausible-looking placeholder, so nothing on screen is

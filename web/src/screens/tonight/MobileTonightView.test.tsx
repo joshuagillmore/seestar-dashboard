@@ -30,7 +30,7 @@ describe('MobileTonightView', () => {
 
   it('shows the real site name in the eyebrow, not the design mockup\'s illustrative "Backyard"', () => {
     render(<MobileTonightView conditions={recorded} targets={plan.targets} site={site} />)
-    // site.profile.name ("Example Observatory (scope GPS)") contains regex metacharacters
+    // site.profile.name ("Example Observatory") contains regex metacharacters
     // — escape before building the matcher rather than matching a substring
     // that happens to ignore them.
     const escaped = site.profile.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

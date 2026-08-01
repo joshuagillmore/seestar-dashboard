@@ -11,7 +11,12 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.routing import Route
 
-from seestar_sidecar.allowlist import ALLOWED_TOOLS, FORBIDDEN_TOOLS, SIDECAR_ROUTES
+from seestar_sidecar.allowlist import (
+    ALLOWED_TOOLS,
+    FORBIDDEN_TOOLS,
+    NO_DIRECT_ROUTE_TOOLS,
+    SIDECAR_ROUTES,
+)
 from seestar_sidecar.main import create_app
 
 #: FastAPI registers these itself (interactive docs + the OpenAPI schema) on
@@ -42,7 +47,11 @@ def _registered_routes(app) -> dict[str, frozenset[str]]:
 
 
 def _expected_routes() -> dict[str, frozenset[str]]:
-    api_names = {"health"} | ALLOWED_TOOLS | SIDECAR_ROUTES
+    # NO_DIRECT_ROUTE_TOOLS (qa_tier2) is allowlisted for call_tool's guard
+    # but deliberately has no literal `/api/<tool>` passthrough — see
+    # allowlist.py's own comment. Excluding it here is what keeps this
+    # invariant from forcing that route into existence.
+    api_names = {"health"} | (ALLOWED_TOOLS - NO_DIRECT_ROUTE_TOOLS) | SIDECAR_ROUTES
     expected = {f"/api/{name}": frozenset({"GET"}) for name in api_names}
     expected.update(_FASTAPI_DOC_ROUTES)
     return expected
@@ -95,8 +104,34 @@ def test_allowlist_is_exactly_the_expected_tools():
             "qa_tier1",
             "get_focuser_position",
             "get_target_observability",
+            # slice 4 (Review & QA screen) — read-only, but see
+            # NO_DIRECT_ROUTE_TOOLS: no literal passthrough route exists.
+            "qa_tier2",
         }
     )
+
+
+def test_no_direct_route_tools_is_a_subset_of_the_allowlist():
+    """NO_DIRECT_ROUTE_TOOLS carves an exception out of the route-set
+    invariant below — it must only ever narrow ALLOWED_TOOLS, never name a
+    tool that isn't allowlisted (which would make the carve-out meaningless)
+    or one that's forbidden (which would smuggle a forbidden tool's call
+    past FORBIDDEN_TOOLS's own route-absence test via this exception).
+    """
+    assert NO_DIRECT_ROUTE_TOOLS <= ALLOWED_TOOLS
+    assert not (NO_DIRECT_ROUTE_TOOLS & FORBIDDEN_TOOLS)
+
+
+def test_qa_tier2_has_no_direct_passthrough_route(client):
+    """qa_tier2 IS read-only and IS allowlisted (see the test above) — but
+    unlike every other ALLOWED_TOOLS member, a direct `/api/qa_tier2` would
+    be a synchronous multi-minute call (see allowlist.py's own comment and
+    docs/superpowers/specs/2026-07-31-slice-4-review-qa.md §1). This proves
+    the carve-out actually holds: no route reaches it directly, the same
+    404-not-403 property FORBIDDEN_TOOLS's own tests prove for a different
+    reason (see test_side_effecting_tools_have_no_route above).
+    """
+    assert client.get("/api/qa_tier2").status_code == 404
 
 
 def test_registered_routes_are_exactly_health_plus_the_allowlist_plus_sidecar_routes():

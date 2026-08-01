@@ -480,14 +480,35 @@ export const LivePreviewSchema = z.object({
  * itself names: "a clearly-dated 'last completed stack' panel beneath [the
  * live sub], built from the share."
  *
- * `target: null` means no completed stack exists yet for this target (e.g.
- * a first-ever session on the object) and always carries a `reason` — a
- * normal, common state, not an error, same discriminator convention as
- * `LivePreviewSchema.source` above. Every other field stays independently
- * nullable on the same defensive reasoning as the rest of this section: the
- * sidecar route this client calls has no recorded fixture yet (built in
- * parallel — see the last-stack sidecar report), so this schema must not
- * assume a field it hasn't seen on a live payload is non-null. */
+ * Verified directly against the real, committed route
+ * (`sidecar/seestar_sidecar/routes.py`'s `_last_stack_payload`/
+ * `_last_stack_absent`, and `last_stack.py`'s own module doc comment) once
+ * the sidecar half of this contract landed:
+ *
+ * - `target: null` means no completed stack exists yet for this target (a
+ *   first-ever session on the object, or the only session so far still
+ *   running) — a normal, common state, not an error, same discriminator
+ *   convention as `LivePreviewSchema.source` above. It always carries a
+ *   `reason`.
+ * - `reason` is a short, stable, machine-readable wire token —
+ *   `no_stack`/`idle`/`bridge_down`/`not_configured`/`share_unreachable`,
+ *   the same tokens `live_preview.py` already defines for the last four,
+ *   reused rather than duplicated — never prose. The client must translate
+ *   it, never render it raw; see `lastStackReasonLabel` in lastStack.ts.
+ * - `url` is always the literal `"/api/last_stack/image"` on BOTH branches
+ *   (the absent response hardcodes it too), so `target`, not `url`, is what
+ *   a caller must check for "is there really an image here" — see
+ *   LastStackCard's own `hasImage`.
+ * - The sidecar's own image cache is cleared on every non-success response,
+ *   so a target switch can never leave a previous target's picture being
+ *   served — this client's `hasImage` check (keyed on `target`) already
+ *   matches that: the panel is expected to disappear on switch, not linger.
+ *
+ * Every field still stays independently nullable in this schema, the same
+ * defensive convention as the rest of this section — this parses the real
+ * route's payload shape, not a guess, but a schema should still not assume a
+ * field is non-null merely because one payload it has been checked against
+ * happens to send it. */
 export const LastStackSchema = z.object({
   ok: z.boolean(),
   target: z.string().nullable(),

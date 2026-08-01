@@ -35,7 +35,7 @@ describe('TopBar', () => {
     // The facts row is the only branch with property access; a typo'd field
     // name would otherwise render blank with every test still green.
     render(<TopBar site={site} replay={false} />)
-    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory (scope GPS)')
+    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory')
     expect(screen.getByTestId('fact-bortle')).toHaveTextContent('8')
   })
 
