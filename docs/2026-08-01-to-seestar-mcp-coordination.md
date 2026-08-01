@@ -51,6 +51,17 @@ then `get_view_state` to decide which state to render. So a Live screen left ope
 scope** costs **6 bridge requests a minute, indefinitely, for nothing**. Nobody measured that
 because it never showed up as a user-visible symptom. We are fixing it.
 
+> **✅ FIXED 2026-08-02**, once `get_run_state` gave us a state tool that costs the bridge
+> nothing. The device calls are now gated on that free file read: `active` and `unknown` check
+> every poll, a failed `get_run_state` fails **open** and checks, and `idle` checks on the first
+> poll and then every fifth. A parked scope drops from ~360 bridge requests an hour to ~78,
+> and opening the screen mid-session is still immediate.
+>
+> Deliberately not "skip the device while idle": `run_state.json` is written by your skills
+> during an orchestrated run, so a scope driven by hand from the phone app produces no file at
+> all. `idle` means "no skill-driven run", which is not "nothing is happening" — reading it as
+> the latter would reintroduce the confident-wrong-answer somewhere new.
+
 ### Your 13,121-call figure includes our debugging
 
 Worth saying so you do not over-fit to it. That window covers a night where we ran **two console

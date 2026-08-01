@@ -865,8 +865,20 @@ only when `find_target()` actually resolved the string — which is the disambig
 after finding `Veil Nebula East` and `Veil Nebula West` both fold to `Veil`. Timestamps are
 offset-bearing. Staleness threshold is theirs, currently 15 minutes.
 
-**Still to do on our side:** allowlist `get_run_state`, add its schema, drop the
-`get_view_state`-timeout inference for "is a run in progress", and stop faking the session start.
+**✅ DONE on our side (2026-08-02).** `get_run_state` is allowlisted (verified read-only at
+source, not from its name), routed, schema'd against a real recording, and wired into
+`useLiveSession`. `check_night_guardrails` now receives `run.session_start_utc` — the scope's
+real start — so the item is closed rather than merely answered. The since-I-started-watching
+fallback remains for a hand-driven session that writes no `run_state.json`: narrower, not gone.
+
+Two things the announcing note's shorthand got wrong, caught by reading the code and confirmed
+against a real payload, and worth knowing if anyone else consumes this tool:
+
+- **`unknown` is not `run: null`.** A stale stamp keeps its run record. The note said "run: null
+  when idle", which is true of idle and misleading about unknown. Their tool docstring is not
+  wrong here, just silent on `run` — worth a line whenever there is a natural reason to send one.
+- `slot_ends_utc` / `park_deadline_utc` are present-and-null; `targets_remaining` / `resolved_id`
+  are omitted entirely. Different states, treated differently by our schema.
 
 ---
 
