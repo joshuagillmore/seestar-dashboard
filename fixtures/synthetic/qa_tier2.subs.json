@@ -1,0 +1,148 @@
+{
+  "_comment": [
+    "SYNTHETIC — hand-built, NOT recorded from a run. This is not validation of",
+    "seestar-mcp's contract and must never be cited as such.",
+    "",
+    "fixtures/qa_tier2.json is a real recorded response, but from a run with no",
+    "subs (total 0, subs []), so it exercises the envelope and the nine medians",
+    "keys and nothing else. The Review & QA screen is made of subs[], so this",
+    "file exists to drive rendering until a real multi-sub payload can be",
+    "recorded (needs SEESTAR_ARCHIVE_DIR pointed at real .fit files).",
+    "",
+    "Every field below is transcribed from verified source at seestar-mcp",
+    "main @ e8f0221 — qa_tier2.py SubMetrics/SubVerdict/SessionReport and",
+    "server.py _compact_report/_compact_metrics — not invented:",
+    "  - `name` is path.stem: NO .fit extension (qa_tier2.py:240). A join key",
+    "    carrying the extension matches zero rows, silently.",
+    "  - an unanalysable sub STAYS in subs[] with metrics.error set and the",
+    "    other metrics null; star_count is 0 rather than null on that path.",
+    "  - floats are rounded to 4 dp by _compact_metrics (_METRIC_DP).",
+    "  - keep_list holds the names of subs whose verdict != REJECT.",
+    "Reason strings keep the MEASURED values (this file's own numbers) but do not quote policy cutoffs. Those live in seestar-mcp config.py; baking one into a fixture I authored would create a second copy that drifts silently, which is the same failure web/src/test/no-thresholds.test.ts guards against in source."
+  ],
+  "ok": true,
+  "summary": {
+    "target": "M76",
+    "total": 6,
+    "kept": 3,
+    "wfwhm": 3.1122,
+    "medians": {
+      "fwhm": 3.0841,
+      "fwhm_sigma": 0.2913,
+      "snr": 14.7712,
+      "star_count": 412,
+      "hfr": 1.8402,
+      "eccentricity": 0.3914,
+      "scattered_light": 0.0212,
+      "scattered_light_sigma": 0.0074,
+      "n_analyzed": 5
+    },
+    "dominant_reject_cause": "eccentricity",
+    "subs": [
+      {
+        "name": "Light_M76_10.0s_LP_20260801-004233",
+        "verdict": "PASS",
+        "reasons": [],
+        "metrics": {
+          "star_count": 431,
+          "fwhm": 2.9714,
+          "hfr": 1.7903,
+          "eccentricity": 0.3402,
+          "snr": 15.2231,
+          "background": 118.4012,
+          "scattered_light": 0.0187,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M76_10.0s_LP_20260801-004244",
+        "verdict": "PASS",
+        "reasons": [],
+        "metrics": {
+          "star_count": 419,
+          "fwhm": 3.0402,
+          "hfr": 1.8221,
+          "eccentricity": 0.3611,
+          "snr": 14.9013,
+          "background": 119.0117,
+          "scattered_light": 0.0203,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M76_10.0s_LP_20260801-004255",
+        "verdict": "MARGINAL",
+        "reasons": [
+          "MARGINAL - eccentricity 0.4821 in the marginal band (mild tracking error)"
+        ],
+        "metrics": {
+          "star_count": 402,
+          "fwhm": 3.1904,
+          "hfr": 1.9011,
+          "eccentricity": 0.4821,
+          "snr": 14.1102,
+          "background": 120.3341,
+          "scattered_light": 0.0221,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M76_10.0s_LP_20260801-004306",
+        "verdict": "REJECT",
+        "reasons": [
+          "REJECT - eccentricity 0.6142 over the session cutoff (tracking error)"
+        ],
+        "metrics": {
+          "star_count": 388,
+          "fwhm": 3.4417,
+          "hfr": 2.0114,
+          "eccentricity": 0.6142,
+          "snr": 13.2204,
+          "background": 121.7788,
+          "scattered_light": 0.0244,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M76_10.0s_LP_20260801-004317",
+        "verdict": "REJECT",
+        "reasons": [
+          "REJECT - star count 173 under the session-median floor of 412 (cloud)",
+          "REJECT - SNR 6.4011 under the session-median floor of 14.7712"
+        ],
+        "metrics": {
+          "star_count": 173,
+          "fwhm": 3.9902,
+          "hfr": 2.3317,
+          "eccentricity": 0.4104,
+          "snr": 6.4011,
+          "background": 143.2201,
+          "scattered_light": 0.0611,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M76_10.0s_LP_20260801-004328",
+        "verdict": "REJECT",
+        "reasons": [
+          "REJECT - could not analyse"
+        ],
+        "metrics": {
+          "star_count": 0,
+          "fwhm": null,
+          "hfr": null,
+          "eccentricity": null,
+          "snr": null,
+          "background": null,
+          "scattered_light": null,
+          "error": "no 2-D image HDU in file"
+        }
+      }
+    ]
+  },
+  "keep_list": [
+    "Light_M76_10.0s_LP_20260801-004233",
+    "Light_M76_10.0s_LP_20260801-004244",
+    "Light_M76_10.0s_LP_20260801-004255"
+  ]
+}

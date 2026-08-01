@@ -557,6 +557,144 @@ export const SessionActivitySchema = z.object({
   source_configured: z.boolean(),
 })
 
+/* --- slice 4: qa_tier2 (Review & QA) ----------------------------------------
+ *
+ * Transcribed from seestar-mcp `main @ e8f0221` source — `qa_tier2.py`'s
+ * `SubMetrics` / `SubVerdict` / `SessionReport` and `server.py`'s
+ * `_compact_report` / `_compact_metrics` — and confirmed field-by-field by
+ * the seestar-mcp session in their round-4 close.
+ *
+ * This is the schema their `qa_tier2` contract tests have been pinning
+ * against our *prose* since round 3, with neither side able to call them
+ * validated. Parsing a real payload is what closes that loop.
+ */
+
+/** One sub's metrics. Every value is nullable: a sub that could not be
+ * analysed still appears in `subs[]` with `error` set and the rest null —
+ * dropping it would silently shrink the denominator on a screen whose whole
+ * job is the distribution.
+ *
+ * `star_count` is typed `int` (not `int | None`) in their dataclass and is 0
+ * on every failure path, so null is not expected — accepted anyway, for the
+ * same reason `StatusSchema`'s fields are `.optional()`: an unexpected null
+ * should render an absent state, not blank the screen. Flagged to them as a
+ * note-vs-type discrepancy, not a defect.
+ *
+ * Unknown keys pass through: `_compact_metrics` iterates
+ * `dataclasses.asdict`, so a new metric appears here the moment they add a
+ * field, and rejecting the payload over one would be the wrong trade. */
+export const QaSubMetricsSchema = z.object({
+  star_count: z.number().nullable().optional(),
+  fwhm: z.number().nullable().optional(),
+  hfr: z.number().nullable().optional(),
+  eccentricity: z.number().nullable().optional(),
+  snr: z.number().nullable().optional(),
+  background: z.number().nullable().optional(),
+  scattered_light: z.number().nullable().optional(),
+  /** Set when the sub could not be analysed at all. Its presence — not a
+   * null metric — is what marks a row unanalysable. */
+  error: z.string().nullable().optional(),
+})
+
+export const QaSubVerdictSchema = z.object({
+  /** The sub's stable key, and the archive join key.
+   *
+   * `path.stem` server-side — the filename WITHOUT its extension:
+   * `Light_M76_10.0s_LP_20260801-004233`, never `….fit`. Verified in
+   * `qa_tier2.py:240` (`sub_name = name if name is not None else path.stem`),
+   * and flagged by the seestar-mcp session before we wrote this: a join key
+   * carrying `.fit` matches zero rows, silently. Our own archive scan keys
+   * on nights rather than frames today, so nothing joins on this yet — this
+   * comment exists so the first thing that does gets it right. */
+  name: z.string(),
+  /** "PASS" | "MARGINAL" | "REJECT" — deliberately NOT a z.enum.
+   *
+   * The vocabulary is the server's, and so is the decision. An enum would
+   * reject the whole payload the day a fourth verdict appears, blanking a
+   * screen over a value we could have shown verbatim. Rendering maps the
+   * three known values to a tone and shows anything else as-is, unstyled —
+   * see qa.ts. The UI renders verdicts; it never computes or re-derives
+   * them (CLAUDE.md), and that has to include not asserting the list. */
+  verdict: z.string(),
+  /** The justification, already composed server-side and rendered verbatim —
+   * each line names the metric, its measured value, and the cutoff it fell
+   * on. Never re-worded here, and never reduced to a colour: the policy's
+   * standard is an auditable verdict traceable to a metric and a threshold.
+   *
+   * Deliberately not quoting a sample reason in this comment. The literal
+   * cutoffs live in seestar-mcp's config.py and nowhere in this repo — see
+   * src/test/no-thresholds.test.ts, which fails the build on one appearing
+   * here, comment included. A threshold written into a comment goes stale
+   * exactly as silently as one written into code. */
+  reasons: z.array(z.string()),
+  metrics: QaSubMetricsSchema,
+})
+
+/** Session medians — the thresholds each sub was actually scored against.
+ * Shown so a verdict stays traceable; never used to recompute one. */
+export const QaMediansSchema = z.object({
+  fwhm: z.number().nullable().optional(),
+  fwhm_sigma: z.number().nullable().optional(),
+  snr: z.number().nullable().optional(),
+  star_count: z.number().nullable().optional(),
+  hfr: z.number().nullable().optional(),
+  eccentricity: z.number().nullable().optional(),
+  scattered_light: z.number().nullable().optional(),
+  scattered_light_sigma: z.number().nullable().optional(),
+  /** How many subs contributed to the medians above — NOT `total`. A session
+   * where these diverge had unanalysable subs, and the medians are drawn
+   * from the smaller set. */
+  n_analyzed: z.number().nullable().optional(),
+})
+
+export const QaSummarySchema = z.object({
+  target: z.string().nullable(),
+  total: z.number(),
+  kept: z.number(),
+  /** Star-count-weighted mean FWHM across subs. */
+  wfwhm: z.number().nullable(),
+  medians: QaMediansSchema,
+  dominant_reject_cause: z.string().nullable(),
+  subs: z.array(QaSubVerdictSchema),
+})
+
+/** The raw `qa_tier2` tool response, stored verbatim as a job's `result`
+ * (qa_analysis.py) and surfaced as `report` on a complete/stale status. */
+export const Tier2Schema = z.object({
+  ok: z.boolean(),
+  summary: QaSummarySchema,
+  /** Names of subs with verdict != REJECT — the server's keep decision,
+   * carried so the UI can show it without deriving it from `subs[]`. */
+  keep_list: z.array(z.string()),
+})
+
+/** `/api/qa_analysis_status` and `/api/qa_analysis_start`: a discriminated
+ * union on `status`, not one shape with everything optional.
+ *
+ * `stale` is a first-class state, distinct from both `complete` and
+ * `not_analysed`: a real report exists but the sub set on disk has changed
+ * since it was computed. Showing it as complete would date-stamp stale
+ * numbers as current; hiding it would discard a usable result. */
+export const QaAnalysisStatusSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('not_analysed') }),
+  z.object({
+    status: z.literal('running'),
+    started_at: z.string().nullable(),
+    elapsed_seconds: z.number(),
+  }),
+  z.object({ status: z.literal('failed'), error: z.string().nullable() }),
+  z.object({
+    status: z.literal('complete'),
+    analysed_at: z.string().nullable(),
+    report: Tier2Schema.optional(),
+  }),
+  z.object({
+    status: z.literal('stale'),
+    analysed_at: z.string().nullable(),
+    report: Tier2Schema.optional(),
+  }),
+])
+
 export type Conditions = z.infer<typeof ConditionsSchema>
 export type PlanTargets = z.infer<typeof PlanTargetsSchema>
 export type PlanTarget = z.infer<typeof PlanTargetSchema>
@@ -588,3 +726,9 @@ export type LivePreview = z.infer<typeof LivePreviewSchema>
 export type LastStack = z.infer<typeof LastStackSchema>
 export type SessionActivityRecord = z.infer<typeof SessionActivityRecordSchema>
 export type SessionActivity = z.infer<typeof SessionActivitySchema>
+export type QaSubMetrics = z.infer<typeof QaSubMetricsSchema>
+export type QaSubVerdict = z.infer<typeof QaSubVerdictSchema>
+export type QaMedians = z.infer<typeof QaMediansSchema>
+export type QaSummary = z.infer<typeof QaSummarySchema>
+export type Tier2 = z.infer<typeof Tier2Schema>
+export type QaAnalysisStatus = z.infer<typeof QaAnalysisStatusSchema>
