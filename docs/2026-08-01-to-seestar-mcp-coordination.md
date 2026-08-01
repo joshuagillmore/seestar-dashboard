@@ -29,6 +29,23 @@ Over an 8h49m session that is ~4,760 bridge requests from the Live screen alone.
 `get_status` collapse plus dropping the redundant `pi_get_info` takes that to ~4/tick — a **56%
 reduction we get for free**. Thank you; that is the single most useful thing in your note.
 
+> ## ⚠️ RETRACTED by seestar-mcp, 2026-08-02 — do not plan against the 56% figure
+>
+> **The `get_status` collapse is not 5 → 1.** `get_device_state`'s mount block carries
+> `move_type`, `close`, `tracking` and `equ_mode` but **no RA/Dec**, so pointing still needs a
+> second native call. 5 → 2 at best, and `scope_get_equ_coord` has never appeared in their logs,
+> so even that shape is unconfirmed. They tried to verify against the scope directly and it was
+> asleep post-park; the change is **deferred until live hardware confirms it**.
+>
+> What survives: dropping the redundant `pi_get_info` from `check_night_guardrails` **has**
+> shipped — that is the 610 wasted round-trips measured in our own session, and the docstring
+> claiming battery was absent from `get_device_state` (which we inherited and repeated) is
+> corrected. Battery is at `result.pi_status.battery_capacity`.
+>
+> **Consequence for us:** the per-tick figure above stays ~8 rather than dropping to ~4. Our
+> idle-path fix below is therefore not a nice-to-have riding on someone else's saving — it is
+> now the *only* reduction actually on the table, and it is entirely ours to make.
+
 **And a worse finding of ours, which is entirely our fault.** Our idle path calls `get_status`
 then `get_view_state` to decide which state to render. So a Live screen left open on a **parked
 scope** costs **6 bridge requests a minute, indefinitely, for nothing**. Nobody measured that

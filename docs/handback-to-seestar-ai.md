@@ -36,12 +36,19 @@ Four tiers, ordered by what they unblock rather than by effort.
 
 ### Tier 1 — blocks a whole screen from being started
 
-**Item 1: `qa_tier2` strips the per-sub metric arrays.**
+**Item 1: `qa_tier2` strips the per-sub metric arrays. — ✅ LANDED (seestar-mcp, 2026-08-02).**
 
-This is the long pole. The Review & QA screen is *made of* per-sub charts — eccentricity, FWHM,
-SNR and star count across every frame — and `_compact_report` removes exactly those arrays before
-the payload leaves. There is nothing partial to build in the meantime, so the screen cannot start
-until this lands. Everything else on this list degrades a screen; this one prevents one existing.
+This was the long pole. The Review & QA screen is *made of* per-sub charts — eccentricity, FWHM,
+SNR and star count across every frame — and `_compact_report` removed exactly those arrays before
+the payload left. Nothing partial could be built in the meantime.
+
+`_compact_report` now returns them deliberately: *"the arrays are computed for the verdicts
+anyway — dropping them here discarded the only copy."* Confirmed against a real payload, not the
+note: `web/src/api/tier2.test.ts` parses `fixtures/qa_tier2.subs.json` (25 real subs, 12 PASS /
+7 MARGINAL / 6 REJECT) through `Tier2Schema`. **The screen is unblocked and the schema exists.**
+
+That also closes the contract loop on their `qa_tier2` pins, which had been written against our
+prose since round 3 with neither side able to call them validated.
 
 ### Tier 2 — blocks a feature within a screen that is otherwise buildable
 
@@ -783,6 +790,12 @@ the ranker.
 
 **Found 2026-07-30.**
 
+> **Superseded in part (2026-08-02).** The "battery is not in `get_device_state`" claim below came
+> from a seestar-mcp docstring that was **wrong**, and we inherited the error. Battery *is* there,
+> at `result.pi_status.battery_capacity`. They have removed the redundant native `pi_get_info` from
+> `check_night_guardrails` — the 610 wasted round-trips measured in our own session — and corrected
+> the docstring. The item itself stands: the percentage still does not surface on a read-only tool.
+
 `pi_get_info` is **not an MCP tool** — there is no `@mcp.tool()` wrapper for it anywhere.
 `check_night_guardrails` calls it natively and uses the battery level to reach its verdict, but the
 percentage never surfaces. Battery is also confirmed *not* to be in `get_device_state`; reading it
@@ -833,6 +846,27 @@ The server knows: a session has a start, and `SessionManifest` already carries a
 **Asked for:** expose the current session's start time on a read-only tool — `get_view_state` or
 `get_status` would both be reasonable — so a client can report elapsed time correctly however late
 it connects, and pass a truthful `session_start_utc` back into the guardrail check.
+
+**✅ ANSWERED (seestar-mcp `main @ b6f3d60`, 2026-08-02) — `get_run_state`, the 34th tool.**
+
+Built to the shape agreed in round 4, and it answers more than this item asked for:
+
+```
+{ ok, state: "active" | "idle" | "unknown", stamped_utc, run: {…} | null }
+run: { session_start_utc, target, slot_ends_utc, park_deadline_utc,
+       targets_remaining?, resolved_id? }
+```
+
+`run.session_start_utc` is the real answer to this item — we can stop timing from browser-open.
+The tri-state is the one we argued for: `unknown` is distinct from `idle` and **must not be read
+as "the scope is free"**; a corrupt file reads `unknown`, never `idle`. `targets_remaining` and
+`resolved_id` are *omitted* when unknown rather than nulled or emptied, and `resolved_id` appears
+only when `find_target()` actually resolved the string — which is the disambiguation we asked for
+after finding `Veil Nebula East` and `Veil Nebula West` both fold to `Veil`. Timestamps are
+offset-bearing. Staleness threshold is theirs, currently 15 minutes.
+
+**Still to do on our side:** allowlist `get_run_state`, add its schema, drop the
+`get_view_state`-timeout inference for "is a run in progress", and stop faking the session start.
 
 ---
 
