@@ -1,0 +1,495 @@
+{
+  "_comment": [
+    "REAL — recorded from seestar-mcp's qa_tier2 (main @ e8f0221) over 25 subs",
+    "randomly sampled (seed 7) from the local archive export's M 81 folder on",
+    "2026-08-02. Not hand-built: this is what the tool actually returned.",
+    "",
+    "This is the payload that closes the contract loop. seestar-mcp has pinned",
+    "qa_tier2 in their build since round 3 against our PROSE, with both sides",
+    "agreeing the pins could not be called validated until a real payload parsed",
+    "on this side. It does — see web/src/api/tier2.test.ts.",
+    "",
+    "Read off the local periodic export, never the scope's SMB share: reading",
+    "full FITS over the share is the heavy transfer that starves the control",
+    "link. No scope involvement at all.",
+    "",
+    "Two properties worth knowing, both observed here rather than assumed:",
+    "  - `target` is null. It is only set when qa_tier2 is called with target=,",
+    "    and our sidecar always calls it with paths= (qa_analysis.py). The screen",
+    "    must take the target from our own target_id, never from summary.target.",
+    "  - per-sub `metrics` are rounded to 4dp by _compact_metrics, but `medians`",
+    "    and `wfwhm` are full float precision. Flagged to seestar-mcp."
+  ],
+  "ok": true,
+  "summary": {
+    "target": null,
+    "total": 25,
+    "kept": 19,
+    "wfwhm": 2.5983404623822577,
+    "medians": {
+      "fwhm": 2.605779464127422,
+      "fwhm_sigma": 0.09048470825143443,
+      "snr": 51.37922710592091,
+      "star_count": 32.0,
+      "hfr": 1.2665751956118463,
+      "eccentricity": 0.40755591942295505,
+      "scattered_light": 0.0035229516784559844,
+      "scattered_light_sigma": 0.005250007191040364,
+      "n_analyzed": 25
+    },
+    "dominant_reject_cause": "scattered_light",
+    "subs": [
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-203641",
+        "verdict": "REJECT",
+        "reasons": [
+          "REJECT: scattered light 0.016 > 0.014 (median + 2σ) — likely thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 30,
+          "fwhm": 2.6096,
+          "hfr": 1.2146,
+          "eccentricity": 0.401,
+          "snr": 46.1685,
+          "background": 2101.0,
+          "scattered_light": 0.0158,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-203908",
+        "verdict": "REJECT",
+        "reasons": [
+          "REJECT: scattered light 0.014 > 0.014 (median + 2σ) — likely thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 32,
+          "fwhm": 2.4998,
+          "hfr": 1.1995,
+          "eccentricity": 0.3853,
+          "snr": 44.9206,
+          "background": 2091.0,
+          "scattered_light": 0.014,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-204125",
+        "verdict": "MARGINAL",
+        "reasons": [
+          "MARGINAL: scattered light 0.013 > 0.009 (median + 1σ) — possible thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 31,
+          "fwhm": 2.6058,
+          "hfr": 1.2571,
+          "eccentricity": 0.4106,
+          "snr": 46.7365,
+          "background": 2075.0,
+          "scattered_light": 0.0133,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-204147",
+        "verdict": "MARGINAL",
+        "reasons": [
+          "MARGINAL: scattered light 0.012 > 0.009 (median + 1σ) — possible thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 32,
+          "fwhm": 2.5149,
+          "hfr": 1.2154,
+          "eccentricity": 0.3772,
+          "snr": 45.349,
+          "background": 2072.0,
+          "scattered_light": 0.0124,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-204221",
+        "verdict": "MARGINAL",
+        "reasons": [
+          "MARGINAL: eccentricity 0.48 >= 0.42 marginal",
+          "MARGINAL: scattered light 0.012 > 0.009 (median + 1σ) — possible thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 32,
+          "fwhm": 2.4119,
+          "hfr": 1.3381,
+          "eccentricity": 0.4809,
+          "snr": 43.4515,
+          "background": 2072.0,
+          "scattered_light": 0.0124,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-204426",
+        "verdict": "MARGINAL",
+        "reasons": [
+          "MARGINAL: scattered light 0.012 > 0.009 (median + 1σ) — possible thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 33,
+          "fwhm": 2.4942,
+          "hfr": 1.3043,
+          "eccentricity": 0.3966,
+          "snr": 43.2804,
+          "background": 2072.0,
+          "scattered_light": 0.0121,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-204512",
+        "verdict": "MARGINAL",
+        "reasons": [
+          "MARGINAL: eccentricity 0.42 >= 0.42 marginal",
+          "MARGINAL: scattered light 0.013 > 0.009 (median + 1σ) — possible thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 30,
+          "fwhm": 2.5639,
+          "hfr": 1.2692,
+          "eccentricity": 0.4213,
+          "snr": 47.307,
+          "background": 2062.0,
+          "scattered_light": 0.0131,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-204813",
+        "verdict": "REJECT",
+        "reasons": [
+          "REJECT: scattered light 0.015 > 0.014 (median + 2σ) — likely thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 31,
+          "fwhm": 2.5033,
+          "hfr": 1.2666,
+          "eccentricity": 0.3179,
+          "snr": 48.5322,
+          "background": 2066.0,
+          "scattered_light": 0.0148,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-204910",
+        "verdict": "MARGINAL",
+        "reasons": [
+          "MARGINAL: eccentricity 0.43 >= 0.42 marginal",
+          "MARGINAL: scattered light 0.013 > 0.009 (median + 1σ) — possible thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 32,
+          "fwhm": 2.5034,
+          "hfr": 1.3211,
+          "eccentricity": 0.4299,
+          "snr": 44.6975,
+          "background": 2059.0,
+          "scattered_light": 0.0135,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240104-205007",
+        "verdict": "REJECT",
+        "reasons": [
+          "MARGINAL: eccentricity 0.42 >= 0.42 marginal",
+          "REJECT: scattered light 0.014 > 0.014 (median + 2σ) — likely thin cirrus / bright-star halos"
+        ],
+        "metrics": {
+          "star_count": 33,
+          "fwhm": 2.495,
+          "hfr": 1.2607,
+          "eccentricity": 0.4213,
+          "snr": 42.5639,
+          "background": 2059.0,
+          "scattered_light": 0.0141,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-210004",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 32,
+          "fwhm": 2.6658,
+          "hfr": 1.3283,
+          "eccentricity": 0.4126,
+          "snr": 53.2021,
+          "background": 1414.0,
+          "scattered_light": 0.0024,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-210603",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 30,
+          "fwhm": 2.6297,
+          "hfr": 1.3573,
+          "eccentricity": 0.3676,
+          "snr": 52.0799,
+          "background": 1417.0,
+          "scattered_light": 0.0027,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-212015",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 33,
+          "fwhm": 2.6027,
+          "hfr": 1.3167,
+          "eccentricity": 0.4076,
+          "snr": 53.3377,
+          "background": 1366.0,
+          "scattered_light": 0.0035,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-212213",
+        "verdict": "REJECT",
+        "reasons": [
+          "REJECT: FWHM 2.77 > 2.74 (median 2.61 + 1.5sigma)"
+        ],
+        "metrics": {
+          "star_count": 31,
+          "fwhm": 2.769,
+          "hfr": 1.4068,
+          "eccentricity": 0.4132,
+          "snr": 56.9484,
+          "background": 1363.0,
+          "scattered_light": 0.003,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-212639",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 32,
+          "fwhm": 2.6777,
+          "hfr": 1.295,
+          "eccentricity": 0.4085,
+          "snr": 55.8079,
+          "background": 1366.0,
+          "scattered_light": 0.0023,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-214623",
+        "verdict": "MARGINAL",
+        "reasons": [
+          "MARGINAL: eccentricity 0.44 >= 0.42 marginal"
+        ],
+        "metrics": {
+          "star_count": 34,
+          "fwhm": 2.6084,
+          "hfr": 1.3312,
+          "eccentricity": 0.4398,
+          "snr": 48.4461,
+          "background": 1363.0,
+          "scattered_light": 0.0035,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-215553",
+        "verdict": "REJECT",
+        "reasons": [
+          "MARGINAL: eccentricity 0.48 >= 0.42 marginal",
+          "REJECT: FWHM 2.80 > 2.74 (median 2.61 + 1.5sigma)"
+        ],
+        "metrics": {
+          "star_count": 29,
+          "fwhm": 2.8042,
+          "hfr": 1.5233,
+          "eccentricity": 0.4844,
+          "snr": 54.3439,
+          "background": 1375.0,
+          "scattered_light": 0.0052,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-220215",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 37,
+          "fwhm": 2.6835,
+          "hfr": 1.2569,
+          "eccentricity": 0.3411,
+          "snr": 48.691,
+          "background": 1334.0,
+          "scattered_light": 0.0029,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-220722",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 36,
+          "fwhm": 2.5997,
+          "hfr": 1.2232,
+          "eccentricity": 0.4087,
+          "snr": 51.3792,
+          "background": 1343.0,
+          "scattered_light": 0.0038,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-220835",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 36,
+          "fwhm": 2.5165,
+          "hfr": 1.2001,
+          "eccentricity": 0.4175,
+          "snr": 54.7473,
+          "background": 1353.0,
+          "scattered_light": 0.0024,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-221044",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 34,
+          "fwhm": 2.6884,
+          "hfr": 1.2654,
+          "eccentricity": 0.3461,
+          "snr": 54.4867,
+          "background": 1353.0,
+          "scattered_light": 0.0028,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-222643",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 39,
+          "fwhm": 2.6002,
+          "hfr": 1.2189,
+          "eccentricity": 0.3923,
+          "snr": 52.0613,
+          "background": 1302.0,
+          "scattered_light": 0.0028,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-223329",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 37,
+          "fwhm": 2.6269,
+          "hfr": 1.2605,
+          "eccentricity": 0.3999,
+          "snr": 55.7387,
+          "background": 1289.0,
+          "scattered_light": 0.0024,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-223654",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 35,
+          "fwhm": 2.6744,
+          "hfr": 1.3962,
+          "eccentricity": 0.404,
+          "snr": 52.3675,
+          "background": 1289.0,
+          "scattered_light": 0.0028,
+          "error": null
+        }
+      },
+      {
+        "name": "Light_M 81_10.0s_IRCUT_20240312-224007",
+        "verdict": "PASS",
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
+        "metrics": {
+          "star_count": 39,
+          "fwhm": 2.6136,
+          "hfr": 1.2502,
+          "eccentricity": 0.3567,
+          "snr": 54.027,
+          "background": 1292.0,
+          "scattered_light": 0.0022,
+          "error": null
+        }
+      }
+    ]
+  },
+  "keep_list": [
+    "Light_M 81_10.0s_IRCUT_20240104-204125",
+    "Light_M 81_10.0s_IRCUT_20240104-204147",
+    "Light_M 81_10.0s_IRCUT_20240104-204221",
+    "Light_M 81_10.0s_IRCUT_20240104-204426",
+    "Light_M 81_10.0s_IRCUT_20240104-204512",
+    "Light_M 81_10.0s_IRCUT_20240104-204910",
+    "Light_M 81_10.0s_IRCUT_20240312-210004",
+    "Light_M 81_10.0s_IRCUT_20240312-210603",
+    "Light_M 81_10.0s_IRCUT_20240312-212015",
+    "Light_M 81_10.0s_IRCUT_20240312-212639",
+    "Light_M 81_10.0s_IRCUT_20240312-214623",
+    "Light_M 81_10.0s_IRCUT_20240312-220215",
+    "Light_M 81_10.0s_IRCUT_20240312-220722",
+    "Light_M 81_10.0s_IRCUT_20240312-220835",
+    "Light_M 81_10.0s_IRCUT_20240312-221044",
+    "Light_M 81_10.0s_IRCUT_20240312-222643",
+    "Light_M 81_10.0s_IRCUT_20240312-223329",
+    "Light_M 81_10.0s_IRCUT_20240312-223654",
+    "Light_M 81_10.0s_IRCUT_20240312-224007"
+  ]
+}

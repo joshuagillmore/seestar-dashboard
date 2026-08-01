@@ -8,28 +8,92 @@ const fixture = (p: string) =>
   JSON.parse(readFileSync(resolve(__dirname, '../../../fixtures', p), 'utf-8'))
 
 /**
- * The qa_tier2 schema, against the two payloads we actually have.
+ * The qa_tier2 schema, against real recorded payloads.
  *
- * Status of the contract loop, stated exactly: seestar-mcp has pinned
- * qa_tier2 in their build since round 3, against our PROSE, and both sides
- * agreed those pins could not be called validated until a real payload
- * parses here. This file does NOT close that loop. `fixtures/qa_tier2.json`
- * is real but empty (total 0, subs []), so it validates the envelope and the
- * nine medians keys and nothing about subs[]. The multi-sub fixture is
- * synthetic — transcribed from verified source, but hand-built, so it tests
- * our rendering path and proves nothing about their contract.
+ * This file CLOSES the contract loop. seestar-mcp pinned qa_tier2 in their
+ * build in round 3 against our prose, and both sides agreed those pins could
+ * not be called validated until a real payload parsed on this side. It now
+ * does: `fixtures/qa_tier2.subs.json` is the tool's actual output over 25
+ * subs from the local archive export, not a hand-built shape.
  *
- * What would close it: one recorded qa_tier2 response over real subs.
+ * `fixtures/qa_tier2.json` is also real but empty (total 0, subs []) — kept
+ * because "nothing analysed" is a state the screen has to render, and it is
+ * the only recorded example of it.
+ *
+ * The synthetic fixture stays for the one case neither recording contains:
+ * an unanalysable sub. Clearly labelled; it proves nothing about the contract.
  */
 describe('Tier2Schema against the real recorded payload', () => {
-  it('parses the real qa_tier2 response, empty though it is', () => {
+  const real = () => Tier2Schema.parse(fixture('qa_tier2.subs.json'))
+
+  it('parses 25 real subs with a genuine verdict spread', () => {
+    const s = real().summary
+
+    expect(s.subs).toHaveLength(25)
+    expect(s.total).toBe(25)
+    const counts = s.subs.reduce<Record<string, number>>(
+      (acc, sub) => ({ ...acc, [sub.verdict]: (acc[sub.verdict] ?? 0) + 1 }),
+      {},
+    )
+    // Not asserting exact counts — those are this recording's, not a contract.
+    // What matters is that all three verdicts occur, so the screen's three
+    // rendering paths are all exercised by something real.
+    expect(Object.keys(counts).sort()).toEqual(['MARGINAL', 'PASS', 'REJECT'])
+  })
+
+  it('real sub names carry no file extension', () => {
+    // The correction seestar-mcp sent before we wrote the schema, now
+    // confirmed against the tool's own output rather than their description.
+    for (const sub of real().summary.subs) {
+      expect(sub.name).not.toMatch(/\.fits?$/i)
+    }
+  })
+
+  it('keep_list is exactly the non-REJECT subs', () => {
+    const parsed = real()
+    const kept = parsed.summary.subs.filter((s) => s.verdict !== 'REJECT')
+
+    expect(parsed.keep_list).toHaveLength(kept.length)
+    expect(parsed.keep_list).toHaveLength(parsed.summary.kept)
+  })
+
+  it('summary.target is null, because we always call with paths', () => {
+    // Observed, not assumed. qa_tier2 only sets `target` when invoked with
+    // target=; qa_analysis.py always invokes it with paths=. So the screen
+    // must take the target from our own target_id — reading it from the
+    // payload would render "—" on every report we ever fetch.
+    expect(real().summary.target).toBeNull()
+  })
+
+  it('per-sub metrics are rounded but the aggregates are not', () => {
+    // _compact_metrics rounds per-sub floats to 4dp, deliberately: full float
+    // repr "implies precision that does not exist". medians and wfwhm come
+    // from the same measurements and are NOT rounded. Pinned so the screen
+    // formats them itself rather than trusting the payload, and flagged to
+    // seestar-mcp as an inconsistency rather than worked around silently.
+    const s = real().summary
+    const dp = (n: number) => (String(n).split('.')[1] ?? '').length
+
+    for (const sub of s.subs) {
+      if (sub.metrics.fwhm != null) expect(dp(sub.metrics.fwhm)).toBeLessThanOrEqual(4)
+    }
+    expect(dp(s.medians.fwhm ?? 0)).toBeGreaterThan(4)
+    expect(dp(s.wfwhm ?? 0)).toBeGreaterThan(4)
+  })
+})
+
+describe('Tier2Schema against the real EMPTY payload', () => {
+  it('an empty subs[] is a real state, not a parse failure', () => {
+    // A session where nothing analysed differs from a broken payload, and
+    // the screen must be able to say so.
     const parsed = Tier2Schema.parse(fixture('qa_tier2.json'))
 
     expect(parsed.summary.total).toBe(0)
     expect(parsed.summary.subs).toEqual([])
-    // The envelope and every medians key ARE validated by this — that part of
-    // their pin set is now confirmed against a real payload.
-    expect(Object.keys(parsed.summary.medians).sort()).toEqual([
+  })
+
+  it('carries all nine medians keys even with nothing to summarise', () => {
+    expect(Object.keys(Tier2Schema.parse(fixture('qa_tier2.json')).summary.medians).sort()).toEqual([
       'eccentricity',
       'fwhm',
       'fwhm_sigma',
@@ -41,16 +105,10 @@ describe('Tier2Schema against the real recorded payload', () => {
       'star_count',
     ])
   })
-
-  it('an empty subs[] is a real state, not a parse failure', () => {
-    // A session where nothing analysed is different from a broken payload,
-    // and the screen must be able to say so.
-    expect(() => Tier2Schema.parse(fixture('qa_tier2.json'))).not.toThrow()
-  })
 })
 
 describe('Tier2Schema against a synthetic multi-sub payload', () => {
-  const report = () => Tier2Schema.parse(fixture('synthetic/qa_tier2.subs.json'))
+  const report = () => Tier2Schema.parse(fixture('synthetic/qa_tier2.unanalysable.json'))
 
   it('parses subs, verdicts and reasons', () => {
     const parsed = report()
@@ -113,7 +171,7 @@ describe('verdict is a string, deliberately not an enum', () => {
     // over a value we could have displayed verbatim. The vocabulary is the
     // server's; asserting the list here would be the UI deciding what a
     // verdict may be.
-    const payload = fixture('synthetic/qa_tier2.subs.json')
+    const payload = fixture('synthetic/qa_tier2.unanalysable.json')
     payload.summary.subs[0].verdict = 'PROVISIONAL'
 
     const parsed = Tier2Schema.parse(payload)
@@ -124,14 +182,14 @@ describe('verdict is a string, deliberately not an enum', () => {
 
 describe('required structure still fails loudly', () => {
   it('rejects a payload with subs[] missing entirely', () => {
-    const payload = fixture('synthetic/qa_tier2.subs.json')
+    const payload = fixture('synthetic/qa_tier2.unanalysable.json')
     delete payload.summary.subs
 
     expect(() => Tier2Schema.parse(payload)).toThrow()
   })
 
   it('rejects a sub with no name — it is the join key', () => {
-    const payload = fixture('synthetic/qa_tier2.subs.json')
+    const payload = fixture('synthetic/qa_tier2.unanalysable.json')
     delete payload.summary.subs[0].name
 
     expect(() => Tier2Schema.parse(payload)).toThrow()
@@ -140,7 +198,7 @@ describe('required structure still fails loudly', () => {
 
 describe('QaAnalysisStatusSchema discriminates on status', () => {
   it('parses each state the sidecar can return', () => {
-    const report = fixture('synthetic/qa_tier2.subs.json')
+    const report = fixture('synthetic/qa_tier2.unanalysable.json')
 
     expect(QaAnalysisStatusSchema.parse({ status: 'not_analysed' }).status).toBe(
       'not_analysed',
@@ -171,7 +229,7 @@ describe('QaAnalysisStatusSchema discriminates on status', () => {
     const parsed = QaAnalysisStatusSchema.parse({
       status: 'stale',
       analysed_at: '2026-08-01T22:00:00+00:00',
-      report: fixture('synthetic/qa_tier2.subs.json'),
+      report: fixture('synthetic/qa_tier2.unanalysable.json'),
     })
 
     expect(parsed.status).toBe('stale')
