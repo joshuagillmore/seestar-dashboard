@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "REAL \u2014 recorded from seestar-mcp's get_run_state (main @ d555c4b).",
+    "",
+    "This machine happened to hold a run_state.json left by their end-to-end",
+    "verification run, so the recording caught the UNKNOWN state rather than the",
+    "commoner idle one \u2014 a stamp older than the 15-minute window, with the run",
+    "record still attached.",
+    "",
+    "That is the case worth having recorded, because it contradicts the shorthand",
+    "in the note announcing the tool ('run: null when idle'): `unknown` carries a",
+    "run object. A consumer that reads `run` as proof of a live session would be",
+    "wrong here, which is exactly the confident-wrong-answer the tri-state exists",
+    "to prevent. Idle and active are in fixtures/synthetic/.",
+    "",
+    "Also visible here and not in the note: slot_ends_utc and park_deadline_utc",
+    "are present-and-null, while targets_remaining and notes are OMITTED. Those",
+    "are different states and the schema treats them differently."
+  ],
+  "ok": true,
+  "state": "unknown",
+  "stamped_utc": "2026-08-01T18:35:37.057632+00:00",
+  "run": {
+    "session_start_utc": "2026-08-01T18:35:37.057632+00:00",
+    "target": "M51",
+    "slot_ends_utc": null,
+    "park_deadline_utc": null,
+    "resolved_id": "M51",
+    "stamped_utc": "2026-08-01T18:35:37.057632+00:00"
+  }
+}

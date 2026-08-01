@@ -1,0 +1,11 @@
+{
+  "_comment": [
+    "SYNTHETIC. The commonest state and the one the real recording missed: no",
+    "run_state.json on disk at all. Shape taken from run_state.read_run_state's",
+    "early return, which is a literal \u2014 {\"state\": \"idle\", \"run\": None} with no",
+    "stamped_utc key."
+  ],
+  "ok": true,
+  "state": "idle",
+  "run": null
+}

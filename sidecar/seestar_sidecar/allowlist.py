@@ -32,6 +32,16 @@ ALLOWED_TOOLS = frozenset(
         # Read-only." — reads, does not move, the focuser.
         "get_target_observability",  # "Read-only, offline (deterministic
         # astropy ephemeris)" — the sweet-band gauge's altitude/rotation data.
+        "get_run_state",  # "Read-only; makes no device call" (server.py) —
+        # verified at source, not taken from the name or the note announcing
+        # it: the controller method reads data/run_state.json via
+        # run_state.read_run_state() and nothing else. read_run_state only
+        # stat/reads the path and never raises; write_run_state and
+        # clear_run_state exist in the same module but are not reachable from
+        # this tool. No Alpaca call, so unlike get_status/get_view_state this
+        # one costs the bridge nothing and does not compete with the control
+        # link — which is precisely why it can be polled on the idle path
+        # where those two cannot.
         # --- slice 4 (Review & QA screen) — see docs/superpowers/specs/
         # 2026-07-31-slice-4-review-qa.md.
         "qa_tier2",  # "Read-only FITS analysis (photutils)" (server.py:1600)

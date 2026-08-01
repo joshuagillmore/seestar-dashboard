@@ -11,6 +11,7 @@ import {
   ProjectsCombinedSchema,
   QaAnalysisResponseSchema,
   QaTargetsSchema,
+  RunStateSchema,
   RecommendProjectsSchema,
   SessionActivitySchema,
   SiteProfileSchema,
@@ -29,6 +30,7 @@ import {
   type ProjectsCombined,
   type QaAnalysisResponse,
   type QaTargets,
+  type RunState,
   type RecommendProjects,
   type SessionActivity,
   type SiteProfile,
@@ -217,3 +219,10 @@ export const fetchQaStatus = (target: string): Promise<QaAnalysisResponse> =>
 
 export const startQaAnalysis = (target: string): Promise<QaAnalysisResponse> =>
   get(`/api/qa_analysis_start?target=${encodeURIComponent(target)}`, QaAnalysisResponseSchema)
+
+/** Is a run in progress right now — the tool that replaces inferring it from
+ * a get_view_state timeout. Reads a file server-side, no Alpaca call, so
+ * unlike every other state fetcher this one costs the bridge nothing and is
+ * safe to poll on the idle path. */
+export const fetchRunState = (): Promise<RunState> =>
+  get('/api/get_run_state', RunStateSchema)

@@ -4,6 +4,7 @@ import {
   fetchGuardrails,
   fetchLastStack,
   fetchLivePreview,
+  fetchRunState,
   fetchSessionActivity,
   fetchStatus,
   fetchTargetObservability,
@@ -31,6 +32,37 @@ import { shouldFetchLastStack } from './lastStack'
  * yet, so "configurable" today means "change this one constant."
  */
 export const POLL_INTERVAL_MS = 60_000
+
+/**
+ * While `get_run_state` reports idle, do the device-touching check on every
+ * Nth poll instead of every one. At the 60 s poll interval that is one check
+ * every five minutes on a parked scope, down from one a minute.
+ *
+ * Not zero, on purpose — see this hook's doc comment: `run_state.json` only
+ * exists for skill-driven runs, so `idle` cannot rule out a session started
+ * by hand from the phone app.
+ */
+export const IDLE_DEVICE_CHECK_EVERY = 5
+
+/**
+ * Should this poll spend bridge requests on `get_status` + `get_view_state`?
+ *
+ * `idleTicks` is how many consecutive polls have reported idle, counting this
+ * one — so 1 is the first idle poll and must still check, which is what makes
+ * opening the screen mid-session immediate.
+ *
+ * Every non-idle answer, including a null from a failed or absent
+ * `get_run_state`, checks the device. Failing open matters more than the
+ * saving: the cost of an unnecessary check is six bridge requests, and the
+ * cost of a wrongly-skipped one is a live session the screen never shows.
+ */
+export function shouldCheckDevice(
+  runStateState: 'active' | 'idle' | 'unknown' | null,
+  idleTicks: number,
+): boolean {
+  if (runStateState !== 'idle') return true
+  return idleTicks <= 1 || (idleTicks - 1) % IDLE_DEVICE_CHECK_EVERY === 0
+}
 
 /** The activity column shows a compact recent tail, not the whole log —
  * matching the design's own scrolling operator panel rather than an
@@ -106,21 +138,51 @@ export type LiveSessionState =
  * same reason this project never parses `reasons[]` to recover a value a
  * tool declined to return as a field.
  *
- * Preview/telemetry fetches only happen once a session is confirmed active —
- * "never poll while idle" (D2) is specifically about there being no new
- * frame or telemetry to fetch, not about the bounded, slow-interval
- * get_status/get_view_state check above that is what notices a session
- * starting in the first place.
+ * ## `get_run_state`, and why the device calls are now conditional
  *
- * `check_night_guardrails` needs a `session_start_utc` the tool surface has
- * no real source for (see client.ts's `fetchGuardrails`) — this hook records
- * the moment IT first observed the session as active and reuses that for
- * every guardrails call this mount. That is an honest "since I've been
- * watching" timestamp, not the scope's actual session start, so a dashboard
- * opened mid-session will understate elapsed time and overstate the
- * max-duration/dawn-margin figures `check_night_guardrails` returns. Real
- * limitation, not silently papered over — see the report this task hands
- * back with.
+ * seestar-mcp shipped `get_run_state` (d555c4b) after we argued that
+ * inferring "is a run in progress" from a `get_view_state` timeout produces a
+ * confident wrong answer in the worst direction. It reads a JSON file and
+ * makes **no Alpaca call**, so unlike everything else here it costs the
+ * bridge nothing. Two things follow.
+ *
+ * **1. The session start is real now.** `run.session_start_utc` is the
+ * scope's own start, not the moment this tab opened. See
+ * `sessionStartedAtRef` below for what still happens when it is absent.
+ *
+ * **2. The idle path stops hammering a parked scope.** Our own measurement,
+ * handed to seestar-mcp and still owed as a fix: this hook polled
+ * `get_status` (5 bridge requests) + `get_view_state` (1) every 60 s against
+ * a parked scope, indefinitely — ~6 requests a minute all night for a mount
+ * that was doing nothing. The device calls are now gated on the free file
+ * read.
+ *
+ * The gate is deliberately not "skip the device entirely while idle".
+ * `run_state.json` is written by seestar-mcp's own skills during an
+ * orchestrated run, so a scope driven by hand from the phone app produces no
+ * file at all — `idle` means "no skill-driven run", which is not the same as
+ * "nothing is happening". Reading it as the latter would reintroduce the
+ * confident-wrong-answer in a new place. So:
+ *
+ *   state 'active'  → device check every poll (a run is definitely on)
+ *   state 'unknown' → device check every poll (a stale stamp must never read
+ *                     as free; the writer may have died mid-run)
+ *   state 'idle'    → device check on the FIRST poll, then every
+ *                     IDLE_DEVICE_CHECK_EVERY-th, so a hand-driven session is
+ *                     still noticed within a few minutes
+ *   run_state fails → device check every poll (fail open — never let a
+ *                     missing optimisation hide a live session)
+ *
+ * The first poll always checks, so opening the screen mid-session shows it
+ * immediately; the back-off only accrues while nothing is happening.
+ *
+ * `check_night_guardrails` needs a `session_start_utc`. When `get_run_state`
+ * gives one, that is the scope's real start. When it does not — an older
+ * server, a hand-driven session, an unparseable file — this hook still falls
+ * back to the moment IT first observed the session, which understates
+ * elapsed time for a dashboard opened mid-session and overstates the
+ * max-duration and dawn-margin figures the guardrail returns. Narrower than
+ * it was, not gone.
  *
  * `session_activity` is kicked off once per poll, before the status/
  * view_state branching below, and awaited on whichever exit path the poll
@@ -135,6 +197,9 @@ export function useLiveSession(): LiveSessionState {
   const stageHistoryRef = useRef<string[]>([])
   const currentTargetRef = useRef<string | null>(null)
   const sessionStartedAtRef = useRef<string | null>(null)
+  // Consecutive polls reporting idle, counting the current one. Reset by any
+  // non-idle answer so a session start restores full cadence immediately.
+  const idleTicksRef = useRef(0)
   // Carries the last_stack result forward across polls where the target
   // hasn't changed, alongside which target it was actually fetched for —
   // see shouldFetchLastStack's own doc comment for why this is gated on the
@@ -149,6 +214,30 @@ export function useLiveSession(): LiveSessionState {
       // Kicked off immediately, independent of everything below — see this
       // hook's own doc comment.
       const sessionActivityPromise = fetchSessionActivity(SESSION_ACTIVITY_LIMIT).catch(() => null)
+
+      // Free — a file read server-side, no Alpaca call — so this runs every
+      // poll regardless of phase and is what gates the expensive ones below.
+      // Failure is not fatal and must not suppress the device check: a
+      // missing optimisation is better than a hidden session.
+      const runState = await fetchRunState().catch(() => null)
+      if (runState?.state === 'idle') {
+        idleTicksRef.current += 1
+      } else {
+        idleTicksRef.current = 0
+      }
+      if (!shouldCheckDevice(runState?.state ?? null, idleTicksRef.current)) {
+        const sessionActivity = await sessionActivityPromise
+        // Deliberately keeps the previous phase rather than asserting 'idle':
+        // this branch did not ask the scope anything, so it has learned
+        // nothing new about it. Claiming idle here would be inventing an
+        // observation we skipped making.
+        if (!cancelled && sessionActivity) {
+          setState((prev) =>
+            prev.phase === 'idle' ? { phase: 'idle', sessionActivity } : prev,
+          )
+        }
+        return
+      }
 
       let status: Status
       try {
@@ -174,12 +263,24 @@ export function useLiveSession(): LiveSessionState {
         return
       }
 
-      if (sessionStartedAtRef.current === null) {
+      // The scope's own start when the server can tell us, and only then the
+      // "since I started watching" fallback. Handback item 20: the guardrail
+      // this feeds governs a hard stop, so understating elapsed time is the
+      // dangerous direction — a dashboard opened three hours into a session
+      // used to report the session as three hours younger than it was.
+      const realStart = runState?.run?.session_start_utc ?? null
+      if (realStart !== null) {
+        sessionStartedAtRef.current = realStart
+      } else if (sessionStartedAtRef.current === null) {
         sessionStartedAtRef.current = new Date().toISOString()
       }
+      // Read once into a local: the ref is non-null by the block above, but
+      // it is a mutable field and narrowing it across the awaits below would
+      // not be sound anyway.
+      const sessionStart = sessionStartedAtRef.current ?? new Date().toISOString()
 
       const [guardrails, tier1, focuser, preview, sessionActivity] = await Promise.all([
-        fetchGuardrails(sessionStartedAtRef.current).catch(() => null),
+        fetchGuardrails(sessionStart).catch(() => null),
         fetchTier1().catch(() => null),
         fetchFocuserPosition().catch(() => null),
         fetchLivePreview().catch(() => null),

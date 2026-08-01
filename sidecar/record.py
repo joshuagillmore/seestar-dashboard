@@ -44,6 +44,11 @@ ARGUMENTS: dict[str, dict] = {
     # capturing the tool's real response *shape*, not a live guardrail
     # verdict for an actual session.
     "check_night_guardrails": {"session_start_utc": "2026-07-30T02:00:00+00:00"},
+    # Reads data/run_state.json and makes no device call, so recording it is
+    # free and works with the scope off. Expect `{"state": "idle", "run":
+    # null}` on any machine that has not run a session — that IS the shape,
+    # not a failed recording: the file only exists while a run is live.
+    "get_run_state": {},
     # --- slice 4 (Review & QA screen) --------------------------------------
     # Explicit `paths: []`, not `target`: qa_tier2 is minutes-long over a
     # real target's subs (see qa_analysis.py's module docstring), and this

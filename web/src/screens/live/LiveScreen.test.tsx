@@ -508,3 +508,80 @@ describe('LiveScreen', () => {
     expect(gridRule).not.toMatch(/repeat\(3,\s*1fr\)/)
   })
 })
+
+/**
+ * `get_run_state` — the tool that replaced inferring a live session from a
+ * `get_view_state` timeout. Two consequences worth pinning: the guardrail
+ * finally gets the scope's real session start, and a parked scope stops
+ * being polled every minute.
+ *
+ * The default stub above deliberately does NOT serve `/api/get_run_state`,
+ * so every other test in this file exercises the fail-open path: the fetch
+ * 404s, `fetchRunState` rejects, and the device check happens anyway. That
+ * is the intended behaviour against an older server, and it is why adding
+ * this tool changed no existing expectation.
+ */
+/** Resolve with the first fetched URL containing `fragment`. Waits on the
+ * call rather than on a DOM element: these tests are about which requests are
+ * made with which arguments, and a rendered target name is a weaker proxy
+ * that also depends on the preview and observability chain. */
+async function waitForFetch(fragment: string): Promise<string> {
+  let found: string | undefined
+  await waitFor(() => {
+    const calls = (globalThis.fetch as unknown as { mock: { calls: [string][] } }).mock.calls
+    found = calls.map(([u]) => u).find((u) => u.includes(fragment))
+    expect(found).toBeDefined()
+  })
+  return found!
+}
+
+describe('get_run_state', () => {
+  const runStateActive = (sessionStart: string) => ({
+    ok: true,
+    state: 'active',
+    stamped_utc: '2026-08-02T22:41:03.118402+00:00',
+    run: {
+      session_start_utc: sessionStart,
+      target: 'M27',
+      slot_ends_utc: null,
+      park_deadline_utc: null,
+      resolved_id: 'M27',
+      stamped_utc: '2026-08-02T22:41:03.118402+00:00',
+    },
+  })
+
+  it('passes the scope’s real session start to the guardrail, not browser-open', async () => {
+    // Handback item 20. This governs a hard stop, and the old behaviour —
+    // timing from when the tab opened — UNDERSTATED elapsed time for anyone
+    // who connected mid-session, which is the dangerous direction.
+    const REAL_START = '2026-08-02T19:04:11.500000+00:00'
+    stubApi({ '/api/get_run_state': runStateActive(REAL_START) })
+
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    const guardrail = await waitForFetch('check_night_guardrails')
+
+    expect(decodeURIComponent(guardrail)).toContain(REAL_START)
+  })
+
+  it('falls back to since-I-started-watching when the run carries no start', async () => {
+    // An idle scope driven by hand writes no run_state.json, so there is no
+    // real start to use. The old fallback stays — narrower, not gone.
+    stubApi({ '/api/get_run_state': { ok: true, state: 'idle', run: null } })
+
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    // Still called, still with something — just not the scope's own start.
+    expect(await waitForFetch('check_night_guardrails')).toMatch(/session_start_utc=/)
+  })
+
+  it('still checks the device on the first idle poll', async () => {
+    // The back-off must never delay the first look, or opening the screen on
+    // a hand-driven session would show nothing for five minutes.
+    stubApi({ '/api/get_run_state': { ok: true, state: 'idle', run: null } })
+
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    expect(await waitForFetch('get_status')).toContain('get_status')
+  })
+})

@@ -104,6 +104,10 @@ def test_allowlist_is_exactly_the_expected_tools():
             "qa_tier1",
             "get_focuser_position",
             "get_target_observability",
+            # Read-only and, unusually, device-free: it reads a JSON file and
+            # makes no Alpaca call, which is what lets the idle path poll it
+            # when the device-touching tools must back off.
+            "get_run_state",
             # slice 4 (Review & QA screen) — read-only, but see
             # NO_DIRECT_ROUTE_TOOLS: no literal passthrough route exists.
             "qa_tier2",

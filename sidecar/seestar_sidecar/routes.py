@@ -306,6 +306,23 @@ async def get_target_observability(
     return await _serve(request, "get_target_observability", {"target": target, "date": date})
 
 
+@router.get("/get_run_state")
+async def get_run_state(request: Request) -> JSONResponse:
+    """Is an imaging run in progress right now?
+
+    The one tool that answers this without inference. Everything else the Live
+    screen has is a device call that TIMES OUT when the scope is idle, which
+    is a signal we were reading backwards: "the call failed" and "nothing is
+    running" are not the same claim, and treating them as one produces a
+    confident wrong answer in the worst direction — "idle" while stacking.
+
+    Costs the bridge nothing: it reads a JSON file, makes no Alpaca call. That
+    is what makes it safe on the idle path, where the device-touching pollers
+    are not.
+    """
+    return await _serve(request, "get_run_state", {})
+
+
 @router.get("/check_night_guardrails")
 async def check_night_guardrails(
     request: Request,

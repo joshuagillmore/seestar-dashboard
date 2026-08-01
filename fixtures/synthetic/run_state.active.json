@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "SYNTHETIC \u2014 a live run. Field shape transcribed from run_state.py's",
+    "RunState dataclass and _payload() at d555c4b, not invented:",
+    "  - targets_remaining PRESENT here (it is omitted when not tracked;",
+    "    [] and 'not tracked' mean opposite things)",
+    "  - resolved_id present only because the target string resolved against",
+    "    the catalogue; omitted entirely when it did not",
+    "  - all timestamps offset-bearing, per their \u00a72 layer split"
+  ],
+  "ok": true,
+  "state": "active",
+  "stamped_utc": "2026-08-02T22:41:03.118402+00:00",
+  "run": {
+    "session_start_utc": "2026-08-02T21:12:44.905311+00:00",
+    "target": "NGC7380",
+    "slot_ends_utc": "2026-08-02T23:30:00+00:00",
+    "park_deadline_utc": "2026-08-03T04:15:00+00:00",
+    "targets_remaining": [
+      "M76",
+      "NGC7635"
+    ],
+    "resolved_id": "NGC7380",
+    "stamped_utc": "2026-08-02T22:41:03.118402+00:00"
+  }
+}

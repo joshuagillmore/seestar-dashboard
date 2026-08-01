@@ -735,6 +735,59 @@ export const QaAnalysisStatusSchema = z.discriminatedUnion('status', [
   }),
 ])
 
+/**
+ * `get_run_state` — is an imaging run in progress right now?
+ *
+ * The one tool that answers this without inference. Everything else the Live
+ * screen has is a device call that times out when the scope is idle, and
+ * "the call failed" is not the same claim as "nothing is running" — reading
+ * one as the other produces a confident wrong answer in the worst direction.
+ *
+ * **`state` is tri-valued and `unknown` is not `idle`.** A run was recorded
+ * but its stamp is older than the server's staleness window (15 minutes at
+ * d555c4b, theirs to change), or the file could not be parsed. It must never
+ * render as "the scope is free" — the writer may have died mid-run with the
+ * mount still tracking.
+ *
+ * **`run` is NOT null on `unknown`.** The note announcing the tool said
+ * "run: null when idle", which is true of idle and misleading about unknown:
+ * a stale record keeps its `run` object. Confirmed against a real recording
+ * (`fixtures/get_run_state.json`, which caught exactly this state). A
+ * consumer treating the presence of `run` as proof of a live session would be
+ * wrong there.
+ */
+export const RunRecordSchema = z.object({
+  /** The real session start — replaces timing from browser-open, which was
+   * only ever right if the dashboard was open before the session began. */
+  session_start_utc: z.string(),
+  /** The string passed to `goto_target`, which the firmware echoes back as
+   * `View.target_name` — so the two share an origin and are joinable. It is
+   * NOT validated against the catalogue; see `resolved_id`. */
+  target: z.string(),
+  /** Present-and-null when unset, observed on the real recording — unlike
+   * `targets_remaining`/`resolved_id`, which are omitted entirely. */
+  slot_ends_utc: z.string().nullable().optional(),
+  park_deadline_utc: z.string().nullable().optional(),
+  /** OMITTED when the plan is not tracked, never `[]` — those render
+   * identically and mean opposite things. */
+  targets_remaining: z.array(z.string()).optional(),
+  /** Present ONLY when the target string actually resolved against the
+   * catalogue. Its absence is the honest "we never resolved this", and it is
+   * what lets us disambiguate names our own normaliser collapses — `Veil
+   * Nebula East` and `Veil Nebula West` both fold to `Veil`. */
+  resolved_id: z.string().optional(),
+  stamped_utc: z.string().optional(),
+  notes: z.string().optional(),
+})
+
+export const RunStateSchema = z.object({
+  ok: z.boolean(),
+  state: z.enum(['active', 'idle', 'unknown']),
+  /** Absent — not null — on idle and on an unparseable file. */
+  stamped_utc: z.string().nullable().optional(),
+  run: RunRecordSchema.nullable(),
+})
+
 /** One target the archive scan knows about, with its Tier-2 status attached.
  * `sub_count` is the raw scale, shown BEFORE the user opts into a run — a
  * 1400-sub analysis is minutes long and they deserve to know that first. */
@@ -812,3 +865,5 @@ export type QaAnalysisStatus = z.infer<typeof QaAnalysisStatusSchema>
 export type QaTarget = z.infer<typeof QaTargetSchema>
 export type QaTargets = z.infer<typeof QaTargetsSchema>
 export type QaAnalysisResponse = z.infer<typeof QaAnalysisResponseSchema>
+export type RunRecord = z.infer<typeof RunRecordSchema>
+export type RunState = z.infer<typeof RunStateSchema>
