@@ -647,6 +647,43 @@ export const QaMediansSchema = z.object({
   n_analyzed: z.number().nullable().optional(),
 })
 
+/**
+ * The cutoffs this session was **actually scored against** — not the config
+ * constants they derive from.
+ *
+ * Requested and shipped at seestar-mcp d555c4b. Before it, the numbers
+ * existed only as prose inside `reasons[]` ("0.016 > 0.014 (median + 2σ)"),
+ * and parsing them back out to draw a line would have been re-deriving a
+ * verdict. This is the field that makes the design's dashed cutoff lines
+ * drawable without the client inventing or hardcoding anything.
+ *
+ * `_effective_thresholds` mirrors `_score_sub`'s branching, so an absolute
+ * override reads as the override and a session-relative floor reads as that
+ * session's own number. **They are not constants**: `snr_floor` is half the
+ * session's median SNR, so two nights reject at different absolute values,
+ * and a line positioned from one night's report means nothing on another's.
+ *
+ * Every entry is nullable — null when the threshold could not be computed
+ * (no analysable subs on that axis), never a fabricated default. A null
+ * threshold must render as no line, never as a line at zero.
+ *
+ * Note the two senses: `*_reject`/`*_marginal` on eccentricity, FWHM and
+ * scattered light are CEILINGS (above is worse); `snr_floor` and
+ * `star_count_floor` are FLOORS (below is worse). Both position identically
+ * on a linear axis, but a label that gets the direction wrong is worse than
+ * no label.
+ */
+export const QaThresholdsSchema = z.object({
+  eccentricity_reject: z.number().nullable().optional(),
+  eccentricity_marginal: z.number().nullable().optional(),
+  fwhm_reject: z.number().nullable().optional(),
+  fwhm_marginal: z.number().nullable().optional(),
+  snr_floor: z.number().nullable().optional(),
+  star_count_floor: z.number().nullable().optional(),
+  scattered_light_reject: z.number().nullable().optional(),
+  scattered_light_marginal: z.number().nullable().optional(),
+})
+
 export const QaSummarySchema = z.object({
   target: z.string().nullable(),
   total: z.number(),
@@ -654,6 +691,9 @@ export const QaSummarySchema = z.object({
   /** Star-count-weighted mean FWHM across subs. */
   wfwhm: z.number().nullable(),
   medians: QaMediansSchema,
+  /** `.optional()` so a report cached before d555c4b still parses — the
+   * screen renders no cutoff lines for those rather than failing. */
+  thresholds: QaThresholdsSchema.optional(),
   dominant_reject_cause: z.string().nullable(),
   subs: z.array(QaSubVerdictSchema),
 })

@@ -9,6 +9,7 @@ import {
   isUnanalysed,
   keptPercent,
   rejectionsByCause,
+  thresholdLinesFor,
   toneFor,
 } from './qa'
 
@@ -166,5 +167,55 @@ describe('isUnanalysed', () => {
   it('is driven by metrics.error, not by null metrics', () => {
     expect(unanalysable().subs.filter(isUnanalysed)).toHaveLength(1)
     expect(real().subs.filter(isUnanalysed)).toHaveLength(0)
+  })
+})
+
+describe('thresholdLinesFor — maps server fields to charts, decides nothing', () => {
+  const thresholds = () => Tier2Schema.parse(fixture('qa_tier2.subs.json')).summary.thresholds
+
+  it('gives eccentricity its two cutoffs, with the server\u2019s own numbers', () => {
+    const lines = thresholdLinesFor('eccentricity', thresholds())
+    const t = thresholds()!
+
+    expect(lines.map((l) => l.value)).toEqual([
+      t.eccentricity_marginal,
+      t.eccentricity_reject,
+    ])
+    expect(lines.map((l) => l.tone)).toEqual(['marginal', 'reject'])
+  })
+
+  it('labels a floor as a floor, not as a reject ceiling', () => {
+    // snr_floor and star_count_floor are FLOORS — below is worse. They plot
+    // identically to a ceiling on a linear axis, so the label is the only
+    // thing carrying the direction.
+    const [line] = thresholdLinesFor('star_count', thresholds())
+
+    expect(line!.label).toMatch(/^floor /)
+  })
+
+  it('returns nothing for a metric with no thresholds defined', () => {
+    expect(thresholdLinesFor('background', thresholds())).toEqual([])
+    expect(thresholdLinesFor('hfr', thresholds())).toEqual([])
+  })
+
+  it('returns nothing when the report predates the thresholds field', () => {
+    expect(thresholdLinesFor('eccentricity', undefined)).toEqual([])
+  })
+
+  it('omits a null threshold rather than drawing a line at zero', () => {
+    // The server sends null when a cutoff could not be computed — no
+    // analysable subs on that axis. A line at 0 would assert a cutoff it
+    // explicitly declined to state.
+    // Deliberately NOT the real cutoff: src/test/no-thresholds.test.ts bans
+    // the literal from source, and an obviously-synthetic value also stops a
+    // reader mistaking a test input for the policy number.
+    const SYNTHETIC = 0.9
+    const lines = thresholdLinesFor('eccentricity', {
+      eccentricity_marginal: null,
+      eccentricity_reject: SYNTHETIC,
+    })
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0]!.value).toBe(SYNTHETIC)
   })
 })

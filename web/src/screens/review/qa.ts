@@ -159,6 +159,59 @@ export function bucketSubs(
   return out
 }
 
+/**
+ * Cutoff lines for one metric's chart, from `summary.thresholds`.
+ *
+ * This is a field-to-chart MAPPING, not a computation: it says which of the
+ * server's threshold fields belong on the eccentricity chart and which on the
+ * star-count chart, and nothing else. No value is derived, compared or
+ * defaulted. A null or missing threshold yields no line — never a line at
+ * zero, which would draw a cutoff the server explicitly declined to state.
+ *
+ * The label carries the DIRECTION, because the two senses read identically on
+ * a linear axis and a label that gets it wrong is worse than no label:
+ * eccentricity/FWHM/scattered-light cutoffs are ceilings (above is worse),
+ * `snr_floor` and `star_count_floor` are floors (below is worse).
+ */
+export interface ThresholdLine {
+  value: number
+  label: string
+  tone: 'marginal' | 'reject'
+}
+
+const THRESHOLD_FIELDS: Partial<
+  Record<string, ReadonlyArray<{ field: string; label: string; tone: 'marginal' | 'reject' }>>
+> = {
+  eccentricity: [
+    { field: 'eccentricity_marginal', label: 'marginal', tone: 'marginal' },
+    { field: 'eccentricity_reject', label: 'reject', tone: 'reject' },
+  ],
+  fwhm: [
+    { field: 'fwhm_marginal', label: 'marginal', tone: 'marginal' },
+    { field: 'fwhm_reject', label: 'reject', tone: 'reject' },
+  ],
+  scattered_light: [
+    { field: 'scattered_light_marginal', label: 'marginal', tone: 'marginal' },
+    { field: 'scattered_light_reject', label: 'reject', tone: 'reject' },
+  ],
+  snr: [{ field: 'snr_floor', label: 'floor', tone: 'reject' }],
+  star_count: [{ field: 'star_count_floor', label: 'floor', tone: 'reject' }],
+}
+
+export function thresholdLinesFor(
+  metric: string,
+  thresholds: Record<string, number | null | undefined> | undefined,
+): ThresholdLine[] {
+  if (thresholds == null) return []
+  return (THRESHOLD_FIELDS[metric] ?? []).flatMap(({ field, label, tone }) => {
+    const value = thresholds[field]
+    if (typeof value !== 'number') return []
+    // The number is the server's; the label states which cutoff it is and,
+    // for a floor, that it is one.
+    return [{ value, label: `${label} ${value}`, tone }]
+  })
+}
+
 /** Format a metric for display. The server already rounds to 4dp at the wire
  * boundary (seestar-mcp f51a1e2); this is about column width, not precision. */
 export function formatMetric(value: number | null | undefined, dp = 2): string {

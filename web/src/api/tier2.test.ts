@@ -57,6 +57,39 @@ describe('Tier2Schema against the real recorded payload', () => {
     expect(parsed.keep_list).toHaveLength(parsed.summary.kept)
   })
 
+  it('carries the effective thresholds this session was scored against', () => {
+    // Shipped at d555c4b after we asked for it: the cutoffs existed only as
+    // prose inside reasons[] before, and parsing them back out to draw a line
+    // would have been re-deriving a verdict.
+    const t = real().summary.thresholds
+
+    expect(t).toBeDefined()
+    expect(Object.keys(t!).sort()).toEqual([
+      'eccentricity_marginal',
+      'eccentricity_reject',
+      'fwhm_marginal',
+      'fwhm_reject',
+      'scattered_light_marginal',
+      'scattered_light_reject',
+      'snr_floor',
+      'star_count_floor',
+    ])
+  })
+
+  it('the thresholds are session-relative, not config constants', () => {
+    // snr_floor is half this session's median SNR. Pinning the RELATIONSHIP
+    // rather than the number is the point: a test asserting 25.6896 would
+    // pass for the wrong reason and would break on any other recording.
+    const s = real().summary
+
+    expect(s.thresholds!.snr_floor).toBeLessThan(s.medians.snr!)
+    expect(s.thresholds!.star_count_floor).toBeLessThan(s.medians.star_count!)
+    // Eccentricity is the exception and it matters: its cutoffs are absolute
+    // policy constants (the canonical PixInsight line), not session-derived,
+    // so this one does NOT track the session median.
+    expect(s.thresholds!.eccentricity_reject).toBeGreaterThan(s.medians.eccentricity!)
+  })
+
   it('summary.target is null, because we always call with paths', () => {
     // Observed, not assumed. qa_tier2 only sets `target` when invoked with
     // target=; qa_analysis.py always invokes it with paths=. So the screen

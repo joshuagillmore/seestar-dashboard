@@ -2,6 +2,14 @@ import type { QaSubVerdict } from '../../api/schemas'
 import { bucketSubs } from './qa'
 import styles from './MetricChart.module.css'
 
+/** One cutoff line. `value` comes from `summary.thresholds` — never a
+ * constant, never parsed out of a reason string. */
+export interface ThresholdLine {
+  value: number
+  label: string
+  tone: 'marginal' | 'reject'
+}
+
 export interface MetricChartProps {
   eyebrow: string
   subs: readonly QaSubVerdict[]
@@ -11,31 +19,41 @@ export interface MetricChartProps {
   buckets?: number
   height?: number
   totalSubs: number
+  /** Cutoff lines to draw. Empty when the report predates
+   * `summary.thresholds` or the server could not compute them: no line is
+   * drawn rather than one at zero. */
+  thresholds?: readonly ThresholdLine[]
 }
 
 /**
- * Per-sub metric across the session, as flex-div bars. No charting library —
- * the CSS-bars decision in CLAUDE.md.
+ * Per-sub metric across the session, as flex-div bars with the server's own
+ * cutoff lines over them. No charting library — the CSS-bars decision.
  *
- * **Bars are coloured by the server's own per-sub verdict, never by comparing
- * a value to a cutoff.** That is not a shortcut, it is the only honest option
- * available: the `qa_tier2` payload carries `medians` but no thresholds, and
- * the cutoffs exist only as prose inside `reasons[]` ("scattered light 0.016
- * > 0.014 (median + 2σ)"). Parsing numbers out of those sentences to draw a
- * line would be re-deriving a verdict, which CLAUDE.md forbids, and
- * hardcoding them is forbidden twice over.
+ * **Bar colour is the server's per-sub verdict, and the lines are the
+ * server's effective thresholds.** Neither is computed here: the chart never
+ * compares a value to a cutoff to decide anything, it just draws both and
+ * lets them be seen together. A bar crossing a line is the server's verdict
+ * and the server's threshold agreeing on screen, not this component deriving
+ * one from the other.
  *
- * So the design's two dashed threshold lines are **deliberately absent**
- * rather than approximated — see the note the screen renders under the
- * legend, and handback item 26. The colour still carries the same
- * information: where in the session the rejects fall, and whether two
- * independent metrics dip together.
+ * The lines were impossible until seestar-mcp shipped `summary.thresholds`
+ * (d555c4b) — before that the cutoffs existed only inside `reasons[]` prose.
  *
- * Bar HEIGHT is scaled to the largest value present in this chart, so the
- * shape of the distribution is honest even though the absolute scale is
- * unlabelled. A bucket with nothing measurable renders as a gap, not a
- * zero-height bar at the floor — a sub that was never measured must not look
- * like one that measured zero.
+ * ## The domain
+ *
+ * Bars and lines must share one scale or the picture lies. The domain is the
+ * largest of the bar values **and the thresholds**, plus headroom — not just
+ * the bars. That matters in the ordinary case: on a clean session every sub
+ * sits well below the reject cutoff, so scaling to the bars alone would push
+ * the reject line off the top of the chart exactly when its absence is the
+ * good news worth showing. The real M 81 recording is this case: every sub
+ * sits below the marginal cutoff and the reject line is well clear of the
+ * tallest bar. No numbers quoted here on purpose — src/test/no-thresholds
+ * fails the build on a cutoff literal anywhere in source, comments included,
+ * and it has now caught two of mine.
+ *
+ * A bucket with nothing measurable renders as a gap, not a zero-height bar:
+ * a sub that was never measured must not look like one that measured zero.
  */
 export function MetricChart({
   eyebrow,
@@ -44,15 +62,29 @@ export function MetricChart({
   buckets = 60,
   height = 118,
   totalSubs,
+  thresholds = [],
 }: MetricChartProps) {
   const data = bucketSubs(subs, metric, buckets)
-  const values = data.map((b) => b.value).filter((v): v is number => v != null)
-  const max = values.length ? Math.max(...values) : 0
+  const barValues = data.map((b) => b.value).filter((v): v is number => v != null)
+  const lineValues = thresholds.map((t) => t.value)
+  const peak = Math.max(0, ...barValues, ...lineValues)
+  // 8% headroom so a line at the very top is not flush with the edge.
+  const domain = peak > 0 ? peak * 1.08 : 1
 
   return (
     <div className={styles.chart}>
       <div className={styles.eyebrow}>{eyebrow}</div>
       <div className={styles.plot} style={{ height: `${height}px` }}>
+        {thresholds.map((line) => (
+          <div
+            key={line.label}
+            className={`${styles.threshold} ${styles[`line_${line.tone}`]}`}
+            style={{ bottom: `${(line.value / domain) * 100}%` }}
+          >
+            <span className={styles.thresholdLabel}>{line.label}</span>
+          </div>
+        ))}
+
         {data.length === 0 ? (
           <div className={styles.empty}>no subs to plot</div>
         ) : (
@@ -69,7 +101,7 @@ export function MetricChart({
             // Clamped to a visible minimum so a genuinely small value is
             // still a bar rather than nothing — but only for values that
             // exist. Absent stays absent, above.
-            const pct = max > 0 ? Math.max(4, (bucket.value / max) * 100) : 4
+            const pct = Math.max(4, (bucket.value / domain) * 100)
             return (
               <div
                 key={bucket.startIndex}

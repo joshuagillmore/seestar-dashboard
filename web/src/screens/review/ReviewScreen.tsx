@@ -8,6 +8,7 @@ import { RejectionsByCause } from './RejectionsByCause'
 import { ReportHeader } from './ReportHeader'
 import { SubTable } from './SubTable'
 import { TargetPicker } from './TargetPicker'
+import { thresholdLinesFor } from './qa'
 import { useQaReview } from './useQaReview'
 import styles from './ReviewScreen.module.css'
 
@@ -35,27 +36,34 @@ export interface ReviewScreenProps {
  * and every reason string is the server's, shown verbatim. No metric is
  * compared to a cutoff anywhere in this directory.
  *
- * ## Three things from the design that are deliberately absent
+ * ## The threshold lines — asked for, and now drawn
  *
- * Each is a missing data source, not an unfinished element, and each ships an
+ * The design specifies dashed cutoff lines and says, correctly, "these are
+ * computed, not constants — never hardcode them in the client. Ship them in
+ * the report payload." They were not in the payload: the cutoffs existed only
+ * as prose inside `reasons[]`, and parsing them back out to position a line
+ * would have been re-deriving a verdict. So this screen shipped with no lines
+ * and a legend saying why, and the gap went back to seestar-mcp instead.
+ *
+ * They shipped `summary.thresholds` (d555c4b) — the *effective* cutoffs the
+ * session was actually scored against, not the config constants. The lines
+ * are now drawn from that field. They are still session-relative: `snr_floor`
+ * is half this session's median SNR, so a line from one night's report means
+ * nothing on another's. `.optional()` on the schema means a report cached
+ * before d555c4b still renders, just without lines.
+ *
+ * ## Two things from the design that remain deliberately absent
+ *
+ * Each is a missing data source, not unfinished work, and each ships an
  * honest gap rather than a plausible-looking placeholder:
  *
- * 1. **The dashed threshold lines on the trend chart.** The design specifies
- *    lines at the reject and marginal cutoffs and says, correctly, "never
- *    hardcode them in the client — ship them in the report payload." They are
- *    not in the payload: `summary` carries `medians` and no thresholds, and
- *    the numbers exist only as prose inside `reasons[]`. Parsing them out of
- *    sentences would be re-deriving a verdict. Bars are toned by the server's
- *    own per-sub verdict instead, which carries the same information without
- *    inventing a number. Handback item 26.
- *
- * 2. **The pattern callout.** The design's highest-value element — one
+ * 1. **The pattern callout.** The design's highest-value element — one
  *    sentence explaining *why* frames failed — and it says explicitly that it
  *    "should come from the agent, not a template". There is no agent output
  *    channel in this repo, and writing the template it warns against would be
  *    worse than leaving the space empty.
  *
- * 3. **The master image card and the seestar-refine actions.** Both are write
+ * 2. **The master image card and the seestar-refine actions.** Both are write
  *    paths: `stack_keep_list`, `stretch_master` and the PixInsight handoff
  *    have no route by design, and post-processing has since left the MCP
  *    surface entirely. The design says to disable buttons whose backend is
@@ -181,8 +189,9 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
                           <Swatch tone="marginal" label="marginal" />
                           <Swatch tone="reject" label="reject" />
                           <span className={styles.legendNote}>
-                            coloured by the server&rsquo;s verdict — the payload carries no
-                            thresholds, so no cutoff lines are drawn
+                            bars toned by the server&rsquo;s verdict; dashed lines are the
+                            cutoffs this session was scored against — session-relative, so
+                            another night&rsquo;s are different numbers
                           </span>
                         </div>
 
@@ -191,6 +200,7 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
                           subs={report.summary.subs}
                           metric="eccentricity"
                           totalSubs={report.summary.total}
+                          thresholds={thresholdLinesFor('eccentricity', report.summary.thresholds)}
                         />
 
                         <div className={styles.split}>
@@ -200,6 +210,10 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
                             metric="star_count"
                             height={44}
                             totalSubs={report.summary.total}
+                            thresholds={thresholdLinesFor(
+                              'star_count',
+                              report.summary.thresholds,
+                            )}
                           />
                           <div className={styles.divider} />
                           <RejectionsByCause summary={report.summary} />

@@ -10,14 +10,44 @@
 
 /* Bars are bottom-aligned so the distribution reads as a profile. `gap: 2px`
    and `flex: 1` per bar is the CSS-bars approach from CLAUDE.md — no charting
-   library, and at 60 buckets this is 60 nodes rather than one per sub. */
+   library, and at 60 buckets this is 60 nodes rather than one per sub.
+   `position: relative` anchors the threshold lines below. */
 .plot {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 2px;
   padding: 0 2px;
   border-bottom: 1px solid var(--border-faint);
 }
+
+/* The server's own effective cutoffs (summary.thresholds), positioned on the
+   same domain as the bars — see MetricChart.tsx. Absolutely positioned so
+   they sit over the bars without joining the flex row and stealing width. */
+.threshold {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed;
+  pointer-events: none;
+}
+
+.line_reject { border-color: var(--reject); }
+.line_marginal { border-color: var(--marginal); }
+
+.thresholdLabel {
+  position: absolute;
+  right: 0;
+  transform: translateY(-140%);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.line_reject .thresholdLabel { color: var(--reject); }
+.line_marginal .thresholdLabel { color: var(--marginal); }
 
 .bar { flex: 1; min-width: 0; border-radius: 1.5px 1.5px 0 0; }
 

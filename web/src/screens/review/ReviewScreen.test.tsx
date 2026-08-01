@@ -198,11 +198,11 @@ describe('ReviewScreen states', () => {
     expect(await screen.findByText(/No archive configured/)).toBeInTheDocument()
   })
 
-  it('draws no threshold lines, and says why', async () => {
-    // The design specifies dashed cutoff lines. The payload carries no
-    // thresholds, and the numbers exist only inside reason prose — so the
-    // lines are absent and the legend states that, rather than the screen
-    // implying the cutoffs were never part of the design.
+  it('draws the cutoff lines from the payload, with the real numbers', async () => {
+    // These come from summary.thresholds (seestar-mcp d555c4b) — the effective
+    // cutoffs this session was scored against. Asserting the VALUES, not just
+    // that lines exist, is the point: a line drawn from a hardcoded constant
+    // would look identical on screen.
     stubFetch({
       qa_analysis_status: {
         ok: true,
@@ -217,6 +217,38 @@ describe('ReviewScreen states', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /M 81/ }))
 
-    expect(await screen.findByText(/payload carries no\s+thresholds/)).toBeInTheDocument()
+    const { eccentricity_reject, eccentricity_marginal, star_count_floor } =
+      realReport.summary.thresholds
+    expect(await screen.findByText(`reject ${eccentricity_reject}`)).toBeInTheDocument()
+    expect(await screen.findByText(`marginal ${eccentricity_marginal}`)).toBeInTheDocument()
+    // The star-count chart gets a FLOOR, labelled as one — the opposite sense
+    // to the eccentricity ceilings, and a label with the direction wrong
+    // would be worse than no label.
+    expect(await screen.findByText(`floor ${star_count_floor}`)).toBeInTheDocument()
+  })
+
+  it('renders a pre-thresholds report without lines rather than failing', async () => {
+    // A report cached before d555c4b has no `thresholds` key. It must still
+    // render — the numbers in it are all still true — just without cutoffs.
+    const older = {
+      ...realReport,
+      summary: { ...realReport.summary, thresholds: undefined },
+    }
+    stubFetch({
+      qa_analysis_status: {
+        ok: true,
+        target_id: 'M81',
+        sub_count: 25,
+        status: 'complete',
+        analysed_at: '2026-08-01T01:15:00+00:00',
+        report: older,
+      },
+    })
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /M 81/ }))
+
+    expect(await screen.findByText(/of 25 subs · 76.0%/)).toBeInTheDocument()
+    expect(screen.queryByText(/^reject 0\./)).not.toBeInTheDocument()
   })
 })
