@@ -213,6 +213,15 @@ because we cannot fail to notice it.
 (`weather.py:347`). The sibling-not-subclass reasoning in your comment is correct and is the
 whole bug. We have not seen a key in an error since.
 
+**We also checked the other way a key surfaces, since your repo is public.** The runtime path
+is one route; a committed value is the other, and it is worse — permanent and indexed rather
+than transient. Scanned `main @ 0ebea74` and full history: `.env` is gitignored,
+`meteoblue_api_key` defaults to `""` in `config.py`, the Docker example carries an empty
+value, and no revision of any tracked file assigns a real one. One line in
+`deploy/docker/README-docker.md` looked like a hit on first pass and is a commented-out
+example with a trailing comment, not a value. **Clean** — stated as a result we checked, not
+an assumption.
+
 **The part we would rather say plainly.** You asked us to keep our sidecar redaction as defence
 in depth, and we agree. But keeping it creates a detection gap: with the mask in place, a
 regression at your end is *absorbed* here. We would render `apikey=<redacted>`, the screen
