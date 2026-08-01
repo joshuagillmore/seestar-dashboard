@@ -343,3 +343,53 @@ class TestAttachIntegrationGoals:
         result = attach_integration_goals(combine_projects(store, {}), self.CATALOG, self.ALIASES, bortle=8)
 
         assert all("goal" in entry for entry in result)
+
+
+def test_a_summary_payload_is_rejected_rather_than_silently_inflating():
+    """seestar-mcp's detail="summary" omits `sessions` — at our own request.
+
+    Omitting rather than emptying was the right call and we argued for it: an
+    empty list renders as "no sessions logged", a real and different state.
+    But it makes the ABSENT case reachable here, and this module is where
+    absence does the most damage — `sessions` is what archive nights are
+    de-duplicated against, so defaulting it to [] means every archive night
+    survives and the totals inflate by whatever the store already counted.
+
+    Nothing downstream would catch it: ProjectsCombinedEntrySchema has no
+    `sessions` field, so the wrong numbers parse cleanly all the way to the
+    card. Loud here, or silent forever.
+    """
+    summary_shaped = {
+        "target_id": "M31",
+        "target_name": "Andromeda",
+        "goal_minutes": 0.0,
+        "collected_minutes": 120.0,
+        "status": "active",
+        "created_utc": "2026-07-01T20:00:00+00:00",
+        "updated_utc": "2026-07-02T20:00:00+00:00",
+        # what detail="summary" sends instead — no `sessions` key at all
+        "sessions_count": 2,
+        "last_session_utc": "2026-07-02T20:00:00+00:00",
+        "notes": "",
+    }
+
+    try:
+        combine_projects([summary_shaped], {})
+    except ValueError as exc:
+        assert "detail='full'" in str(exc), "the error must say how to fix it"
+    else:
+        raise AssertionError(
+            "a summary payload was accepted; archive_minutes would inflate silently"
+        )
+
+
+def test_an_empty_sessions_list_is_still_accepted():
+    """Present-and-empty is a legitimate state — a project with no logged
+    sessions yet. Only ABSENCE is the contract violation."""
+    project = _store_project("M42", "Orion", 0.0, [])
+    project["sessions"] = []
+
+    combined = combine_projects([project], {})
+
+    assert combined[0]["target_id"] == "M42"
+    assert combined[0]["store_minutes"] == 0.0

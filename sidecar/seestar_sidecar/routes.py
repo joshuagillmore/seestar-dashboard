@@ -245,9 +245,24 @@ async def get_site_profile(request: Request) -> JSONResponse:
     return await _serve(request, "get_site_profile", {})
 
 
+#: `list_projects` and `recommend_projects` default to `detail="summary"`
+#: server-side as of seestar-mcp a66f2d3, which OMITS each project's
+#: `sessions` history (replacing it with `sessions_count` /
+#: `last_session_utc`). Omitting the key rather than emptying it was our own
+#: request — an empty list renders as "no sessions logged", which is a real
+#: and different state — so the default is safe but it is not what this
+#: client wants: SessionHistory.tsx itemises `store.sessions`, and
+#: projects_union de-duplicates archive nights against them.
+#:
+#: Passed explicitly at every call site rather than relied on as a default in
+#: either direction. `detail="full"` is byte-identical to the historical
+#: payload, so this restores exactly what ProjectSchema already parses.
+_FULL_DETAIL = {"detail": "full"}
+
+
 @router.get("/list_projects")
 async def list_projects(request: Request) -> JSONResponse:
-    return await _serve(request, "list_projects", {})
+    return await _serve(request, "list_projects", dict(_FULL_DETAIL))
 
 
 @router.get("/recommend_projects")
@@ -353,7 +368,7 @@ async def projects_combined(request: Request) -> JSONResponse:
     rather than smuggled into every entry.
     """
     try:
-        store = await _fetch(request, "list_projects", {})
+        store = await _fetch(request, "list_projects", dict(_FULL_DETAIL))
     except (ProxyTransportError, FileNotFoundError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
     if not store.get("ok"):
