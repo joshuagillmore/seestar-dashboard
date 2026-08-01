@@ -1,9 +1,10 @@
 """Console entry point: `uv run seestar-dashboard`.
 
 The bare `uvicorn seestar_sidecar.main:create_app --factory` command works,
-but a taken port fails as a raw OSError traceback out of asyncio — and port
-8000 is intermittently held by Docker Desktop on this machine, so that is
-not a hypothetical. This wraps it: check the port first, fail with one
+but a taken port fails as a raw OSError traceback out of asyncio, and port
+collisions are not hypothetical: the default was 8000 until it collided with
+both Docker Desktop and an unrelated local app. 8787 is the default now,
+chosen to sit clear of the usual suspects (8000, 8080, 8888, 5000, 3000). This wraps it: check the port first, fail with one
 readable line naming the port if it's taken, and print the URL to open
 before uvicorn's own logging takes over.
 """
@@ -39,8 +40,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.environ.get("SEESTAR_PORT", "8000")),
-        help="Port to serve on (default: 8000, or $SEESTAR_PORT).",
+        default=int(os.environ.get("SEESTAR_PORT", "8787")),
+        help="Port to serve on (default: 8787, or $SEESTAR_PORT).",
     )
     parser.add_argument(
         "--host",

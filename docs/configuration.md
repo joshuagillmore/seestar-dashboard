@@ -230,15 +230,21 @@ want the cache to live somewhere else, e.g. outside the repo checkout.
 The port `uv run seestar-dashboard` serves on. Read by
 `sidecar/seestar_sidecar/launcher.py`.
 
-**Unset:** defaults to `8000`. If that port is already taken (Docker Desktop
-holds it intermittently on some machines), the launcher prints which port is
-blocked and exits cleanly — `--port` on the command line overrides this the
-same way the env var does.
+**Unset:** defaults to `8787`, chosen to sit clear of the ports most likely to
+be in use already (8000, 8080, 8888, 5000, 3000). The default was 8000 until it
+collided with Docker Desktop and an unrelated local app on the same machine.
+If the port is taken, the launcher prints which one is blocked and exits
+cleanly — `--port` on the command line overrides this the same way the env var
+does.
+
+The Vite dev server reads the same variable (`web/vite.config.ts`), so one
+change moves both the API and the dev proxy. Nothing needs editing in two
+places.
 
 | OS | Example |
 |---|---|
-| Windows (PowerShell) | `$env:SEESTAR_PORT = "8080"` |
-| macOS / Linux | `export SEESTAR_PORT=8080` |
+| Windows (PowerShell) | `$env:SEESTAR_PORT = "9001"` |
+| macOS / Linux | `export SEESTAR_PORT=9001` |
 
 ## SEESTAR_REPLAY
 

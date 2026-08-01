@@ -16,7 +16,7 @@ cd ../sidecar && uv sync
 uv run seestar-dashboard
 ```
 
-Then open **http://localhost:8000**.
+Then open **http://localhost:8787**.
 
 On Windows, double-click **`run.bat`** at the repo root instead of typing the
 last command — it `cd`s into `sidecar/` and runs the same thing. Drag it to
@@ -37,10 +37,12 @@ no terminal at all. Full reference, including what happens when each is
 unset and per-OS examples: [`docs/configuration.md`](docs/configuration.md).
 Short version:
 
-- **Port:** `uv run seestar-dashboard --port 8080`, or set `SEESTAR_PORT`.
-  Port 8000 is intermittently held by Docker Desktop on some machines; if
-  it's taken, the launcher prints which port is blocked and exits cleanly
-  rather than a stack trace.
+- **Port:** `uv run seestar-dashboard --port 9001`, or set `SEESTAR_PORT`.
+  The default is **8787**, chosen to sit clear of the ports most likely to be
+  busy already (8000, 8080, 8888, 5000, 3000). If it's taken anyway, the
+  launcher prints which port is blocked and exits cleanly rather than a stack
+  trace. The Vite dev server reads the same `SEESTAR_PORT`, so one change
+  moves both.
 - **Offline / no telescope attached:** `SEESTAR_REPLAY=1 uv run seestar-dashboard`
   serves recorded fixtures (`fixtures/*.json`) instead of spawning the MCP
   server, and the UI's top bar shows a "fixtures — not live" indicator.
@@ -61,7 +63,7 @@ Short version:
 Two terminals, with live reload on the frontend:
 
 ```
-cd sidecar && uv run uvicorn seestar_sidecar.main:create_app --factory --port 8000
+cd sidecar && uv run uvicorn seestar_sidecar.main:create_app --factory --port 8787
 cd web && npm run dev
 ```
 
