@@ -51,7 +51,26 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
 
   const imageSrc = livePreviewImageSrc(preview)
 
-  const hasImage = Boolean(preview?.url)
+  /**
+   * Whether there is actually a frame — keyed on `source`, NOT on `url`.
+   *
+   * This tested `url` and was wrong against the real server. `url` is a
+   * STATIC ROUTE PATH that `_live_preview_absent()` sets unconditionally
+   * (routes.py), so it is present even when `source` is null and `reason` is
+   * `share_unreachable`. The card therefore rendered an `<img>` at a URL that
+   * 404s — a broken-image icon — and the honest absent state below it, which
+   * exists precisely for this case, was unreachable in practice.
+   *
+   * It passed every test because `fixtures/synthetic/live_preview_none.json`
+   * omitted `url`, which no real response ever does. The fixture has been
+   * corrected alongside this. Found by opening the screen against a live
+   * scope with an unreachable share; no unit test could have caught it while
+   * the fixture disagreed with the server.
+   *
+   * `source` is `null` exactly when there is no frame, in both the fixtures
+   * and the real payload, which is what makes it the honest guard.
+   */
+  const hasImage = Boolean(preview?.source)
 
   return (
     <section className={styles.card}>

@@ -1,10 +1,21 @@
 {
+  "_comment": [
+    "SYNTHETIC. Corrected 2026-08-02: `url` was ABSENT here, which no real",
+    "response ever is. routes.py's _live_preview_absent() sets url",
+    "unconditionally \u2014 it is a static route path, not a per-frame value \u2014 so",
+    "the no-frame payload carries source: null AND a url that 404s.",
+    "",
+    "The mismatch hid a real defect: PreviewCard guarded on `url` to decide",
+    "whether to render an <img>, which was correct against this fixture and",
+    "wrong against the server, so the card showed a broken-image icon instead",
+    "of its honest absent state. Found by looking at the live screen."
+  ],
   "ok": true,
   "source": null,
   "captured_at": null,
   "stack_count": null,
   "target": null,
   "stale": false,
-  "url": null,
+  "url": "/api/live_preview/image",
   "reason": "no active session"
 }
