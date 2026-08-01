@@ -1,0 +1,119 @@
+.screen { display: flex; flex-direction: column; gap: 14px; }
+
+.header { display: flex; align-items: baseline; justify-content: space-between; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-fainter);
+}
+
+.heading {
+  margin: 4px 0 0;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.skeleton {
+  height: 320px;
+  border-radius: var(--radius-card);
+  background: var(--bg-card-sunken);
+  border: 1px solid var(--border-quiet);
+}
+
+/* Target list (own 300px, set in TargetPicker.module.css) beside the report. */
+.columns { display: flex; align-items: flex-start; gap: 16px; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--border-quiet);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+}
+
+/* Every "nothing to show yet" state uses this — no analysis, running,
+   failed, nothing selected. They are states, not errors, and read the same
+   way. */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--border-quiet);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+}
+
+.stateText {
+  margin: 0;
+  max-width: 60ch;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-dimmer);
+}
+
+/* The only control on this screen that starts work. Deliberately explicit
+   about scale in its label ("Analyse 842 subs") — see TargetPicker. */
+.action {
+  padding: 8px 14px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-control);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) { background: var(--accent-hover-bg); }
+.action:disabled { opacity: 0.6; cursor: default; }
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dimmer);
+}
+
+.swatchItem { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 8px; height: 8px; border-radius: 2px; }
+.swatch.pass { background: var(--chart-bar-quiet); }
+.swatch.marginal { background: var(--marginal); }
+.swatch.reject { background: var(--reject); }
+
+/* Says out loud why the design's dashed cutoff lines aren't drawn. The
+   thresholds aren't in the payload, and guessing them would be worse than
+   their absence — see ReviewScreen.tsx. */
+.legendNote {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.split { display: flex; align-items: stretch; gap: 14px; }
+.split > :first-child { flex: 1; min-width: 0; }
+.split > :last-child { width: 300px; flex: 0 0 auto; }
+.divider { width: 1px; background: var(--border-faint); flex: 0 0 auto; }
+
+.errorNote {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  color: var(--reject);
+}

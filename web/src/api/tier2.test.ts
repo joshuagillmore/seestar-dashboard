@@ -65,20 +65,30 @@ describe('Tier2Schema against the real recorded payload', () => {
     expect(real().summary.target).toBeNull()
   })
 
-  it('per-sub metrics are rounded but the aggregates are not', () => {
-    // _compact_metrics rounds per-sub floats to 4dp, deliberately: full float
-    // repr "implies precision that does not exist". medians and wfwhm come
-    // from the same measurements and are NOT rounded. Pinned so the screen
-    // formats them itself rather than trusting the payload, and flagged to
-    // seestar-mcp as an inconsistency rather than worked around silently.
+  it('every float is rounded to 4dp — aggregates included', () => {
+    // At e8f0221 only subs[].metrics were rounded; medians and wfwhm shipped
+    // at full float precision, and an earlier version of this test pinned
+    // that asymmetry. seestar-mcp fixed it at f51a1e2 after we flagged it —
+    // their own reason for _METRIC_DP (full repr "implies precision that
+    // does not exist") applies equally to aggregates drawn from the same
+    // measurements. Rounded at the wire boundary only; classification
+    // upstream still runs on full precision.
+    //
+    // The fixture was RE-RECORDED for this. Leaving the old assertion against
+    // the old recording would have kept passing while the real server did
+    // something else — a green test pinning behaviour that no longer exists.
     const s = real().summary
     const dp = (n: number) => (String(n).split('.')[1] ?? '').length
 
     for (const sub of s.subs) {
-      if (sub.metrics.fwhm != null) expect(dp(sub.metrics.fwhm)).toBeLessThanOrEqual(4)
+      for (const value of Object.values(sub.metrics)) {
+        if (typeof value === 'number') expect(dp(value)).toBeLessThanOrEqual(4)
+      }
     }
-    expect(dp(s.medians.fwhm ?? 0)).toBeGreaterThan(4)
-    expect(dp(s.wfwhm ?? 0)).toBeGreaterThan(4)
+    for (const value of Object.values(s.medians)) {
+      if (typeof value === 'number') expect(dp(value)).toBeLessThanOrEqual(4)
+    }
+    expect(dp(s.wfwhm ?? 0)).toBeLessThanOrEqual(4)
   })
 })
 

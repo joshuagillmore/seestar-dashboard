@@ -1,0 +1,89 @@
+.panel {
+  width: 300px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-quiet);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-fainter);
+}
+
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'name subs' 'status status';
+  gap: 2px 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover { background: var(--bg-card-sunken); }
+
+.selected { background: var(--bg-card-sunken); border-color: var(--border-quiet); }
+
+.name {
+  grid-area: name;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Shown before anything can be started — the scale the user is committing
+   to. A 1400-sub run is minutes long. */
+.subs {
+  grid-area: subs;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dimmer);
+  font-variant-numeric: tabular-nums;
+}
+
+.status {
+  grid-area: status;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+}
+
+.status.pass { color: var(--pass); }
+.status.marginal { color: var(--marginal); }
+.status.reject { color: var(--reject); }
+.status.running { color: var(--accent); }
+/* "Not analysed" is the ordinary state of a fresh archive, not a problem —
+   toned as quiet, never as a warning. */
+.status.idle { color: var(--text-faint); }
+
+.note {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-dimmer);
+}
+
+.note code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}

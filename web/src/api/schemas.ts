@@ -695,6 +695,43 @@ export const QaAnalysisStatusSchema = z.discriminatedUnion('status', [
   }),
 ])
 
+/** One target the archive scan knows about, with its Tier-2 status attached.
+ * `sub_count` is the raw scale, shown BEFORE the user opts into a run — a
+ * 1400-sub analysis is minutes long and they deserve to know that first. */
+export const QaTargetSchema = z.intersection(
+  z.object({
+    target_id: z.string(),
+    display_name: z.string(),
+    sub_count: z.number(),
+  }),
+  QaAnalysisStatusSchema,
+)
+
+export const QaTargetsSchema = z.object({
+  ok: z.boolean(),
+  targets: z.array(QaTargetSchema),
+  /** Why the scan found nothing, when it found nothing — see the sidecar's
+   * `archive.ArchiveStatus`. "Unconfigured" and "configured but empty" read
+   * identically from a target count alone and are different problems. */
+  archive_status: z.object({
+    configured: z.boolean(),
+    path: z.string().nullable(),
+    exists: z.boolean(),
+    target_count: z.number(),
+  }),
+})
+
+/** `/api/qa_analysis_status` and `/api/qa_analysis_start` — the status union
+ * plus the identifying fields the route merges in alongside it. */
+export const QaAnalysisResponseSchema = z.intersection(
+  z.object({
+    ok: z.boolean(),
+    target_id: z.string(),
+    sub_count: z.number(),
+  }),
+  QaAnalysisStatusSchema,
+)
+
 export type Conditions = z.infer<typeof ConditionsSchema>
 export type PlanTargets = z.infer<typeof PlanTargetsSchema>
 export type PlanTarget = z.infer<typeof PlanTargetSchema>
@@ -732,3 +769,6 @@ export type QaMedians = z.infer<typeof QaMediansSchema>
 export type QaSummary = z.infer<typeof QaSummarySchema>
 export type Tier2 = z.infer<typeof Tier2Schema>
 export type QaAnalysisStatus = z.infer<typeof QaAnalysisStatusSchema>
+export type QaTarget = z.infer<typeof QaTargetSchema>
+export type QaTargets = z.infer<typeof QaTargetsSchema>
+export type QaAnalysisResponse = z.infer<typeof QaAnalysisResponseSchema>

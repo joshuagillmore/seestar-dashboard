@@ -9,6 +9,8 @@ import {
   LivePreviewSchema,
   PlanTargetsSchema,
   ProjectsCombinedSchema,
+  QaAnalysisResponseSchema,
+  QaTargetsSchema,
   RecommendProjectsSchema,
   SessionActivitySchema,
   SiteProfileSchema,
@@ -25,6 +27,8 @@ import {
   type LivePreview,
   type PlanTargets,
   type ProjectsCombined,
+  type QaAnalysisResponse,
+  type QaTargets,
   type RecommendProjects,
   type SessionActivity,
   type SiteProfile,
@@ -189,3 +193,27 @@ export const fetchLastStack = (target: string): Promise<LastStack> =>
  * SessionActivityCard for how `origin` must be rendered without flattening. */
 export const fetchSessionActivity = (limit?: number): Promise<SessionActivity> =>
   get(`/api/session_activity${limit !== undefined ? `?limit=${limit}` : ''}`, SessionActivitySchema)
+
+/* --- slice 4: Review & QA -------------------------------------------------
+ *
+ * `qa_tier2` is minutes long over a real target's 200-1400 subs, so it is
+ * NEVER a page-load fetch. Three routes, and the split is the safety
+ * property, not a convenience:
+ *
+ *   fetchQaTargets   listing + per-target status only. Never a report, never
+ *                    starts anything. Safe on load.
+ *   fetchQaStatus    one target's status, plus its full report once complete.
+ *                    Safe to poll; never starts anything.
+ *   startQaAnalysis  the ONLY call that can begin a run. Deliberate user
+ *                    action only. Idempotent: a target already running, or
+ *                    already analysed for its current sub set, returns that
+ *                    status without recomputing.
+ */
+export const fetchQaTargets = (): Promise<QaTargets> =>
+  get('/api/qa_targets', QaTargetsSchema)
+
+export const fetchQaStatus = (target: string): Promise<QaAnalysisResponse> =>
+  get(`/api/qa_analysis_status?target=${encodeURIComponent(target)}`, QaAnalysisResponseSchema)
+
+export const startQaAnalysis = (target: string): Promise<QaAnalysisResponse> =>
+  get(`/api/qa_analysis_start?target=${encodeURIComponent(target)}`, QaAnalysisResponseSchema)

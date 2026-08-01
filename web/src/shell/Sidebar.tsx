@@ -7,16 +7,19 @@ import styles from './Sidebar.module.css'
 interface NavItem {
   view: View
   label: string
-  /** Present only for a screen not built yet — its literal text becomes the
-   * row's meta and the row is disabled. Absent means the row is live: it
-   * navigates on click and its meta comes from real data instead. */
-  disabledLabel?: string
 }
+
+/* NavItem used to carry a `disabledLabel` for screens that were not built
+   yet — the row rendered disabled with "slice 4" as its meta. All four
+   screens ship as of slice 4, so nothing sets it, and a branch that nothing
+   reaches cannot be tested through this component (NAV_ITEMS is private).
+   Removed rather than left as an untested path in navigation; it is six
+   lines to reinstate if a fifth screen ever needs it. */
 
 const NAV_ITEMS: NavItem[] = [
   { view: 'tonight', label: "Tonight's plan" },
   { view: 'live', label: 'Live session' },
-  { view: 'review', label: 'Review & QA', disabledLabel: 'slice 4' },
+  { view: 'review', label: 'Review & QA' },
   { view: 'projects', label: 'Projects' },
 ]
 
@@ -127,7 +130,6 @@ export function Sidebar({
       <div className={styles.eyebrow}>Session</div>
 
       {NAV_ITEMS.map((item) => {
-        const disabled = item.disabledLabel !== undefined
         const active = view === item.view
         const tone: DotTone =
           item.view === 'tonight'
@@ -141,21 +143,27 @@ export function Sidebar({
                   ? 'marginal'
                   : 'pass'
                 : 'idle'
-        const meta = disabled
-          ? item.disabledLabel
-          : item.view === 'tonight'
+        // Every view names itself explicitly. An `else` here would hand the
+        // Review row the Projects headline the moment Review stopped being
+        // disabled — which is exactly what happened when slice 4 landed.
+        // Review has no summary of its own to show: the QA state lives in
+        // that screen, not in the shell, and inventing one here would mean
+        // the shell fetching an analysis listing on every page.
+        const meta =
+          item.view === 'tonight'
             ? (verdict ?? '—')
             : item.view === 'live'
               ? (liveMeta ?? '—')
-              : (projectsHeadline ?? '—')
+              : item.view === 'projects'
+                ? (projectsHeadline ?? '—')
+                : '—'
 
         return (
           <button
             key={item.view}
             className={`${styles.nav} ${active ? styles.navActive : ''}`}
-            disabled={disabled}
             aria-current={active ? 'page' : undefined}
-            onClick={disabled ? undefined : () => onNavigate(item.view)}
+            onClick={() => onNavigate(item.view)}
           >
             <Dot tone={tone} />
             <span className={styles.label}>{item.label}</span>

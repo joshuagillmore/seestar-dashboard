@@ -50,16 +50,33 @@ describe('Sidebar', () => {
     expect(screen.getByText(/Bortle 8/)).toBeInTheDocument()
   })
 
-  it('marks Review as unavailable, and Tonight, Live and Projects as available', () => {
-    // Live session shipped in slice 3 — only Review (slice 4) stays disabled now.
+  it('has all four screens available now that Review has shipped', () => {
     render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
     expect(screen.getByRole('button', { name: /Tonight/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /Live session/ })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /Review & QA/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review & QA/ })).toBeEnabled()
     expect(screen.getByRole('button', { name: /Projects/ })).toBeEnabled()
-    // The still-disabled row keeps its slice-N label verbatim.
-    expect(screen.getByText('slice 4')).toBeInTheDocument()
-    expect(screen.queryByText('slice 3')).not.toBeInTheDocument()
+    // No slice-N placeholder text survives anywhere in the rail.
+    expect(screen.queryByText(/^slice \d$/)).not.toBeInTheDocument()
+  })
+
+  it('does not give Review the Projects headline', () => {
+    // The meta chain used to end in an `else` that returned projectsHeadline.
+    // Harmless while Review was disabled (its meta was "slice 4"); the moment
+    // slice 4 shipped it would have printed the Projects hours on the Review
+    // row. Caught when enabling the row, pinned so it cannot come back.
+    render(
+      <Sidebar
+        site={site}
+        verdict="NO-GO"
+        gpsWarning={null}
+        view="tonight"
+        onNavigate={vi.fn()}
+        projectsHeadline="30.6 h"
+      />,
+    )
+    expect(screen.getByRole('button', { name: /Projects/ })).toHaveTextContent('30.6 h')
+    expect(screen.getByRole('button', { name: /Review & QA/ })).not.toHaveTextContent('30.6 h')
   })
 
   it('renders without a profile', () => {
@@ -209,11 +226,15 @@ describe('Sidebar', () => {
     expect(onNavigate).toHaveBeenCalledWith('projects')
   })
 
-  it('never calls onNavigate for a disabled nav button', () => {
+  it('calls onNavigate for Review, now that it is enabled', () => {
+    // Replaces "never calls onNavigate for a disabled nav button". That test
+    // pinned the disabled mechanism through the only row that used it; with
+    // all four screens shipped, nothing sets disabledLabel and the mechanism
+    // was removed rather than left as an untested branch in navigation.
     const onNavigate = vi.fn()
     render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={onNavigate} />)
     fireEvent.click(screen.getByRole('button', { name: /Review & QA/ }))
-    expect(onNavigate).not.toHaveBeenCalled()
+    expect(onNavigate).toHaveBeenCalledWith('review')
   })
 
   it('calls onNavigate for Live session, now that it is enabled', () => {
