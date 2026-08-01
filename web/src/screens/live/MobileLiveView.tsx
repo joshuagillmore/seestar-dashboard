@@ -67,7 +67,14 @@ export function MobileLiveView({ targetId, targetName, stack, tier1, focuser, pr
     deriveTelemetryValues(stack, tier1, focuser)
 
   const imageSrc = livePreviewImageSrc(preview)
-  const hasImage = Boolean(preview?.url)
+  // Keyed on `source`, not `url` — the same defect PreviewCard had, and for
+  // the same reason. `url` is a static route path that routes.py's
+  // `_live_preview_absent()` sets unconditionally, so it is present even when
+  // there is no frame; guarding on it renders an <img> at a URL that 404s.
+  // Both components passed their tests because the no-frame fixture omitted
+  // `url`, which no real response does. Correcting that fixture is what
+  // surfaced this second copy.
+  const hasImage = Boolean(preview?.source)
 
   return (
     <div className={styles.root}>
