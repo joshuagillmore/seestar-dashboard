@@ -252,3 +252,54 @@ describe('ReviewScreen states', () => {
     expect(screen.queryByText(/^reject 0\./)).not.toBeInTheDocument()
   })
 })
+
+describe('the start response must actually parse', () => {
+  it('renders the running state from a real start payload', async () => {
+    // This is the bug clicking the button found. `qa_analysis_start` omitted
+    // `sub_count` while `qa_analysis_status` included it, one schema
+    // described both, and every start response was rejected — the browser
+    // showed a parse error while the job it had just launched ran to
+    // completion behind it.
+    //
+    // The existing tests could not catch it: they assert the route was
+    // CALLED, and the fetch stub returned a generic {ok:true} that nothing
+    // parsed. Asserting a call is not asserting a contract.
+    stubFetch({
+      qa_analysis_start: {
+        ok: true,
+        target_id: 'M81',
+        sub_count: 587,
+        status: 'running',
+        started_at: '2026-08-02T01:15:00+00:00',
+        elapsed_seconds: 0.4,
+      },
+    })
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /M 81/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Analyse 587 subs/ }))
+
+    expect(await screen.findByText(/Analysing 587 subs/)).toBeInTheDocument()
+    expect(screen.queryByText(/unexpected payload/i)).not.toBeInTheDocument()
+  })
+
+  it('a start response missing sub_count is rejected loudly', async () => {
+    // Pins the shape rather than the symptom: if the two routes diverge
+    // again this fails here as well as in the sidecar paired-shape test.
+    stubFetch({
+      qa_analysis_start: {
+        ok: true,
+        target_id: 'M81',
+        status: 'running',
+        started_at: '2026-08-02T01:15:00+00:00',
+        elapsed_seconds: 0.4,
+      },
+    })
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /M 81/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Analyse 587 subs/ }))
+
+    expect(await screen.findByText(/unexpected payload/i)).toBeInTheDocument()
+  })
+})

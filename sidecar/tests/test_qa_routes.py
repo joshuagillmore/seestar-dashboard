@@ -384,3 +384,32 @@ def test_a_changed_sub_set_is_visible_as_stale_after_completion(app_factory, mon
     assert status["sub_count"] == 4
     # The stale report is still attached, clearly marked, rather than hidden.
     assert status["report"] == REAL_REPORT
+
+
+def test_start_and_status_return_the_same_identifying_fields(app_factory, monkeypatch):
+    """A consumer polls these two interchangeably, so they must not differ by
+    a field.
+
+    They did: `qa_analysis_start` omitted `sub_count` while
+    `qa_analysis_status` included it. One client schema could not describe
+    both, so the browser rejected every start response and rendered a parse
+    error while the job it had just launched ran to completion behind it.
+
+    Found by clicking the button against a real archive. No test caught it
+    because the client tests asserted the route was CALLED, never that its
+    response parsed — and this suite only ever checked each route's own
+    fields, never that the pair agreed.
+    """
+    async def fake_tier2(paths):
+        return {"ok": True, "summary": {"subs": []}, "keep_list": []}
+
+    monkeypatch.setattr(routes.qa_analysis, "call_qa_tier2", fake_tier2, raising=False)
+    with TestClient(app_factory()) as client:
+        started = client.get("/api/qa_analysis_start?target=M31").json()
+        polled = client.get("/api/qa_analysis_status?target=M31").json()
+
+    identifying = {"ok", "target_id", "sub_count"}
+    assert identifying <= set(started), f"start is missing {identifying - set(started)}"
+    assert identifying <= set(polled), f"status is missing {identifying - set(polled)}"
+    assert started["sub_count"] == polled["sub_count"]
+    assert started["target_id"] == polled["target_id"]

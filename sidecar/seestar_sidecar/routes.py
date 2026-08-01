@@ -874,7 +874,15 @@ async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
     status = qa_analysis.start_analysis(
         registry, cache_dir, target, archive_target.sub_paths, call_qa_tier2, include_report=False
     )
-    return JSONResponse({"ok": True, "target_id": target, **status})
+    # `sub_count` included so this matches qa_analysis_status exactly. It used
+    # to be omitted here and present there, which meant one client schema
+    # could not describe both — the browser rejected every start response and
+    # showed a parse error while the job it had just launched ran to
+    # completion behind it. Two routes a consumer polls interchangeably should
+    # not differ by a field.
+    return JSONResponse(
+        {"ok": True, "target_id": target, "sub_count": len(archive_target.sub_paths), **status}
+    )
 
 
 @router.get("/qa_analysis_status")
