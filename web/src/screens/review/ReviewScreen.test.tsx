@@ -416,3 +416,58 @@ describe('sub image', () => {
     expect(screen.queryByTestId('sub-image-card')).not.toBeInTheDocument()
   })
 })
+
+describe('the target list keeps up with the analysis', () => {
+  it('flips the row to analysed without a page reload', async () => {
+    // The bug: /api/qa_targets is fetched once on mount and never again, so a
+    // target analysed during this visit kept saying "not analysed" in the
+    // list while its finished report rendered beside it. Only a reload agreed
+    // with itself.
+    stubFetch({
+      qa_analysis_status: {
+        ok: true,
+        target_id: 'M81',
+        sub_count: 25,
+        status: 'complete',
+        analysed_at: '2026-08-02T01:15:00+00:00',
+        report: realReport,
+      },
+    })
+    render_()
+
+    // Anchored: once a report renders, the sub rows are buttons too and this
+    // fixture's sub names contain "M 81" ("Light_M 81_10.0s_IRCUT_...").
+    const pickerRow = () => screen.getByRole('button', { name: /^M 81/ })
+
+    await waitFor(() => expect(pickerRow()).toHaveTextContent('not analysed'))
+
+    fireEvent.click(pickerRow())
+    await screen.findByText(/of 25 subs/)
+
+    // NOT toHaveTextContent('analysed') — "not analysed" contains it, so that
+    // assertion would pass without the fix.
+    await waitFor(() => expect(pickerRow()).not.toHaveTextContent('not analysed'))
+    expect(pickerRow()).toHaveTextContent('analysed')
+  })
+
+  it('leaves other rows alone', async () => {
+    stubFetch({
+      qa_analysis_status: {
+        ok: true,
+        target_id: 'M81',
+        sub_count: 25,
+        status: 'complete',
+        analysed_at: '2026-08-02T01:15:00+00:00',
+        report: realReport,
+      },
+    })
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    await screen.findByText(/of 25 subs/)
+
+    // M42 was already complete in the listing and must not be rewritten by
+    // M81's status.
+    expect(screen.getByRole('button', { name: /^M 42/ })).toHaveTextContent('analysed')
+  })
+})

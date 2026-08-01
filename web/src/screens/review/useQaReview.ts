@@ -110,6 +110,37 @@ export function useQaReview(): QaReviewState {
       })
   }, [])
 
+  /**
+   * Keep the target list in step with the status we just fetched.
+   *
+   * The list is fetched once on mount and never again — `/api/qa_targets`
+   * re-scans the whole archive, so re-running it on every poll would be a
+   * real cost for one row's worth of change. That left a bug: a target
+   * analysed during this visit kept saying "not analysed" in the list while
+   * its finished report rendered beside it, because the row still held what
+   * it had at page load. Only a page reload agreed with itself.
+   *
+   * Patched from the status response we already have rather than refetched.
+   * `display_name` and `sub_count` come from the row (the status route's
+   * `sub_count` agrees, but the row is the authority for the label), and the
+   * status fields replace the stale ones — so a row goes not_analysed →
+   * running → complete as the poll sees it happen.
+   */
+  useEffect(() => {
+    if (status == null || selected == null) return
+    setTargets((prev) => {
+      if (prev == null) return prev
+      const i = prev.targets.findIndex((t) => t.target_id === selected)
+      if (i === -1) return prev
+      const row = prev.targets[i]!
+      if (row.status === status.status) return prev // no churn on every poll
+      const { ok: _ok, target_id: _tid, sub_count: _sc, ...statusFields } = status
+      const next = [...prev.targets]
+      next[i] = { ...row, ...statusFields } as (typeof prev.targets)[number]
+      return { ...prev, targets: next }
+    })
+  }, [status, selected])
+
   // Poll ONLY while a job is actually running. No running job, no timer.
   useEffect(() => {
     if (status?.status !== 'running' || selected == null) return undefined
