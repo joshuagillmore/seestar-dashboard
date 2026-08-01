@@ -258,15 +258,15 @@ describe('ProjectsScreen', () => {
     await renderLoaded()
     // Renders in two places (Sidebar's site block, TopBar's facts row), so
     // scope by element type/testid rather than a bare getByText.
-    expect(screen.getByText('Example Observatory (scope GPS)', { selector: 'div' })).toBeInTheDocument()
-    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory (scope GPS)')
+    expect(screen.getByText('Example Observatory', { selector: 'div' })).toBeInTheDocument()
+    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory')
   })
 
   it('renders gracefully when site/health have not arrived yet (null props)', async () => {
     stubApi()
     render(<ProjectsScreen view="projects" onNavigate={vi.fn()} site={null} health={null} />)
     await waitFor(() => expect(screen.queryByTestId('projects-loading')).not.toBeInTheDocument())
-    expect(screen.queryByText('Example Observatory (scope GPS)')).not.toBeInTheDocument()
+    expect(screen.queryByText('Example Observatory')).not.toBeInTheDocument()
     expect(
       screen.getByText(`${combined.count} projects · ${totalHoursText} collected`, { exact: false }),
     ).toBeInTheDocument()

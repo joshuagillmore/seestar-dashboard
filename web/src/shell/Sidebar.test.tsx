@@ -46,7 +46,7 @@ describe('Sidebar', () => {
 
   it('shows the site name and Bortle from the profile', () => {
     render(<Sidebar site={site} verdict="NO-GO" gpsWarning={null} view="tonight" onNavigate={vi.fn()} />)
-    expect(screen.getByText('Example Observatory (scope GPS)')).toBeInTheDocument()
+    expect(screen.getByText('Example Observatory')).toBeInTheDocument()
     expect(screen.getByText(/Bortle 8/)).toBeInTheDocument()
   })
 
@@ -140,7 +140,7 @@ describe('Sidebar', () => {
   it('gpsMatched: null — "GPS unverified" paired with the mask state (still applied), marginal tone, never the full warning sentence', () => {
     // The real installation's only-ever-observed state: GPS unknown, mask
     // still applied (assumed saved site) per _location_block's first branch.
-    const warning = "GPS unverified — assuming saved site 'Example Observatory (scope GPS)'."
+    const warning = "GPS unverified — assuming saved site 'Example Observatory'."
     render(
       <Sidebar site={site} verdict="NO-GO" gpsWarning={warning} gpsMatched={null} view="tonight" onNavigate={vi.fn()} />,
     )

@@ -3,9 +3,9 @@
   "location": {
     "matched": null,
     "distance_km": null,
-    "site_name": "Example Observatory (scope GPS)",
+    "site_name": "Example Observatory",
     "mask_applied": true,
-    "warning": "GPS unverified \u2014 assuming saved site 'Example Observatory (scope GPS)'."
+    "warning": "GPS unverified \u2014 assuming saved site 'Example Observatory'."
   },
   "go": false,
   "suitability": 0,

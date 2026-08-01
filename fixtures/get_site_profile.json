@@ -1,7 +1,7 @@
 {
   "ok": true,
   "profile": {
-    "name": "Example Observatory (scope GPS)",
+    "name": "Example Observatory",
     "lat_deg": 51.4778,
     "lon_deg": -0.0015,
     "elevation_m": 46.0,

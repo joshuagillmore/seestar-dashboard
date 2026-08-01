@@ -8,16 +8,21 @@ made the Live screen report an idle scope while it was stacking.
 
 ## One field is deliberately not faithful
 
-**`get_site_profile.json`'s coordinates are rounded to one decimal place** — about
-11 km. The real values locate a house to roughly ten metres, and this repository
-is public; the sister `seestar-mcp` project rewrote its entire git history to
-strip exactly this category of data.
+**`get_site_profile.json`'s site is entirely synthetic.** Name, coordinates and
+elevation are Greenwich Royal Observatory — the origin of the prime meridian, and
+the canonical reference point in astronomy. It is unmistakably a landmark rather
+than somebody's garden.
 
-One decimal is enough for everything that reads them (Bortle context, horizon and
-altitude logic, the sidebar's site block) and not enough to identify anyone. No
-test asserts the precise values.
+The real values located a house to about ten metres, and this repository is
+public; the sister `seestar-mcp` project rewrote its entire git history to strip
+exactly this category of data. Rounding was tried first and rejected: an
+11 km-accurate coordinate still names the city, which is most of the exposure.
 
-**If you re-record this fixture, round it again before committing.**
+Nothing depends on the values. Bortle, horizon and altitude logic all read fields
+that are still real, and the only tests touching coordinates either validate the
+schema or override them outright.
+
+**If you re-record this fixture, replace the site block again before committing.**
 
 ## Everything else is verbatim
 

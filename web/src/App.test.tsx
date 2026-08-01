@@ -61,20 +61,20 @@ describe('App', () => {
     const fetchMock = stubApi()
     render(<App />)
     await waitFor(() => expect(screen.getByText(/Observing planner/)).toBeInTheDocument())
-    expect(screen.getByText('Example Observatory (scope GPS)', { selector: 'div' })).toBeInTheDocument()
-    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory (scope GPS)')
+    expect(screen.getByText('Example Observatory', { selector: 'div' })).toBeInTheDocument()
+    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory')
 
     fireEvent.click(screen.getByRole('button', { name: /Projects/ }))
     await waitFor(() =>
       expect(screen.getByText(/list_projects · multi-night integration/)).toBeInTheDocument(),
     )
     // Never disappears, not "reappears after a refetch" — no waitFor here.
-    expect(screen.getByText('Example Observatory (scope GPS)', { selector: 'div' })).toBeInTheDocument()
-    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory (scope GPS)')
+    expect(screen.getByText('Example Observatory', { selector: 'div' })).toBeInTheDocument()
+    expect(screen.getByTestId('fact-site')).toHaveTextContent('Example Observatory')
 
     fireEvent.click(screen.getByRole('button', { name: /Tonight/ }))
     await waitFor(() => expect(screen.getByText(/Observing planner/)).toBeInTheDocument())
-    expect(screen.getByText('Example Observatory (scope GPS)', { selector: 'div' })).toBeInTheDocument()
+    expect(screen.getByText('Example Observatory', { selector: 'div' })).toBeInTheDocument()
 
     const siteCalls = fetchMock.mock.calls.filter(([url]) => url === '/api/get_site_profile')
     const healthCalls = fetchMock.mock.calls.filter(([url]) => url === '/api/health')
