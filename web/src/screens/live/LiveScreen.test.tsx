@@ -216,7 +216,7 @@ describe('LiveScreen', () => {
     expect(bridgeDownTone).toBe('reject')
   })
 
-  it('renders the active session once get_status and get_view_state both succeed', async () => {
+  it('renders the active session once get_view_state succeeds', async () => {
     stubApi()
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
@@ -578,10 +578,30 @@ describe('get_run_state', () => {
   it('still checks the device on the first idle poll', async () => {
     // The back-off must never delay the first look, or opening the screen on
     // a hand-driven session would show nothing for five minutes.
+    //
+    // The device check is `get_view_state`, not `get_status`. This assertion
+    // used to name get_status and was right at the time: it was the first
+    // call every tick. After the probe inversion, an active tick never calls
+    // get_status at all, so asserting on it would pass or fail for reasons
+    // unrelated to whether the device was checked.
     stubApi({ '/api/get_run_state': { ok: true, state: 'idle', run: null } })
 
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
 
-    expect(await waitForFetch('get_status')).toContain('get_status')
+    expect(await waitForFetch('get_view_state')).toContain('get_view_state')
+  })
+
+  it('does not call get_status at all while a session is active', async () => {
+    // The saving itself. get_view_state answering has already proved the
+    // bridge is up, so the five-request connection check is redundant on
+    // exactly the ticks where the control link is busiest. 6 device requests
+    // per active tick down to 1.
+    stubApi({ '/api/get_run_state': { ok: true, state: 'active', run: null } })
+
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitForFetch('check_night_guardrails')  // active path reached
+
+    const calls = (globalThis.fetch as unknown as { mock: { calls: [string][] } }).mock.calls
+    expect(calls.map(([u]) => u).some((u) => u.includes('get_status'))).toBe(false)
   })
 })
