@@ -46,6 +46,12 @@ _env_archive_dir = os.environ.get("SEESTAR_ARCHIVE_DIR")
 DEFAULT_ARCHIVE_DIR: Path | None = Path(_env_archive_dir) if _env_archive_dir else None
 
 #: Confirmed by the user: every sub-frame in the archive is a 10.0s exposure,
+#: The Seestar writes a small JPEG beside every captured sub, named
+#: `<stem>_thn.jpg`. Verified across the whole archive: 7,533 subs, 7,533
+#: thumbnails, none missing. It is what lets the Review & QA table show a sub
+#: without decoding FITS or handing a path to the OS to open.
+SUB_THUMBNAIL_SUFFIX = "_thn.jpg"
+
 #: and every filename encodes it (`Light_<target>_<exposure>s_<filter>_<stamp>.fit`).
 EXPOSURE_SECONDS = 10.0
 

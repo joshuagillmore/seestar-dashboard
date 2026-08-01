@@ -303,3 +303,116 @@ describe('the start response must actually parse', () => {
     expect(await screen.findByText(/unexpected payload/i)).toBeInTheDocument()
   })
 })
+
+const completeReport = () => ({
+  qa_analysis_status: {
+    ok: true,
+    target_id: 'M81',
+    sub_count: 25,
+    status: 'complete',
+    analysed_at: '2026-08-02T01:15:00+00:00',
+    report: realReport,
+  },
+})
+
+describe('verdict filter', () => {
+  const openReport = async () => {
+    stubFetch(completeReport())
+    render_()
+    fireEvent.click(await screen.findByRole('button', { name: /M 81/ }))
+    await screen.findByText(/of 25 subs/)
+  }
+
+  it('offers a chip per policy verdict, each carrying its own count', async () => {
+    await openReport()
+
+    for (const label of ['REJECT', 'MARGINAL', 'PASS']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument()
+    }
+  })
+
+  it('starts with nothing hidden', async () => {
+    await openReport()
+
+    for (const label of ['REJECT', 'MARGINAL', 'PASS']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+    }
+  })
+
+  it('hides a verdict from the table when its chip is switched off', async () => {
+    await openReport()
+    const before = screen.getAllByText('PASS').length
+
+    fireEvent.click(screen.getByRole('button', { name: /^PASS/ }))
+
+    // The chip itself still says PASS, so the count drops rather than zeroing.
+    expect(screen.getAllByText('PASS').length).toBeLessThan(before)
+    expect(screen.getByRole('button', { name: /^PASS/ })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('says how many are hidden rather than quietly showing fewer', async () => {
+    // A filtered table that just gets shorter looks like a smaller session.
+    await openReport()
+
+    fireEvent.click(screen.getByRole('button', { name: /^PASS/ }))
+
+    expect(await screen.findByText(/in the session/)).toBeInTheDocument()
+  })
+
+  it('does not filter the charts — only the table', async () => {
+    // A chart of only the rejects is not a picture of the night. The cutoff
+    // lines and their labels must survive any filter.
+    await openReport()
+    fireEvent.click(screen.getByRole('button', { name: /^PASS/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^MARGINAL/ }))
+
+    const { eccentricity_reject } = realReport.summary.thresholds
+    expect(screen.getByText(`reject ${eccentricity_reject}`)).toBeInTheDocument()
+  })
+})
+
+describe('sub image', () => {
+  it('opens the scope thumbnail when a row is clicked', async () => {
+    stubFetch(completeReport())
+    render_()
+    fireEvent.click(await screen.findByRole('button', { name: /M 81/ }))
+    await screen.findByText(/of 25 subs/)
+
+    const firstSub = realReport.summary.subs[0]
+    fireEvent.click(screen.getByTitle(firstSub.name))
+
+    const card = await screen.findByTestId('sub-image-card')
+    const img = card.querySelector('img')!
+    // Encoded, because real sub names contain spaces.
+    expect(img.getAttribute('src')).toBe(
+      `/api/sub_image/M81/${encodeURIComponent(firstSub.name)}`,
+    )
+  })
+
+  it('labels the image as a thumbnail, not the sub', async () => {
+    // Judging focus from a 250px JPEG is exactly the misread this prevents.
+    stubFetch(completeReport())
+    render_()
+    fireEvent.click(await screen.findByRole('button', { name: /M 81/ }))
+    await screen.findByText(/of 25 subs/)
+    fireEvent.click(screen.getByTitle(realReport.summary.subs[0].name))
+
+    expect(await screen.findByText(/not fine focus/)).toBeInTheDocument()
+  })
+
+  it('closes again', async () => {
+    stubFetch(completeReport())
+    render_()
+    fireEvent.click(await screen.findByRole('button', { name: /M 81/ }))
+    await screen.findByText(/of 25 subs/)
+    fireEvent.click(screen.getByTitle(realReport.summary.subs[0].name))
+    await screen.findByTestId('sub-image-card')
+
+    fireEvent.click(screen.getByLabelText('Close sub preview'))
+
+    expect(screen.queryByTestId('sub-image-card')).not.toBeInTheDocument()
+  })
+})

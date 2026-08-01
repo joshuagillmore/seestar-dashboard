@@ -159,6 +159,12 @@ SIDECAR_ROUTES = frozenset(
         "qa_targets",
         "qa_analysis_start",
         "qa_analysis_status",
+        # The Seestar's own per-sub JPEG thumbnail, so a Review & QA row can be
+        # looked at as well as read. Serves a file the scope already wrote
+        # (`<stem>_thn.jpg`, ~15 KB) — no FITS decoding, and nothing is handed
+        # to the OS to open. Neither path component is used to build a
+        # filesystem path: see the handler.
+        "sub_image/{target_id}/{sub_name}",
         "last_stack",
         "last_stack/image",
     }

@@ -7,6 +7,11 @@ export interface SubTableProps {
   /** How many rows to render. The design shows 6 of 766 deliberately: "the
    * charts carry the distribution, the table carries evidence." */
   limit?: number
+  /** Total before filtering, so the footer can say "of 102" rather than "of
+   * 28" and hide that a filter is on. */
+  totalUnfiltered?: number
+  onSelect?: (sub: QaSubVerdict) => void
+  selectedName?: string | null
 }
 
 const METRIC_COLUMNS = [
@@ -39,7 +44,13 @@ const METRIC_COLUMNS = [
  * quality judgement about it — and colouring it as one would attribute a
  * decision nobody took.
  */
-export function SubTable({ subs, limit = 12 }: SubTableProps) {
+export function SubTable({
+  subs,
+  limit = 12,
+  totalUnfiltered,
+  onSelect,
+  selectedName = null,
+}: SubTableProps) {
   const rows = subs.slice(0, limit)
 
   return (
@@ -63,7 +74,29 @@ export function SubTable({ subs, limit = 12 }: SubTableProps) {
           const unanalysed = isUnanalysed(sub)
 
           return (
-            <div key={sub.name} className={styles.row}>
+            <div
+              key={sub.name}
+              className={[
+                styles.row,
+                onSelect ? styles.clickable : '',
+                sub.name === selectedName ? styles.selected : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onClick={onSelect ? () => onSelect(sub) : undefined}
+              role={onSelect ? 'button' : undefined}
+              tabIndex={onSelect ? 0 : undefined}
+              onKeyDown={
+                onSelect
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onSelect(sub)
+                      }
+                    }
+                  : undefined
+              }
+            >
               <span className={styles.name} title={sub.name}>
                 {sub.name}
               </span>
@@ -100,9 +133,13 @@ export function SubTable({ subs, limit = 12 }: SubTableProps) {
         })
       )}
 
-      {subs.length > rows.length && (
+      {(subs.length > rows.length || (totalUnfiltered != null && totalUnfiltered !== subs.length)) && (
         <div className={styles.footer}>
-          showing {rows.length} of {subs.length} — the charts above carry the full distribution
+          showing {rows.length} of {subs.length}
+          {totalUnfiltered != null && totalUnfiltered !== subs.length
+            ? ` matching (${totalUnfiltered} in the session)`
+            : ''}{' '}
+          — the charts above carry the full distribution, unfiltered
         </div>
       )}
     </div>

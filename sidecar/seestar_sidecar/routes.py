@@ -12,7 +12,12 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from seestar_sidecar.allowlist import ALLOWED_TOOLS, SIDECAR_ROUTES
-from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR, scan_archive, scan_stacked_images
+from seestar_sidecar.archive import (
+    DEFAULT_ARCHIVE_DIR,
+    SUB_THUMBNAIL_SUFFIX,
+    scan_archive,
+    scan_stacked_images,
+)
 from seestar_sidecar.catalog import (
     DEFAULT_ALIASES_PATH,
     DEFAULT_CATALOG_PATH,
@@ -836,6 +841,59 @@ async def qa_targets(request: Request) -> JSONResponse:
     return JSONResponse(
         {"ok": True, "targets": targets, "archive_status": asdict(scan.status)}
     )
+
+
+@router.get("/sub_image/{target_id}/{sub_name}")
+async def sub_image(request: Request, target_id: str, sub_name: str) -> Response:
+    """The Seestar's own JPEG thumbnail for one sub, so a row in the Review &
+    QA table can be looked at rather than only read.
+
+    The scope writes `<stem>_thn.jpg` beside every `Light_*.fit` it captures —
+    verified across the whole archive: 7,533 subs, 7,533 thumbnails, none
+    missing. So this needs no FITS decoding and no handing a path to the OS to
+    open; it serves a file that is already there, at ~15 KB.
+
+    `sub_name` is `qa_tier2.summary.subs[].name`, which is `path.stem` — NO
+    extension (see CONTRACT.md). This route appends the thumbnail suffix
+    itself rather than trusting a filename from the URL.
+
+    **Neither path component is ever used to build a filesystem path.**
+    `target_id` goes through `is_plausible_target_id()` exactly as
+    `target_image` does, and the sub is then resolved by matching `sub_name`
+    against the STEMS of files the archive scan itself discovered. A `..` or
+    an absolute path matches no stem and 404s, because nothing here
+    concatenates user input onto a directory.
+    """
+    if not is_plausible_target_id(target_id):
+        return JSONResponse(
+            {"ok": False, "error": f"not a recognised target id: {target_id!r}"},
+            status_code=404,
+        )
+
+    archive_dir, local_tz = _archive_dir_and_tz(request)
+    scan = scan_archive(archive_dir, local_tz=local_tz)
+    target = scan.targets.get(target_id)
+    if target is None:
+        return JSONResponse(
+            {"ok": False, "error": f"no archive target {target_id!r}"}, status_code=404
+        )
+
+    # Match against what the scan found. Never `folder / f"{sub_name}_thn.jpg"`.
+    match = next((p for p in target.sub_paths if p.stem == sub_name), None)
+    if match is None:
+        return JSONResponse(
+            {"ok": False, "error": f"no sub {sub_name!r} in {target_id!r}"}, status_code=404
+        )
+
+    thumbnail = match.with_name(f"{match.stem}{SUB_THUMBNAIL_SUFFIX}")
+    if not thumbnail.exists():
+        # Honest absent state: the sub is real, its thumbnail is not. Distinct
+        # from "no such sub", and the UI says so rather than showing a gap.
+        return JSONResponse(
+            {"ok": False, "error": f"no thumbnail alongside {sub_name!r}"}, status_code=404
+        )
+
+    return FileResponse(thumbnail, media_type="image/jpeg")
 
 
 @router.get("/qa_analysis_start")
