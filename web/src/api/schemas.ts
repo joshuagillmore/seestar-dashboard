@@ -23,14 +23,17 @@ import { z } from 'zod'
  * re-record the fixtures** before assuming anything still holds. A green test
  * suite pinning a stale recording is indistinguishable from a passing contract
  * until the day it isn't — which is why `fixtures/qa_tier2.subs.json` has been
- * re-recorded three times (e8f0221, f51a1e2, d555c4b).
+ * re-recorded four times (e8f0221, f51a1e2, d555c4b, 04dce5e).
  *
  * Their semantics: MAJOR removes or renames a required key, or changes a
  * value's unit, sign or reference frame — the changes a schema cannot see.
- * MINOR adds a key. PATCH corrects a description without changing behaviour,
- * which is what 1.0.1 is.
+ * MINOR adds a key. PATCH corrects a description without changing behaviour.
+ *
+ * 1.1.0 made `thresholds.eccentricity_marginal` session-derived rather than a
+ * constant — a value-derivation change a schema cannot see, which is exactly
+ * why the fixture is re-recorded on a bump and not merely re-read.
  */
-export const SEESTAR_MCP_CONTRACT_VERSION = '1.0.1'
+export const SEESTAR_MCP_CONTRACT_VERSION = '1.1.0'
 
 export const LocationSchema = z.object({
   matched: z.boolean().nullable(),

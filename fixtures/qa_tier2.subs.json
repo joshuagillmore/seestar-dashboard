@@ -3,24 +3,19 @@
     "REAL — recorded from seestar-mcp's qa_tier2 over 25 subs randomly sampled",
     "(seed 7) from the local archive export's M 81 folder. Not hand-built.",
     "",
-    "RE-RECORDED at main @ d555c4b, which adds `summary.thresholds`. Re-record",
-    "on every seestar-mcp version bump that touches this payload: a green test",
-    "pinning a stale recording is indistinguishable from a passing contract",
-    "until the day it isn't. Previous recordings: e8f0221 (aggregates unrounded),",
-    "f51a1e2 (aggregates rounded, no thresholds).",
+    "RE-RECORDED at main @ 04dce5e, contract v1.1.0, which makes",
+    "`thresholds.eccentricity_marginal` SESSION-DERIVED. For this session it is",
+    "0.4449, not the 0.42 constant it used to be — so a client that hardcoded",
+    "0.42 would draw the marginal line ~6% low on this night. We read the field",
+    "(qa.ts thresholdLinesFor) and src/test/no-thresholds.test.ts fails the build",
+    "on the literal, so that class of bug cannot reach us.",
     "",
-    "`thresholds` are the EFFECTIVE cutoffs this session was scored against, not",
-    "the config constants — _effective_thresholds mirrors _score_sub's branching,",
-    "so a session-relative floor shows that session's number. Here snr_floor is",
-    "25.6896 because this session's median SNR was 51.3792; another night gives a",
-    "different absolute. null where a threshold could not be computed, never a",
-    "fabricated default.",
+    "Rejects and keep_list are unchanged by v1.1.0 — MARGINAL is an advisory",
+    "band, not a keep decision.",
     "",
-    "Worth knowing when reading the chart built on this: eccentricity_reject",
-    "(0.575) sits ABOVE every sub in this session (range 0.3179-0.4844), so the",
-    "reject line is off the top of the bar range. That is a real and useful",
-    "reading — nothing came close to the rotation cutoff — and it is why the",
-    "chart's domain has to include the thresholds rather than just the bars.",
+    "Re-record on every version bump that touches this payload: a green test",
+    "pinning a stale recording is indistinguishable from a passing contract until",
+    "the day it isn't. Prior recordings: e8f0221, f51a1e2, d555c4b.",
     "",
     "Read off the local periodic export, never the scope's SMB share.",
     "`target` is null and always will be for us: qa_tier2 only sets it when",
@@ -39,13 +34,14 @@
       "star_count": 32.0,
       "hfr": 1.2666,
       "eccentricity": 0.4076,
+      "eccentricity_sigma": 0.0373,
       "scattered_light": 0.0035,
       "scattered_light_sigma": 0.0053,
       "n_analyzed": 25
     },
     "thresholds": {
       "eccentricity_reject": 0.575,
-      "eccentricity_marginal": 0.42,
+      "eccentricity_marginal": 0.4449,
       "fwhm_reject": 2.7415,
       "fwhm_marginal": 2.6963,
       "snr_floor": 25.6896,
@@ -127,7 +123,7 @@
         "name": "Light_M 81_10.0s_IRCUT_20240104-204221",
         "verdict": "MARGINAL",
         "reasons": [
-          "MARGINAL: eccentricity 0.48 >= 0.42 marginal",
+          "MARGINAL: eccentricity 0.48 >= 0.44 (median 0.41 + 1sigma)",
           "MARGINAL: scattered light 0.012 > 0.009 (median + 1σ) — possible thin cirrus / bright-star halos"
         ],
         "metrics": {
@@ -162,7 +158,6 @@
         "name": "Light_M 81_10.0s_IRCUT_20240104-204512",
         "verdict": "MARGINAL",
         "reasons": [
-          "MARGINAL: eccentricity 0.42 >= 0.42 marginal",
           "MARGINAL: scattered light 0.013 > 0.009 (median + 1σ) — possible thin cirrus / bright-star halos"
         ],
         "metrics": {
@@ -197,7 +192,6 @@
         "name": "Light_M 81_10.0s_IRCUT_20240104-204910",
         "verdict": "MARGINAL",
         "reasons": [
-          "MARGINAL: eccentricity 0.43 >= 0.42 marginal",
           "MARGINAL: scattered light 0.013 > 0.009 (median + 1σ) — possible thin cirrus / bright-star halos"
         ],
         "metrics": {
@@ -215,7 +209,6 @@
         "name": "Light_M 81_10.0s_IRCUT_20240104-205007",
         "verdict": "REJECT",
         "reasons": [
-          "MARGINAL: eccentricity 0.42 >= 0.42 marginal",
           "REJECT: scattered light 0.014 > 0.014 (median + 2σ) — likely thin cirrus / bright-star halos"
         ],
         "metrics": {
@@ -316,9 +309,9 @@
       },
       {
         "name": "Light_M 81_10.0s_IRCUT_20240312-214623",
-        "verdict": "MARGINAL",
+        "verdict": "PASS",
         "reasons": [
-          "MARGINAL: eccentricity 0.44 >= 0.42 marginal"
+          "PASS: all metrics within session norms"
         ],
         "metrics": {
           "star_count": 34,
@@ -335,7 +328,7 @@
         "name": "Light_M 81_10.0s_IRCUT_20240312-215553",
         "verdict": "REJECT",
         "reasons": [
-          "MARGINAL: eccentricity 0.48 >= 0.42 marginal",
+          "MARGINAL: eccentricity 0.48 >= 0.44 (median 0.41 + 1sigma)",
           "REJECT: FWHM 2.80 > 2.74 (median 2.61 + 1.5sigma)"
         ],
         "metrics": {
