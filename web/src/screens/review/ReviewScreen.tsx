@@ -1,4 +1,5 @@
-import type { Health, SiteProfile } from '../../api/schemas'
+import { useState } from 'react'
+import type { Health, QaSubVerdict, SiteProfile } from '../../api/schemas'
 import { AppShell } from '../../shell/AppShell'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
@@ -8,7 +9,8 @@ import { RejectionsByCause } from './RejectionsByCause'
 import { ReportHeader } from './ReportHeader'
 import { SubTable } from './SubTable'
 import { TargetPicker } from './TargetPicker'
-import { thresholdLinesFor } from './qa'
+import { thresholdLinesFor, toneFor, type QaTone } from './qa'
+import { SubImageCard } from './SubImageCard'
 import { useQaReview } from './useQaReview'
 import styles from './ReviewScreen.module.css'
 
@@ -18,6 +20,16 @@ export interface ReviewScreenProps {
   site: SiteProfile | null
   health: Health | null
 }
+
+/** The three the policy defines, in severity order. `unknown` is not offered
+ * as a filter: it exists so an unrecognised verdict still RENDERS, and hiding
+ * one behind a chip nobody thinks to click would defeat that. Such a sub
+ * always shows. */
+const FILTERS: ReadonlyArray<{ tone: QaTone; label: string }> = [
+  { tone: 'reject', label: 'REJECT' },
+  { tone: 'marginal', label: 'MARGINAL' },
+  { tone: 'pass', label: 'PASS' },
+]
 
 /**
  * Slice 4 — Review & QA. Morning-after triage over `qa_tier2`.
@@ -73,6 +85,11 @@ export interface ReviewScreenProps {
  */
 export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenProps) {
   const { phase, targets, selected, status, starting, error, select, analyse } = useQaReview()
+  // Empty = no filter, show everything. Not "all three selected", so the
+  // default state cannot be confused with a filter that happens to include
+  // everything.
+  const [hidden, setHidden] = useState<ReadonlySet<QaTone>>(new Set())
+  const [openSub, setOpenSub] = useState<QaSubVerdict | null>(null)
 
   const selectedTarget = targets?.targets.find((t) => t.target_id === selected) ?? null
   // Narrowed once, here, so the render below never has to re-test the union.
@@ -220,7 +237,63 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
                         </div>
                       </div>
 
-                      <SubTable subs={report.summary.subs} />
+                      {(() => {
+                        // Filtering applies to the TABLE only. The charts show
+                        // the session's distribution and filtering them would
+                        // misrepresent it — a chart of only the rejects is not
+                        // a picture of the night.
+                        const visible = report.summary.subs.filter((s) => {
+                          const tone = toneFor(s.verdict)
+                          // An unrecognised verdict is never hidden — see FILTERS.
+                          return !FILTERS.some((f) => f.tone === tone) || !hidden.has(tone)
+                        })
+                        const countFor = (tone: QaTone) =>
+                          report.summary.subs.filter((s) => toneFor(s.verdict) === tone).length
+
+                        return (
+                          <>
+                            <div className={styles.filterBar}>
+                              <span className={styles.filterLabel}>Show</span>
+                              {FILTERS.map(({ tone, label }) => {
+                                const on = !hidden.has(tone)
+                                return (
+                                  <button
+                                    key={tone}
+                                    type="button"
+                                    aria-pressed={on}
+                                    className={`${styles.chip} ${styles[tone]} ${on ? styles.chipOn : ''}`}
+                                    onClick={() =>
+                                      setHidden((prev) => {
+                                        const next = new Set(prev)
+                                        if (next.has(tone)) next.delete(tone)
+                                        else next.add(tone)
+                                        return next
+                                      })
+                                    }
+                                  >
+                                    {label} <span className={styles.chipCount}>{countFor(tone)}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+
+                            {openSub && (
+                              <SubImageCard
+                                targetId={selectedTarget.target_id}
+                                sub={openSub}
+                                onClose={() => setOpenSub(null)}
+                              />
+                            )}
+
+                            <SubTable
+                              subs={visible}
+                              totalUnfiltered={report.summary.subs.length}
+                              onSelect={setOpenSub}
+                              selectedName={openSub?.name ?? null}
+                            />
+                          </>
+                        )
+                      })()}
                     </>
                   )}
                 </>

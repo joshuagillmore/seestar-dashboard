@@ -1,0 +1,116 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-quiet);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+}
+
+.head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.titleGroup { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+.badge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: var(--radius-chip);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9.5px;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+}
+
+.badge.pass { background: var(--pass-bg); color: var(--pass); }
+.badge.marginal { background: var(--marginal-bg); color: var(--marginal); }
+.badge.reject { background: var(--reject-bg); color: var(--reject); }
+.badge.unknown,
+.badge.unanalysed { background: var(--neutral-tag-bg); color: var(--text-dimmer); }
+
+.name {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.close {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-quiet);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-dimmer);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.close:hover { background: var(--bg-card-sunken); color: var(--text-primary); }
+
+.body { display: flex; gap: 16px; align-items: flex-start; }
+
+.imageWrap { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; width: 280px; }
+
+.image {
+  width: 100%;
+  border-radius: var(--radius-control);
+  background: var(--bg-card-sunken);
+  display: block;
+}
+
+/* Says what the picture is. A thumbnail read as a full-resolution sub would
+   have someone judging focus from a 250px JPEG. */
+.imageNote {
+  font-family: var(--font-sans);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+
+.detail { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+.metrics {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border-faint);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+
+.metric { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: var(--bg-card); }
+
+.metric dt {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.metric dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* Rendered verbatim, never re-worded — the auditable half of the verdict. */
+.reasons { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 4px; }
+
+.reasons li,
+.reason {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dimmer);
+}

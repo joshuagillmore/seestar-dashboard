@@ -91,3 +91,11 @@
 }
 
 .footer { background: var(--bg-card-sunken); }
+
+/* Rows become selectable when the screen passes an onSelect — clicking one
+   opens its thumbnail (SubImageCard). Kept off when it doesn't, so the table
+   is not falsely interactive. */
+.clickable { cursor: pointer; }
+.clickable:hover { background: var(--bg-card-sunken); }
+.clickable:focus-visible { outline: 1px solid var(--accent-border); outline-offset: -1px; }
+.selected { background: var(--bg-card-sunken); }

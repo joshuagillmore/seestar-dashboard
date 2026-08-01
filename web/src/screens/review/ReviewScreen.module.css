@@ -117,3 +117,38 @@
   font-size: 11.5px;
   color: var(--reject);
 }
+
+/* Verdict filter. Applies to the evidence table only — the charts above stay
+   whole, because a chart of only the rejects is not a picture of the night. */
+.filterBar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.filterLabel {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid var(--border-quiet);
+  border-radius: var(--radius-chip);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+/* Off reads as genuinely off — dimmed and unfilled — so the current filter is
+   legible at a glance rather than needing the counts to be read. */
+.chip.chipOn.pass { background: var(--pass-bg); color: var(--pass); border-color: var(--pass-bg); }
+.chip.chipOn.marginal { background: var(--marginal-bg); color: var(--marginal); border-color: var(--marginal-bg); }
+.chip.chipOn.reject { background: var(--reject-bg); color: var(--reject); border-color: var(--reject-bg); }
+
+.chipCount { font-variant-numeric: tabular-nums; opacity: 0.75; }

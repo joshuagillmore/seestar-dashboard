@@ -226,3 +226,15 @@ export const startQaAnalysis = (target: string): Promise<QaAnalysisResponse> =>
  * safe to poll on the idle path. */
 export const fetchRunState = (): Promise<RunState> =>
   get('/api/get_run_state', RunStateSchema)
+
+/** URL for one sub's Seestar-written JPEG thumbnail (`<stem>_thn.jpg`).
+ *
+ * `subName` is `qa_tier2.summary.subs[].name` — the stem, no extension. Both
+ * components are encoded: sub names contain spaces ("Light_M57 Ring
+ * Nebula_10.0s_LP_…"), and the route matches the DECODED value against stems
+ * the archive scan found, so it must arrive intact.
+ *
+ * Returns a URL for an <img>, not bytes — same convention as
+ * `fetchLivePreview`/`fetchLastStack`. */
+export const subImageSrc = (targetId: string, subName: string): string =>
+  `/api/sub_image/${encodeURIComponent(targetId)}/${encodeURIComponent(subName)}`
