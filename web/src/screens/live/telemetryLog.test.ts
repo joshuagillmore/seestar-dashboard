@@ -53,3 +53,29 @@ describe('formatElapsed', () => {
     expect(formatElapsed({ tier1: snapshot('2026-07-30T00:00:05Z') }, first)).toBe('00:00')
   })
 })
+
+describe('formatElapsed timestamp shapes', () => {
+  const entry = (ts: string) =>
+    ({ tier1: { snapshot: { ts } } }) as unknown as Parameters<typeof formatElapsed>[0]
+
+  it('handles the offset-bearing shape qa_tier1 actually emits', () => {
+    // seestar-mcp's projects/provenance layer emits `...+00:00`.
+    expect(
+      formatElapsed(entry('2026-07-31T18:53:57.970086+00:00'), entry('2026-07-31T18:52:57.970086+00:00')),
+    ).toBe('01:00')
+  })
+
+  it('reads a naive timestamp as UTC, not local', () => {
+    // The regression this guards: a bare Date.parse treats a date-time with no
+    // offset as LOCAL time, so on a UTC-4 machine the elapsed counter would be
+    // out by four hours — silently, and only for whoever is not on UTC.
+    // seestar-mcp's planning layer emits exactly this shape, and a field
+    // changing layer is not hypothetical.
+    expect(formatElapsed(entry('2026-08-01T04:01:30'), entry('2026-08-01T04:00:00'))).toBe('01:30')
+  })
+
+  it('gives the same answer whichever shape the two timestamps use', () => {
+    const mixed = formatElapsed(entry('2026-08-01T04:01:00+00:00'), entry('2026-08-01T04:00:00'))
+    expect(mixed).toBe('01:00')
+  })
+})

@@ -34,7 +34,10 @@ without anyone remembering to think about it.
 
 from __future__ import annotations
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 #: Parameter names whose values are redacted wherever they appear. Matched
 #: case-insensitively, and as a substring — `apikey`, `api_key`, `X-Api-Key`
@@ -68,12 +71,30 @@ def redact_secrets(text: str) -> str:
     if not text:
         return text
 
+    hits: list[str] = []
+
     def replace(match: re.Match[str]) -> str:
-        if _is_secret_name(match.group("name")):
-            return f"{match.group('name')}={REDACTED}"
+        name = match.group("name")
+        if _is_secret_name(name):
+            hits.append(name)
+            return f"{name}={REDACTED}"
         return match.group(0)
 
-    return _ASSIGNMENT.sub(replace, text)
+    out = _ASSIGNMENT.sub(replace, text)
+
+    if hits:
+        # Firing is not routine. This is a backstop for a defect upstream — a
+        # credential should never be in an error string in the first place — so
+        # a hit means something regressed at the source and is worth finding,
+        # not absorbing silently. The parameter NAMES are safe to log; the
+        # values are exactly what must not be.
+        logger.warning(
+            "redacted %d credential-shaped value(s) from an outbound error: %s. "
+            "A secret reached this layer; fix it at the source rather than relying on this.",
+            len(hits),
+            ", ".join(sorted(set(hits))),
+        )
+    return out
 
 
 def redact_payload(payload: dict) -> dict:

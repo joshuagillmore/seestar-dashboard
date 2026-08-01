@@ -1,4 +1,5 @@
 import type { Tier1 } from '../../api/schemas'
+import { parse } from '../tonight/timeline'
 
 /**
  * `qa_tier1` is a snapshot (design README.md:478: "Tier-1 is cheap health
@@ -36,7 +37,16 @@ export function appendTelemetryEntry(log: TelemetryEntry[], tier1: Tier1): Telem
  * client-side fetch time — matching the design's own worked example
  * (`[71:20]` down to `[64:20]`, each row one poll apart). */
 export function formatElapsed(entry: TelemetryEntry, first: TelemetryEntry): string {
-  const totalSeconds = Math.max(0, Math.round((Date.parse(entry.tier1.snapshot.ts) - Date.parse(first.tier1.snapshot.ts)) / 1000))
+  // Uses the shared `parse`, not a bare `Date.parse`. `snapshot.ts` is
+  // offset-bearing today, which bare Date.parse handles correctly — but the
+  // server emits BOTH shapes (planning naive, projects/provenance
+  // offset-bearing, confirmed by seestar-mcp 2026-08-01), and bare Date.parse
+  // reads a naive string as LOCAL time, not UTC. That is silent and would show
+  // as an elapsed counter wrong by the UTC offset. One normaliser, everywhere.
+  const totalSeconds = Math.max(
+    0,
+    Math.round((parse(entry.tier1.snapshot.ts) - parse(first.tier1.snapshot.ts)) / 1000),
+  )
   const mm = Math.floor(totalSeconds / 60)
   const ss = totalSeconds % 60
   return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`

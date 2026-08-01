@@ -75,3 +75,27 @@ def test_no_error_field_is_fine():
 def test_empty_and_missing_text_do_not_raise():
     assert redact_secrets("") == ""
     assert redact_payload({"ok": False, "error": None}) == {"ok": False, "error": None}
+
+
+def test_a_redaction_is_logged_because_firing_means_something_upstream_regressed(caplog):
+    """The backstop should not be silent.
+
+    seestar-mcp fixed the leak at source, and our redaction now masks anything
+    that gets through — which means a regression there would be invisible to us
+    unless the mask announces itself. It logs the parameter NAMES (safe) and
+    never the values (the whole point).
+    """
+    with caplog.at_level("WARNING"):
+        out = redact_secrets("boom apikey=sekrit&lat=51.4")
+
+    assert "sekrit" not in out
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages, "a redaction must not be silent"
+    assert any("apikey" in m for m in messages), messages
+    assert not any("sekrit" in r.getMessage() for r in caplog.records), "logged the value"
+
+
+def test_a_clean_error_logs_nothing(caplog):
+    with caplog.at_level("WARNING"):
+        redact_secrets("Client error '429 Too Many Requests' for url 'https://x/y?lat=51.4'")
+    assert not caplog.records
