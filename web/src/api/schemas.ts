@@ -6,6 +6,32 @@ import { z } from 'zod'
  * null there — location.matched, sqm and median_fwhm all do today.
  */
 
+/**
+ * The seestar-mcp consumer contract version this file was written against.
+ *
+ * `docs/CONTRACT.md` in `OrangeAgente/seestar-mcp`, enforced by their
+ * `tests/test_console_contract.py` — it fails *their* build rather than our
+ * runtime, which is the whole point of it existing. They version it so we can
+ * pin; this is us pinning.
+ *
+ * It cannot be checked automatically: we have no import path to their repo,
+ * and a test asserting this constant against itself would prove nothing. It is
+ * a **provenance record**, not a guard — it makes "which contract were we built
+ * against?" answerable, so drift can be diffed rather than discovered.
+ *
+ * **On a version bump, diff their CONTRACT.md against this version and
+ * re-record the fixtures** before assuming anything still holds. A green test
+ * suite pinning a stale recording is indistinguishable from a passing contract
+ * until the day it isn't — which is why `fixtures/qa_tier2.subs.json` has been
+ * re-recorded three times (e8f0221, f51a1e2, d555c4b).
+ *
+ * Their semantics: MAJOR removes or renames a required key, or changes a
+ * value's unit, sign or reference frame — the changes a schema cannot see.
+ * MINOR adds a key. PATCH corrects a description without changing behaviour,
+ * which is what 1.0.1 is.
+ */
+export const SEESTAR_MCP_CONTRACT_VERSION = '1.0.1'
+
 export const LocationSchema = z.object({
   matched: z.boolean().nullable(),
   distance_km: z.number().nullable(),

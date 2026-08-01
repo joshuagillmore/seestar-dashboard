@@ -97,6 +97,21 @@ computation makes `plan_targets` take about sixteen minutes per call, and withou
 brightness/feasibility term the ranker will confidently recommend faint galaxies an f/5 50 mm
 cannot resolve. Both are spelled out in that item.
 
+### The contract has replaced most of this list
+
+**Pinned to seestar-mcp consumer contract v1.0.1** (`docs/CONTRACT.md` in their repo,
+enforced by `tests/test_console_contract.py`, which fails *their* build rather than our
+runtime). Recorded on our side as `SEESTAR_MCP_CONTRACT_VERSION` in `web/src/api/schemas.ts`.
+
+That constant is a provenance record, not a guard — we have no import path to their repo, so
+nothing checks it automatically. **On a version bump: diff their CONTRACT.md against the pinned
+version and re-record the fixtures.** A green suite pinning a stale recording is
+indistinguishable from a passing contract until the day it isn't, which is why
+`fixtures/qa_tier2.subs.json` has been re-recorded three times.
+
+Their semantics: MAJOR removes/renames a required key or changes a unit, sign or reference
+frame — the changes a schema cannot see. MINOR adds a key. PATCH corrects a description.
+
 ### What is already done on the dashboard side
 
 Nothing here is waiting on the dashboard. Every item has an honest absent state shipped — the
