@@ -5,6 +5,7 @@ you find yourself reshaping a payload here, it belongs in the server instead —
 see docs/handback-to-seestar-ai.md.
 """
 import asyncio
+import os
 import json
 from contextlib import AsyncExitStack
 from typing import Any
@@ -15,6 +16,10 @@ from mcp.client.stdio import stdio_client
 
 class ProxyTransportError(RuntimeError):
     """The MCP subprocess could not be reached, started, or answered."""
+
+
+#: What this process calls itself in seestar-mcp's provenance log.
+CLIENT_ID = "console"
 
 
 class McpConnection:
@@ -37,7 +42,17 @@ class McpConnection:
             return
         stack = AsyncExitStack()
         try:
-            params = StdioServerParameters(command=self._command, args=self._args)
+            # Name ourselves in the shared provenance log. Both this dashboard
+            # and the agent append to one seestar-mcp log; without this our
+            # records read `client: "anon-<hex>"` and neither side can tell
+            # whose traffic is whose. seestar-mcp's config.py documents
+            # SEESTAR_CLIENT_ID for exactly this. An operator-set value wins —
+            # someone running two consoles deserves to distinguish them.
+            env = {**os.environ}
+            env.setdefault("SEESTAR_CLIENT_ID", CLIENT_ID)
+            params = StdioServerParameters(
+                command=self._command, args=self._args, env=env
+            )
             read, write = await stack.enter_async_context(stdio_client(params))
             session = await stack.enter_async_context(ClientSession(read, write))
             await session.initialize()
