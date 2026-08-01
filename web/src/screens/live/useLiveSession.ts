@@ -17,7 +17,6 @@ import type {
   LastStack,
   LivePreview,
   SessionActivity,
-  Status,
   TargetObservability,
   Tier1,
   ViewState,
@@ -76,7 +75,6 @@ export type LiveSessionState =
   | {
       phase: 'active'
       viewState: ViewState
-      status: Status
       /** Each is `null` independently on its own fetch failure — a session
        * being active is anchored on `viewState` alone, so a guardrails or
        * observability hiccup degrades only its own card, not the screen. */
@@ -124,19 +122,56 @@ export type LiveSessionState =
 
 /**
  * The idle/bridge-down distinction is read from *which* call fails, not from
- * matching error text — `get_status` is a cheap, always-answerable
- * connection check (CLAUDE.md's read-only table), while `get_view_state`
- * only answers during an active session and is documented to time out
- * otherwise (slice-3 spec §4: "native state methods time out on an idle
- * scope"). So:
+ * matching error text — `get_view_state` only answers during an active
+ * session and is documented to time out otherwise (slice-3 spec §4: "native
+ * state methods time out on an idle scope"), while `get_status` answers
+ * whenever the link is up at all. This avoids parsing the server's error
+ * prose to classify a failure, the same reason this project never parses
+ * `reasons[]` to recover a value a tool declined to return as a field.
  *
- *   get_status fails                → bridge-down (the connection itself is gone)
- *   get_status OK, view_state fails → idle (nothing wrong, nothing observing)
- *   both OK                         → active
+ * ## Order matters, and it used to be the wrong way round
  *
- * This avoids parsing the server's error prose to classify a failure, the
- * same reason this project never parses `reasons[]` to recover a value a
- * tool declined to return as a field.
+ * `get_status` is **not cheap**: it fans out to five separate Alpaca property
+ * reads (`connected`, `rightascension`, `declination`, `tracking`,
+ * `slewing`), which seestar-mcp measured and we confirmed. `get_view_state`
+ * is one.
+ *
+ * This hook used to call `get_status` first, every tick, and `get_view_state`
+ * second. That is backwards. **Nothing in this client ever renders a
+ * `get_status` field** — checked across every component; the payload was
+ * fetched, stored on the active state, and read by nobody. Its only real job
+ * is as a liveness probe: we use the fact that it *answered*.
+ *
+ * And on an active tick, `get_view_state` answering has already proved the
+ * link is up. So the five-request check was pure redundancy on exactly the
+ * ticks where the control link is most contended — the opposite of
+ * seestar-mcp's own "ease off the device-touching tools while stacking".
+ *
+ * Inverted:
+ *
+ *   view_state OK                  → active. Bridge proved up; get_status
+ *                                    never called.        1 request
+ *   view_state fails, status OK    → idle                 6 requests
+ *   view_state fails, status fails → bridge-down          6 requests
+ *
+ * An active tick drops from 6 device requests to 1. The idle path is
+ * unchanged in cost and already behind the back-off below, so it pays the
+ * six only once every five polls.
+ *
+ * `status` is deliberately no longer carried on the active state. Keeping a
+ * field nothing renders invites someone to render a stale one later, and on
+ * the active path it is now never fetched at all — the honest shape is its
+ * absence. If a screen ever needs pointing or tracking, fetch it then and
+ * see the note below first.
+ *
+ * **Do not "optimise" this by substituting a native call for the fan-out.**
+ * seestar-mcp verified against live hardware that it does not collapse:
+ * pointing does (`scope_get_equ_coord` matches Alpaca to ~5 arcsec of
+ * sidereal drift), but `tracking` does not — the Alpaca property and the
+ * firmware's `mount.tracking` flag report *opposite* values on an
+ * idle-but-tracking-enabled scope, and `connected` (link up) is not
+ * `is_verified` (RSA auth passed). Three attempts at that collapse were
+ * wrong; only the measurement settled it.
  *
  * ## `get_run_state`, and why the device calls are now conditional
  *
@@ -239,25 +274,30 @@ export function useLiveSession(): LiveSessionState {
         return
       }
 
-      let status: Status
-      try {
-        status = await fetchStatus()
-      } catch (cause) {
-        const sessionActivity = await sessionActivityPromise
-        if (!cancelled) {
-          setState({
-            phase: 'bridge-down',
-            error: cause instanceof Error ? cause.message : String(cause),
-            sessionActivity,
-          })
-        }
-        return
-      }
-
+      // `get_view_state` FIRST, and `get_status` only if it fails — see this
+      // hook's doc comment. A successful view_state has already proved the
+      // bridge is up, so the 5-request connection check is redundant on
+      // exactly the ticks where the control link is busiest.
       let viewState: ViewState
       try {
         viewState = await fetchViewState()
       } catch {
+        // No session. Now — and only now — spend the 5 requests to tell
+        // "idle" from "the bridge is gone", which is the one question
+        // get_status is actually here to answer.
+        try {
+          await fetchStatus()
+        } catch (cause) {
+          const sessionActivity = await sessionActivityPromise
+          if (!cancelled) {
+            setState({
+              phase: 'bridge-down',
+              error: cause instanceof Error ? cause.message : String(cause),
+              sessionActivity,
+            })
+          }
+          return
+        }
         const sessionActivity = await sessionActivityPromise
         if (!cancelled) setState({ phase: 'idle', sessionActivity })
         return
@@ -316,7 +356,6 @@ export function useLiveSession(): LiveSessionState {
       setState({
         phase: 'active',
         viewState,
-        status,
         guardrails,
         tier1,
         focuser,
