@@ -80,7 +80,27 @@ def combine_projects(
 
     for project in store_projects:
         target_id = project["target_id"]
-        store_nights_by_target[target_id] = _store_nights(project.get("sessions", []))
+        # `sessions` ABSENT and `sessions` EMPTY mean opposite things here, and
+        # the difference is not cosmetic: these nights are what archive nights
+        # are de-duplicated against below. An absent key defaulted to [] gives
+        # an empty `known_nights`, so every archive night survives the union
+        # and `archive_minutes` / `total_minutes` silently inflate by whatever
+        # the store already counted. Every field stays present and numeric, so
+        # ProjectsCombinedEntrySchema parses it happily — a wrong number with
+        # no error anywhere.
+        #
+        # seestar-mcp's `detail="summary"` (default since a66f2d3) omits the
+        # key exactly as we asked it to, so this is now reachable rather than
+        # theoretical: routes.py passes detail="full" at every call site, and
+        # this is the assertion that the request actually took effect.
+        if "sessions" not in project:
+            raise ValueError(
+                f"list_projects returned no `sessions` key for {target_id!r} — "
+                "this is the detail='summary' payload. The union de-duplicates "
+                "archive nights against store sessions, so proceeding would "
+                "inflate archive_minutes silently. Pass detail='full'."
+            )
+        store_nights_by_target[target_id] = _store_nights(project["sessions"])
         combined[target_id] = {
             "target_id": target_id,
             "target_name": project.get("target_name") or target_id,
