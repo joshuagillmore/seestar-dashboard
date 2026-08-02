@@ -63,6 +63,38 @@ from seestar_sidecar.session_activity import DEFAULT_PROVENANCE_PATH, read_recen
 
 router = APIRouter(prefix="/api")
 
+#: Every image route serves a file whose CONTENT can change while its URL
+#: stays the same — a new stacked master lands for a target, or the server
+#: starts serving a different variant at the same path (which is exactly what
+#: happened when target_image began preferring the scope's `_thn.jpg`).
+#:
+#: With no directive at all, browsers apply heuristic freshness and simply do
+#: not revalidate: measured in a real tab, 22 of 32 Projects images were still
+#: being served from cache as the OLD full-resolution files, so a client that
+#: had loaded the grid before the change got none of the 6.1 MB -> 0.75 MB
+#: benefit. The same silence would have served a stale master after a new
+#: session, which was already wrong before that change made it visible.
+#:
+#: `no-cache` does not mean "do not store" — it means "revalidate before
+#: reuse".
+#:
+#: Note what that costs here, because it is not free: Starlette's bare
+#: FileResponse SETS an ETag but does not implement conditional responses
+#: (that is StaticFiles' job), so a revalidation is a full re-fetch, not a
+#: 304. Acceptable on this route and measured rather than assumed: these are
+#: 8-27 KB files served from local disk, so a whole Projects grid is ~0.75 MB
+#: at ~10 ms each. If they were the old 400-840 KB masters this would be the
+#: wrong trade and conditional handling would be worth writing.
+IMAGE_CACHE_CONTROL = "no-cache"
+
+
+def _image_response(path, *, media_type: str = "image/jpeg") -> FileResponse:
+    """A file response that revalidates. See IMAGE_CACHE_CONTROL."""
+    return FileResponse(
+        path, media_type=media_type, headers={"Cache-Control": IMAGE_CACHE_CONTROL}
+    )
+
+
 
 def replay_enabled() -> bool:
     return os.environ.get("SEESTAR_REPLAY") == "1"
@@ -472,8 +504,8 @@ async def target_image(
         # asking to actually look at the image, and must still get the
         # full-resolution file.
         if size <= DEFAULT_IMAGE_SIZE_PX and own.thumbnail_path is not None:
-            return FileResponse(own.thumbnail_path, media_type="image/jpeg")
-        return FileResponse(own.path, media_type="image/jpeg")
+            return _image_response(own.thumbnail_path)
+        return _image_response(own.path)
 
     catalog_path, aliases_path = _catalog_paths(request)
     catalog = load_catalog(catalog_path)
@@ -615,7 +647,7 @@ async def live_preview_image(request: Request) -> Response:
         return JSONResponse(
             {"ok": False, "error": "no live preview frame available yet"}, status_code=404
         )
-    return FileResponse(cache.path, media_type="image/jpeg")
+    return _image_response(cache.path)
 
 
 # --- last completed stack (slice 3 follow-up) ------------------------------
@@ -726,7 +758,7 @@ async def last_stack_image(request: Request) -> Response:
         return JSONResponse(
             {"ok": False, "error": "no last stack available yet"}, status_code=404
         )
-    return FileResponse(cache.path, media_type="image/jpeg")
+    return _image_response(cache.path)
 
 
 # --- session activity (operator panel) --------------------------------------
@@ -913,7 +945,7 @@ async def sub_image(request: Request, target_id: str, sub_name: str) -> Response
             {"ok": False, "error": f"no thumbnail alongside {sub_name!r}"}, status_code=404
         )
 
-    return FileResponse(thumbnail, media_type="image/jpeg")
+    return _image_response(thumbnail)
 
 
 @router.get("/qa_analysis_start")
