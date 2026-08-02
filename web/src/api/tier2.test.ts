@@ -285,3 +285,27 @@ describe('QaAnalysisStatusSchema discriminates on status', () => {
     expect(() => QaAnalysisStatusSchema.parse({ status: 'sort_of_done' })).toThrow()
   })
 })
+
+describe('contract v1.1.1 threshold guarantees', () => {
+  const t = () => Tier2Schema.parse(fixture('qa_tier2.subs.json')).summary.thresholds!
+
+  it('the marginal line never sits above the reject line', () => {
+    // Guaranteed as of contract v1.1.1, previously only incidentally true.
+    // Their adversarial review found the derived line could exceed the reject
+    // cutoff on a session whose median sits near it — making MARGINAL
+    // unreachable on exactly the poor night where it matters. MetricChart
+    // draws both, so an inverted pair would render a chart that reads
+    // backwards.
+    expect(t().eccentricity_marginal!).toBeLessThanOrEqual(t().eccentricity_reject!)
+  })
+
+  it('every threshold is a finite number, never NaN', () => {
+    // A NaN cutoff silently disabled the rule server-side (`x >= NaN` is
+    // always false). Arriving here it would position a chart line at NaN%,
+    // which renders as no line at all — a disabled rule and an absent line,
+    // neither of them announced.
+    for (const [key, value] of Object.entries(t())) {
+      if (value != null) expect(Number.isFinite(value), `${key} is not finite`).toBe(true)
+    }
+  })
+})
