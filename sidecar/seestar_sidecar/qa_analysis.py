@@ -143,6 +143,54 @@ def _cache_path(cache_dir: Path, target_id: str) -> Path:
     return cache_dir / f"{target_id}.json"
 
 
+def _inflight_path(cache_dir: Path, target_id: str) -> Path:
+    """Marker written while a job runs, removed when it reaches any terminal
+    state. Its presence with no live job means the process died mid-run."""
+    return cache_dir / f"{target_id}.inflight.json"
+
+
+def mark_inflight(cache_dir: Path, target_id: str, signature: str) -> None:
+    """Record that a job is starting.
+
+    A running job lives only in an in-memory registry and an asyncio task, so
+    a restart used to lose it silently: the target simply read `not_analysed`
+    again, with nothing to say that twenty minutes of work had been thrown
+    away. `not_analysed` was not a lie — but "nobody has run this" and "a run
+    was killed under you" are different things to be told.
+
+    Never raises. Failing to write the marker must not stop the analysis; it
+    only costs the nicer message on the unlucky path.
+    """
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        _inflight_path(cache_dir, target_id).write_text(
+            json.dumps({"target_id": target_id, "signature": signature, "started_at": _iso(_now())}),
+            encoding="utf-8",
+        )
+    except OSError:
+        logger.warning("could not mark %s in flight", target_id, exc_info=True)
+
+
+def clear_inflight(cache_dir: Path, target_id: str) -> None:
+    """Remove the marker. Called on every terminal state — success, failure
+    and the ok:false path alike — so only a killed process leaves one."""
+    try:
+        _inflight_path(cache_dir, target_id).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def load_inflight(cache_dir: Path, target_id: str) -> dict | None:
+    """The marker, or `None` if absent or unreadable."""
+    try:
+        path = _inflight_path(cache_dir, target_id)
+        if not path.is_file():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def load_cached_report(cache_dir: Path, target_id: str) -> dict | None:
     """`{"target_id", "signature", "analysed_at", "result"}` for the most
     recently CACHED (i.e. completed and written) analysis of `target_id`, or
@@ -254,6 +302,20 @@ def resolve_status(
             out["report"] = cached["result"]
         return out
 
+    # No job, no cache — but a marker left behind means a previous process
+    # was killed mid-run. Reported as failed rather than not_analysed: both
+    # are honest about there being no report, but only one tells the user
+    # that work was interrupted rather than never started, and the UI's
+    # failed state already offers the right affordance (try again).
+    interrupted = load_inflight(cache_dir, target_id)
+    if interrupted is not None:
+        return {
+            "status": STATUS_FAILED,
+            "error": (
+                "interrupted — the sidecar restarted while this was running"
+                f" (started {interrupted.get('started_at')})"
+            ),
+        }
     return {"status": STATUS_NOT_ANALYSED}
 
 
@@ -314,20 +376,24 @@ def start_analysis(
             job.status = STATUS_FAILED
             job.error = str(exc)
             job.finished_at = _now()
+            clear_inflight(cache_dir, target_id)
             logger.warning("qa_tier2 analysis failed for %s", target_id, exc_info=True)
             return
         if not result.get("ok", True):
             job.status = STATUS_FAILED
             job.error = result.get("error") or "qa_tier2 returned ok: false"
             job.finished_at = _now()
+            clear_inflight(cache_dir, target_id)
             return
         job.status = STATUS_COMPLETE
         job.result = result
         job.finished_at = _now()
+        clear_inflight(cache_dir, target_id)
         try:
             write_cached_report(cache_dir, target_id, signature, result)
         except OSError:
             logger.warning("failed to write qa analysis cache for %s", target_id, exc_info=True)
 
+    mark_inflight(cache_dir, target_id, signature)
     job.task = asyncio.create_task(_run())
     return _job_view(job, include_report)
