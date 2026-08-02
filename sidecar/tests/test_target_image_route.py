@@ -280,3 +280,42 @@ def test_missing_archive_directory_still_serves_the_survey_fallback(
 
     assert response.status_code == 200
     assert response.content == b"survey-bytes"
+
+
+def test_images_are_served_with_a_revalidating_cache_directive(client):
+    """One URL, changing content — a new stacked master lands, or the server
+    starts serving a different variant at the same path.
+
+    With no directive browsers apply heuristic freshness and do not
+    revalidate. Measured in a real tab after the thumbnail change: 22 of 32
+    Projects images were still coming from cache as the OLD full-resolution
+    files, so a client that had loaded the grid earlier got none of the
+    6.1 MB -> 0.75 MB benefit. The same silence would have served a stale
+    master after a new session.
+
+    `no-cache` means "revalidate before reuse", not "do not store".
+    """
+    response = client.get("/api/target_image/M31")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
+
+
+def test_revalidation_is_a_full_refetch_not_a_304(client):
+    """Pins what this route actually does, against what is easy to assume.
+
+    Starlette's bare FileResponse sets an ETag but does NOT honour
+    If-None-Match — conditional handling belongs to StaticFiles. An earlier
+    version of this test asserted a 304 and failed, which is the only reason
+    the comment on IMAGE_CACHE_CONTROL is accurate.
+
+    The trade is fine here and the numbers are why: 8-27 KB from local disk.
+    If this route went back to serving 400-840 KB masters, it would not be,
+    and this test failing would be the signal to write the conditional path.
+    """
+    first = client.get("/api/target_image/M31")
+
+    second = client.get("/api/target_image/M31", headers={"If-None-Match": first.headers["etag"]})
+
+    assert second.status_code == 200
+    assert second.content == first.content
