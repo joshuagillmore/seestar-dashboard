@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
-import { fetchProjects, fetchProjectsCombined, fetchRecommendProjects } from '../../api/client'
+import { fetchProjects, fetchProjectsCombined, fetchQaTargets,
+  fetchRecommendProjects } from '../../api/client'
 import type {
   Health,
   ListProjects,
   ProjectsCombined,
   RecommendProjects,
   SiteProfile,
+  QaTargets,
 } from '../../api/schemas'
 import { AppShell } from '../../shell/AppShell'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
 import type { View } from '../../shell/view'
 import { ProjectCard } from './ProjectCard'
+import { setPendingReviewTarget } from '../review/pendingTarget'
 import { SessionHistory } from './SessionHistory'
 import { formatHours, mergeProjects, projectStatus } from './projects'
 import { readSelectedProjectId, writeSelectedProjectId } from './selection'
@@ -25,6 +28,11 @@ interface Data {
    * for what's a best-effort header line; see fetchRecommendProjects's own
    * `.catch(() => null)` below. */
   recommended: RecommendProjects | null
+  /** Per-target QA verdict mixes, for the quality bars. `null` when the
+   * listing could not be fetched; a target simply missing from it (or
+   * carrying no `verdicts`) means "never analysed", which renders no bar
+   * rather than an empty one. */
+  qa: QaTargets | null
 }
 
 /**
@@ -89,9 +97,13 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
       // this line is a bonus, not load-bearing data the rest of the screen
       // depends on.
       fetchRecommendProjects(1).catch(() => null),
+      // Also best-effort, and for the same reason: the quality bars are an
+      // addition to each card, not the card. A failure here (or an archive
+      // with nothing analysed yet) means no bars, never a broken grid.
+      fetchQaTargets().catch(() => null),
     ])
-      .then(([combined, listed, recommended]) => {
-        if (!cancelled) setData({ combined, listed, recommended })
+      .then(([combined, listed, recommended, qa]) => {
+        if (!cancelled) setData({ combined, listed, recommended, qa })
       })
       .catch((cause: Error) => {
         if (!cancelled) setError(cause.message)
@@ -174,6 +186,13 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
               <div className={styles.grid} data-testid="projects-grid">
                 {merged.map((project) => (
                   <ProjectCard
+                    verdicts={
+                      data.qa?.targets.find((q) => q.target_id === project.targetId)?.verdicts
+                    }
+                    onOpenQa={() => {
+                      setPendingReviewTarget(project.targetId)
+                      onNavigate('review')
+                    }}
                     key={project.targetId}
                     project={project}
                     selected={project.targetId === selected?.targetId}

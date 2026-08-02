@@ -91,7 +91,23 @@ def normalize_target_id(raw_name: str) -> str:
     if match:
         return f"{match['letters']}{match['digits']}"
     tokens = raw_name.split()
-    return tokens[0] if tokens else raw_name
+    if not tokens:
+        return raw_name
+    # Only drop the trailing words when the FIRST one is itself a designation
+    # — "M27 Dumbbell Nebula" -> "M27". A leading word carrying no digits is
+    # not an id, and taking it anyway threw away the only distinguishing part:
+    # "Veil Nebula East" and "Veil Nebula West" both folded to "Veil".
+    #
+    # That mattered beyond a cosmetic label. Both the live preview's share
+    # scan and the archive join key run through here, and the scan compares a
+    # normalised directory name against a normalised target — so two mosaic
+    # panels of one nebula shared an id and the screen could show the East
+    # panel's frame while imaging West. Verified against the real archive:
+    # every existing folder keeps the id it had, because all 24 lead with a
+    # designation and are handled above or by the digit check here.
+    if any(ch.isdigit() for ch in tokens[0]):
+        return tokens[0]
+    return "".join(tokens)
 
 
 def observing_night(instant_utc: datetime) -> date:
@@ -242,6 +258,14 @@ class StackedImage:
     path: Path
     is_thumbnail: bool  # True when only the `_thn` sibling exists, no full-res .jpg
     captured_at: datetime
+    #: The `_thn.jpg` sibling when one exists, whether or not a full-res JPEG
+    #: does. Carried rather than discarded so a caller that wants a small
+    #: image can have the small file: the full masters are 400-840 KB each and
+    #: the Projects grid draws 32 of them at ~90 px, which was 6.1 MB of
+    #: decode to paint postage stamps. The scope writes these itself, so this
+    #: needs no resizing and no cache. `None` when only a full-res JPEG
+    #: exists, in which case `path` is the only option.
+    thumbnail_path: "Path | None" = None
 
 
 def scan_archive(root: Path | None, local_tz: timezone | None = None) -> ArchiveScan:
@@ -378,6 +402,7 @@ def scan_stacked_images(
                 path=path,
                 is_thumbnail="full" not in files,
                 captured_at=_local_capture_instant_utc(date_str, time_str, local_tz),
+                thumbnail_path=files.get("thumbnail"),
             )
             current = latest.get(target_id)
             if current is None or candidate.captured_at > current.captured_at:

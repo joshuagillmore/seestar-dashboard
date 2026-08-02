@@ -400,10 +400,10 @@ def test_start_and_status_return_the_same_identifying_fields(app_factory, monkey
     response parsed — and this suite only ever checked each route's own
     fields, never that the pair agreed.
     """
-    async def fake_tier2(paths):
+    async def fake_tool(app, tool, arguments):
         return {"ok": True, "summary": {"subs": []}, "keep_list": []}
 
-    monkeypatch.setattr(routes.qa_analysis, "call_qa_tier2", fake_tier2, raising=False)
+    monkeypatch.setattr(routes, "_call_tool_on_app", fake_tool)
     with TestClient(app_factory()) as client:
         started = client.get("/api/qa_analysis_start?target=M31").json()
         polled = client.get("/api/qa_analysis_status?target=M31").json()
@@ -413,3 +413,63 @@ def test_start_and_status_return_the_same_identifying_fields(app_factory, monkey
     assert identifying <= set(polled), f"status is missing {identifying - set(polled)}"
     assert started["sub_count"] == polled["sub_count"]
     assert started["target_id"] == polled["target_id"]
+
+
+def test_verdict_counts_are_counted_never_re_derived():
+    """A vocabulary the policy does not define lands in `unknown` rather than
+    being coerced into one of the three. Folding an unrecognised verdict into
+    "pass" would tone a bar green for a frame the server flagged."""
+    from seestar_sidecar.qa_analysis import verdict_counts
+
+    result = {
+        "summary": {
+            "subs": [
+                {"verdict": "PASS"},
+                {"verdict": "MARGINAL"},
+                {"verdict": "REJECT"},
+                {"verdict": "REJECT"},
+                {"verdict": "PROVISIONAL"},
+            ]
+        }
+    }
+
+    assert verdict_counts(result) == {
+        "pass": 1,
+        "marginal": 1,
+        "reject": 2,
+        "unknown": 1,
+        "total": 5,
+    }
+
+
+def test_verdict_counts_is_none_when_there_is_nothing_to_count():
+    from seestar_sidecar.qa_analysis import verdict_counts
+
+    # Absent, not a row of zeros — zeros would draw an empty bar for a target
+    # that was simply never analysed, which is a different thing.
+    assert verdict_counts(None) is None
+    assert verdict_counts({}) is None
+    assert verdict_counts({"summary": {}}) is None
+
+
+def test_qa_targets_carries_verdict_counts_only_for_analysed_targets(app_factory, monkeypatch):
+    async def fake_tool(app, tool, arguments):
+        assert tool == "qa_tier2"
+        return {
+            "ok": True,
+            "summary": {"subs": [{"verdict": "PASS"}, {"verdict": "REJECT"}], "kept": 1},
+            "keep_list": [],
+        }
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", fake_tool)
+    with TestClient(app_factory()) as client:
+        before = client.get("/api/qa_targets").json()["targets"][0]
+        assert "verdicts" not in before, "an unanalysed target must not carry a zeroed row"
+
+        client.get("/api/qa_analysis_start?target=M31")
+        _wait_until_not_running(client)
+        after = next(
+            t for t in client.get("/api/qa_targets").json()["targets"] if t["target_id"] == "M31"
+        )
+
+    assert after["verdicts"] == {"pass": 1, "marginal": 0, "reject": 1, "unknown": 0, "total": 2}

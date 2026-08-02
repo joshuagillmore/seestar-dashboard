@@ -478,3 +478,59 @@ async def test_a_changed_sub_set_invalidates_the_cache_and_recomputes(tmp_path):
     assert status["status"] == STATUS_RUNNING
     await registry.get("M31").task
     assert call_count == 1  # the stale cache did NOT short-circuit this run
+
+
+def test_an_interrupted_job_reports_as_interrupted_not_as_never_run(tmp_path):
+    """A running job lives only in memory and an asyncio task, so a restart
+    used to lose it silently — the target read `not_analysed` again with
+    nothing to say that twenty minutes of work had been thrown away.
+
+    `not_analysed` was not a lie, but "nobody has run this" and "a run was
+    killed under you" are different things to be told. Simulates the restart
+    the only way that matters: a marker on disk and a FRESH registry, exactly
+    what a new process sees.
+    """
+    from seestar_sidecar.qa_analysis import mark_inflight, resolve_status
+
+    cache_dir = tmp_path / "qa"
+    mark_inflight(cache_dir, "IC405", "sig-1")
+
+    status = resolve_status(QaJobRegistry(), cache_dir, "IC405", "sig-1")
+
+    assert status["status"] == STATUS_FAILED
+    assert "interrupted" in status["error"]
+
+
+def test_a_cleared_marker_reads_as_never_analysed(tmp_path):
+    from seestar_sidecar.qa_analysis import clear_inflight, mark_inflight, resolve_status
+
+    cache_dir = tmp_path / "qa"
+    mark_inflight(cache_dir, "IC405", "sig-1")
+    clear_inflight(cache_dir, "IC405")
+
+    assert resolve_status(QaJobRegistry(), cache_dir, "IC405", "sig-1")["status"] == (
+        STATUS_NOT_ANALYSED
+    )
+
+
+def test_a_completed_report_wins_over_a_stale_marker(tmp_path):
+    """Belt and braces: a marker that somehow outlived its job must not mask
+    a real cached report."""
+    from seestar_sidecar.qa_analysis import mark_inflight, resolve_status, write_cached_report
+
+    cache_dir = tmp_path / "qa"
+    write_cached_report(cache_dir, "IC405", "sig-1", {"ok": True, "summary": {"subs": []}})
+    mark_inflight(cache_dir, "IC405", "sig-1")
+
+    assert resolve_status(QaJobRegistry(), cache_dir, "IC405", "sig-1")["status"] == STATUS_COMPLETE
+
+
+def test_marking_in_flight_never_raises_on_an_unwritable_cache_dir(tmp_path):
+    """Failing to write the marker must not stop the analysis — it only costs
+    the nicer message on the unlucky path."""
+    from seestar_sidecar.qa_analysis import mark_inflight
+
+    blocker = tmp_path / "not-a-dir"
+    blocker.write_text("x", encoding="utf-8")
+
+    mark_inflight(blocker / "qa", "IC405", "sig-1")  # must not raise

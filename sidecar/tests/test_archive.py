@@ -462,3 +462,37 @@ def test_non_stacked_files_in_the_plain_directory_are_ignored(tmp_path):
     images = scan_stacked_images(tmp_path, local_tz=EDT)
 
     assert images == {}
+
+
+def test_mosaic_panels_do_not_collapse_to_the_same_id():
+    """"Veil Nebula East" and "Veil Nebula West" both folded to "Veil".
+
+    Not cosmetic: the live preview's share scan normalises a directory name
+    and compares it against a normalised target, so two panels of one nebula
+    shared an id and the screen could show the East panel's frame while
+    imaging West. Mosaic panels of a large nebula are a normal observing
+    pattern, not a contrived case.
+    """
+    assert normalize_target_id("Veil Nebula East") != normalize_target_id("Veil Nebula West")
+
+
+def test_a_leading_word_is_only_dropped_when_it_is_itself_a_designation():
+    # Kept: the first token carries digits, so it IS the id and the trailing
+    # common name is noise.
+    assert normalize_target_id("M27 Dumbbell Nebula") == "M27"
+    assert normalize_target_id("M57 Ring Nebula") == "M57"
+    assert normalize_target_id("SH2-142") == "SH2-142"
+    # Spaced designations are handled before this branch.
+    assert normalize_target_id("NGC 2244 Satellite Cluster") == "NGC2244"
+    assert normalize_target_id("M 31") == "M31"
+    # No designation anywhere: nothing may be discarded.
+    assert normalize_target_id("Veil Nebula East") == "VeilNebulaEast"
+    assert normalize_target_id("the fuzzy one near Cygnus") == "thefuzzyonenearCygnus"
+
+
+def test_single_token_names_are_unchanged():
+    # "Unknown" is the archive's own bucket for undetermined captures and is
+    # surfaced as-is per the hand-back rule — report it, don't guess.
+    assert normalize_target_id("Unknown") == "Unknown"
+    assert normalize_target_id("M31") == "M31"
+    assert normalize_target_id("") == ""

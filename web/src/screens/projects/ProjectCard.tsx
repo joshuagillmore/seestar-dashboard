@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { goalLabel as describeGoalLabel, hasNumericGoal } from '../../api/integrationGoal'
+import type { QaVerdictCounts } from '../../api/schemas'
 import { TargetThumb } from '../../ui/TargetThumb'
+import { QualityBar } from './QualityBar'
 import { isGoalDoubled, toggleGoalDoubled } from './doubling'
 import {
   formatHours,
@@ -34,6 +36,12 @@ export interface ProjectCardProps {
   project: MergedProject
   selected: boolean
   onSelect: () => void
+  /** This target's QA verdict mix, when it has been analysed. Absent — not
+   * zeroed — otherwise, so the card renders no quality bar rather than an
+   * empty one, which would read as "nothing passed". */
+  verdicts?: QaVerdictCounts
+  /** Opens this target's report on the Review & QA screen. */
+  onOpenQa?: () => void
 }
 
 /**
@@ -62,7 +70,13 @@ export interface ProjectCardProps {
  * same shared TargetThumb as PlanCard's thumbnail, so both surfaces share
  * one own-vs-survey honesty guarantee instead of two implementations of it.
  */
-export function ProjectCard({ project, selected, onSelect }: ProjectCardProps) {
+export function ProjectCard({
+  project,
+  selected,
+  onSelect,
+  verdicts,
+  onOpenQa,
+}: ProjectCardProps) {
   const [doubled, setDoubled] = useState(() => isGoalDoubled(project.targetId))
   const status = projectStatus(project, doubled)
   const pct = progressPct(project, doubled)
@@ -109,6 +123,17 @@ export function ProjectCard({ project, selected, onSelect }: ProjectCardProps) {
               />
             )}
           </div>
+          {/* Collected-vs-goal is the bar above. This one answers the
+              question that changes what you do next: how much of what you
+              collected is keepable. A target can sit at 100% of its suggested
+              time and be mostly rejects. Rendered only when the target has
+              actually been analysed. */}
+          {verdicts && (
+            <QualityBar
+              verdicts={verdicts}
+              onOpen={onOpenQa}
+            />
+          )}
           <div className={styles.provenance}>{provenanceLabel(project)}</div>
           <div
             className={styles.meta}

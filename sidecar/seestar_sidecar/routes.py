@@ -460,6 +460,19 @@ async def target_image(
     stacked_images = scan_stacked_images(archive_dir, local_tz=local_tz)
     own = stacked_images.get(target_id)
     if own is not None:
+        # Prefer the scope's own `_thn.jpg` when the caller asked for a small
+        # image. The full masters are 400-840 KB and the Projects grid draws
+        # 32 of them at roughly 90 px — 6.1 MB of JPEG decoded to paint
+        # postage stamps, which is what made that screen slow. The thumbnails
+        # are 7-21 KB and already on disk, so this needs no resizing library
+        # and no cache; the survey path has always sized its cutouts and this
+        # brings the own-image path in line.
+        #
+        # Only below the default: an explicit larger `size` is a caller
+        # asking to actually look at the image, and must still get the
+        # full-resolution file.
+        if size <= DEFAULT_IMAGE_SIZE_PX and own.thumbnail_path is not None:
+            return FileResponse(own.thumbnail_path, media_type="image/jpeg")
         return FileResponse(own.path, media_type="image/jpeg")
 
     catalog_path, aliases_path = _catalog_paths(request)
@@ -830,12 +843,19 @@ async def qa_targets(request: Request) -> JSONResponse:
         status = qa_analysis.resolve_status(
             registry, cache_dir, target.target_id, signature, include_report=False
         )
+        # The quality mix, without the report. Five integers per target is
+        # what lets the Projects grid tone a bar by pass/marginal/reject;
+        # embedding 22 reports of up to ~430 KB would be the bloat
+        # include_report=False exists to prevent.
+        cached = qa_analysis.load_cached_report(cache_dir, target.target_id)
+        counts = qa_analysis.verdict_counts((cached or {}).get("result"))
         targets.append(
             {
                 "target_id": target.target_id,
                 "display_name": target.display_name,
                 "sub_count": len(target.sub_paths),
                 **status,
+                **({"verdicts": counts} if counts is not None else {}),
             }
         )
     return JSONResponse(

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { fetchQaStatus, fetchQaTargets, startQaAnalysis } from '../../api/client'
+import { takePendingReviewTarget } from './pendingTarget'
 import type { QaAnalysisResponse, QaTargets } from '../../api/schemas'
 
 /** How often to re-poll a running job. `qa_tier2` takes minutes over a real
@@ -53,6 +54,10 @@ export function useQaReview(): QaReviewState {
   // Guards a late response from a target the user has already navigated away
   // from overwriting the current one.
   const currentTarget = useRef<string | null>(null)
+  // `select` is declared after this effect; a ref avoids reordering the hook
+  // or adding it to the mount effect's deps (which would re-run the listing
+  // fetch every time the callback identity changed).
+  const selectRef = useRef<((targetId: string) => void) | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -61,6 +66,13 @@ export function useQaReview(): QaReviewState {
         if (cancelled) return
         setTargets(data)
         setPhase('ready')
+        // Arrived from the Projects grid's quality bar. Consumed once (see
+        // pendingTarget.ts), so coming back here later via the nav rail
+        // opens the ordinary empty state rather than reviving this target.
+        const pending = takePendingReviewTarget()
+        if (pending != null && data.targets.some((x) => x.target_id === pending)) {
+          selectRef.current?.(pending)
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -90,6 +102,8 @@ export function useQaReview(): QaReviewState {
         setError(err instanceof Error ? err.message : String(err))
       })
   }, [])
+
+  selectRef.current = select
 
   const analyse = useCallback(() => {
     const target = currentTarget.current
