@@ -89,7 +89,12 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
   // default state cannot be confused with a filter that happens to include
   // everything.
   const [hidden, setHidden] = useState<ReadonlySet<QaTone>>(new Set())
-  const [openSub, setOpenSub] = useState<QaSubVerdict | null>(null)
+  // Stored WITH the target it belongs to. Holding the sub alone let it
+  // outlive a target change: the card then paired the new target's id with
+  // the old target's sub, showing one report's metrics and reasons under
+  // another's heading and requesting an image URL for a sub that target does
+  // not contain. Keyed this way, a mismatch simply renders nothing.
+  const [openSub, setOpenSub] = useState<{ targetId: string; sub: QaSubVerdict } | null>(null)
 
   const selectedTarget = targets?.targets.find((t) => t.target_id === selected) ?? null
   // Narrowed once, here, so the render below never has to re-test the union.
@@ -200,6 +205,33 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
                         stale={finished.status === 'stale'}
                       />
 
+                      {/* A stale report was a dead end: the only Analyse
+                          buttons lived in the not_analysed and failed
+                          branches, so once new subs arrived — an entirely
+                          ordinary thing to happen — the screen showed
+                          obsolete numbers with no way to refresh them, even
+                          though the start endpoint recomputes happily on a
+                          changed signature. */}
+                      {finished.status === 'stale' && (
+                        <div className={styles.staleBar}>
+                          <p className={styles.stateText}>
+                            New subs have arrived since this ran, so these numbers describe an
+                            older set. Re-analysing covers all{' '}
+                            {selectedTarget.sub_count} on disk now.
+                          </p>
+                          <button
+                            type="button"
+                            className={styles.action}
+                            onClick={analyse}
+                            disabled={starting}
+                          >
+                            {starting
+                              ? 'Starting…'
+                              : `Re-analyse ${selectedTarget.sub_count} subs`}
+                          </button>
+                        </div>
+                      )}
+
                       <div className={styles.card}>
                         <div className={styles.legend}>
                           <Swatch tone="pass" label="pass" />
@@ -277,10 +309,10 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
                               })}
                             </div>
 
-                            {openSub && (
+                            {openSub?.targetId === selectedTarget.target_id && (
                               <SubImageCard
-                                targetId={selectedTarget.target_id}
-                                sub={openSub}
+                                targetId={openSub.targetId}
+                                sub={openSub.sub}
                                 onClose={() => setOpenSub(null)}
                               />
                             )}
@@ -288,8 +320,14 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
                             <SubTable
                               subs={visible}
                               totalUnfiltered={report.summary.subs.length}
-                              onSelect={setOpenSub}
-                              selectedName={openSub?.name ?? null}
+                              onSelect={(sub) =>
+                                setOpenSub({ targetId: selectedTarget.target_id, sub })
+                              }
+                              selectedName={
+                                openSub?.targetId === selectedTarget.target_id
+                                  ? openSub.sub.name
+                                  : null
+                              }
                             />
                           </>
                         )

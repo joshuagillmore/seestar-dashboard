@@ -605,3 +605,42 @@ describe('get_run_state', () => {
     expect(calls.map(([u]) => u).some((u) => u.includes('get_status'))).toBe(false)
   })
 })
+
+describe('run state is only trusted when active', () => {
+  const runState = (state: string, sessionStart: string) => ({
+    ok: true,
+    state,
+    stamped_utc: '2026-08-02T22:41:03.118402+00:00',
+    run: {
+      session_start_utc: sessionStart,
+      target: 'M27',
+      slot_ends_utc: null,
+      park_deadline_utc: null,
+      resolved_id: 'M27',
+      stamped_utc: '2026-08-02T22:41:03.118402+00:00',
+    },
+  })
+
+  it('ignores session_start_utc from an unknown (stale) run record', async () => {
+    // `unknown` retains the previous run's fields by design — a stamp too old
+    // to vouch for. Feeding that into check_night_guardrails, which governs a
+    // hard stop, reports an abandoned session's age as the current one's.
+    // This is exactly the misuse we warned seestar-mcp about and then wrote.
+    const ABANDONED = '2026-07-30T02:00:00.000000+00:00'
+    stubApi({ '/api/get_run_state': runState('unknown', ABANDONED) })
+
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    const guardrail = await waitForFetch('check_night_guardrails')
+    expect(decodeURIComponent(guardrail)).not.toContain(ABANDONED)
+  })
+
+  it('still trusts it when the run is active', async () => {
+    const REAL = '2026-08-02T19:04:11.500000+00:00'
+    stubApi({ '/api/get_run_state': runState('active', REAL) })
+
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    expect(decodeURIComponent(await waitForFetch('check_night_guardrails'))).toContain(REAL)
+  })
+})

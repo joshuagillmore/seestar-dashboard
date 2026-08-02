@@ -534,3 +534,87 @@ def test_marking_in_flight_never_raises_on_an_unwritable_cache_dir(tmp_path):
     blocker.write_text("x", encoding="utf-8")
 
     mark_inflight(blocker / "qa", "IC405", "sig-1")  # must not raise
+
+
+def test_a_report_that_cannot_be_saved_is_reported_failed_not_complete(tmp_path, monkeypatch):
+    """Publishing complete before the write meant a restart in that window
+    lost the result AND the interruption marker, so the target read
+    not_analysed with nothing to say work had happened.
+
+    A result no restart can recover is not a success, and saying `complete`
+    for one that exists only in this process's memory is the dishonest
+    version.
+    """
+    import asyncio
+
+    from seestar_sidecar import qa_analysis
+
+    cache_dir = tmp_path / "qa"
+    registry = QaJobRegistry()
+
+    def boom(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(qa_analysis, "write_cached_report", boom)
+
+    async def tier2(paths):
+        return {"ok": True, "summary": {"subs": []}, "keep_list": []}
+
+    async def run():
+        qa_analysis.start_analysis(registry, cache_dir, "M31", [tmp_path / "a.fit"], tier2)
+        for _ in range(200):
+            await asyncio.sleep(0.01)
+            job = registry.get("M31")
+            if job and job.status != qa_analysis.STATUS_RUNNING:
+                return job
+        raise AssertionError("job never finished")
+
+    job = asyncio.run(run())
+
+    assert job.status == STATUS_FAILED
+    assert "could not be saved" in job.error
+
+
+def test_the_cache_write_is_atomic(tmp_path):
+    """write_text truncated the file in place, so a crash mid-write destroyed
+    the PREVIOUS good report as well as failing to store the new one."""
+    from seestar_sidecar.qa_analysis import load_cached_report, write_cached_report
+
+    cache_dir = tmp_path / "qa"
+    write_cached_report(cache_dir, "M31", "sig-1", {"ok": True, "summary": {"subs": []}})
+    write_cached_report(cache_dir, "M31", "sig-2", {"ok": True, "summary": {"subs": [1]}})
+
+    cached = load_cached_report(cache_dir, "M31")
+    assert cached["signature"] == "sig-2"
+    # No temp file left behind for a reader to trip over.
+    assert not list(cache_dir.glob("*.tmp"))
+
+
+def test_a_third_concurrent_analysis_is_refused_rather_than_queued(tmp_path):
+    """Per-target idempotency capped duplicates of ONE target and did nothing
+    about twenty different ones. Each analysis is minutes of photutils on one
+    CPU, so unbounded starts finish everything later than doing them in
+    order."""
+    import asyncio
+
+    from seestar_sidecar import qa_analysis
+
+    cache_dir = tmp_path / "qa"
+    registry = QaJobRegistry()
+    started = asyncio.Event()
+
+    async def slow(paths):
+        started.set()
+        await asyncio.sleep(5)
+        return {"ok": True, "summary": {"subs": []}, "keep_list": []}
+
+    async def run():
+        for name in ("A", "B"):
+            qa_analysis.start_analysis(registry, cache_dir, name, [tmp_path / "a.fit"], slow)
+        await asyncio.sleep(0.05)
+        return qa_analysis.start_analysis(registry, cache_dir, "C", [tmp_path / "a.fit"], slow)
+
+    third = asyncio.run(run())
+
+    assert third["status"] == STATUS_FAILED
+    assert "already running" in third["error"]

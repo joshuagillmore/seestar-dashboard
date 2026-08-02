@@ -63,6 +63,57 @@ from seestar_sidecar.session_activity import DEFAULT_PROVENANCE_PATH, read_recen
 
 router = APIRouter(prefix="/api")
 
+#: Origins allowed to START an analysis. The sidecar serves the built frontend
+#: itself, so a real request is same-origin; the Vite dev server is the one
+#: legitimate cross-origin caller.
+#:
+#: Why this exists: qa_analysis_start used to be a GET. A GET that spawns
+#: minutes of CPU is reachable from any page the user happens to have open —
+#: `<img src="http://127.0.0.1:8787/api/qa_analysis_start?target=M31">` is
+#: enough, and CORS does not stop the REQUEST, only the reading of its
+#: response. Per-target idempotency does not help when an attacker can guess
+#: or enumerate target ids.
+#:
+#: Three things now stand in the way, and the first two are the load-bearing
+#: ones: the route is POST (so an <img>/<script>/simple-form cannot reach it),
+#: and it requires a custom header, which a cross-origin request cannot set
+#: without a preflight this server never answers. The Origin check below is
+#: the belt to those braces.
+_LOCAL_ORIGIN_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+
+#: A header no cross-origin *simple* request can set. Its presence is what
+#: distinguishes "our own fetch()" from "a page that happens to be open".
+CLIENT_HEADER = "x-seestar-client"
+
+
+def _is_local_origin(origin: str | None) -> bool:
+    if not origin:
+        # Same-origin fetch() sends no Origin for same-site GETs, but POST
+        # always carries one in every browser we target. Absent means it did
+        # not come from a browser page at all (curl, a test client) — which is
+        # allowed: this guard exists to stop a THIRD-PARTY PAGE, not to
+        # authenticate a local operator who already has shell access.
+        return True
+    from urllib.parse import urlparse
+
+    host = urlparse(origin).hostname
+    return host in _LOCAL_ORIGIN_HOSTS
+
+
+def _reject_untrusted_caller(request: Request) -> JSONResponse | None:
+    """`None` when the caller may start work, else the refusal to return."""
+    if request.headers.get(CLIENT_HEADER) is None:
+        return JSONResponse(
+            {"ok": False, "error": f"missing {CLIENT_HEADER} header"}, status_code=403
+        )
+    if not _is_local_origin(request.headers.get("origin")):
+        return JSONResponse(
+            {"ok": False, "error": "cross-origin analysis requests are refused"},
+            status_code=403,
+        )
+    return None
+
+
 #: Every image route serves a file whose CONTENT can change while its URL
 #: stays the same — a new stacked master lands for a target, or the server
 #: starts serving a different variant at the same path (which is exactly what
@@ -879,8 +930,20 @@ async def qa_targets(request: Request) -> JSONResponse:
         # what lets the Projects grid tone a bar by pass/marginal/reject;
         # embedding 22 reports of up to ~430 KB would be the bloat
         # include_report=False exists to prevent.
+        # Counts are attached ONLY when they describe the sub set on disk
+        # right now. load_cached_report deliberately does not compare
+        # signatures (that is resolve_status's job), so using it unqualified
+        # meant a target whose subs had grown still advertised "N of M
+        # keepable" from an older run — a specific, confident number that
+        # silently omitted every new frame. `status` was already in this
+        # payload, but a consumer has to remember to check it, and the
+        # Projects grid did not.
         cached = qa_analysis.load_cached_report(cache_dir, target.target_id)
-        counts = qa_analysis.verdict_counts((cached or {}).get("result"))
+        counts = (
+            qa_analysis.verdict_counts((cached or {}).get("result"))
+            if status.get("status") == qa_analysis.STATUS_COMPLETE
+            else None
+        )
         targets.append(
             {
                 "target_id": target.target_id,
@@ -948,7 +1011,7 @@ async def sub_image(request: Request, target_id: str, sub_name: str) -> Response
     return _image_response(thumbnail)
 
 
-@router.get("/qa_analysis_start")
+@router.post("/qa_analysis_start")
 async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
     """Explicitly trigger Tier-2 QA analysis for `target` — see
     qa_analysis.start_analysis(). Only ever reached from a deliberate user
@@ -964,6 +1027,10 @@ async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
     disk (an archive target directory that exists but is currently empty),
     is an honest 404 — there is nothing to analyse, not a transport failure.
     """
+    refusal = _reject_untrusted_caller(request)
+    if refusal is not None:
+        return refusal
+
     archive_dir, local_tz = _archive_dir_and_tz(request)
     scan = scan_archive(archive_dir, local_tz=local_tz)
     archive_target = scan.targets.get(target)

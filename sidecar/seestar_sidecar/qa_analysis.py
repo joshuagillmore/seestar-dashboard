@@ -138,6 +138,11 @@ class QaJobRegistry:
     def set(self, job: QaJob) -> None:
         self._jobs[job.target_id] = job
 
+    def all(self):
+        """Every job this process knows about. Used to count what is running
+        — see MAX_CONCURRENT_ANALYSES."""
+        return list(self._jobs.values())
+
 
 def _cache_path(cache_dir: Path, target_id: str) -> Path:
     return cache_dir / f"{target_id}.json"
@@ -147,6 +152,21 @@ def _inflight_path(cache_dir: Path, target_id: str) -> Path:
     """Marker written while a job runs, removed when it reaches any terminal
     state. Its presence with no live job means the process died mid-run."""
     return cache_dir / f"{target_id}.inflight.json"
+
+
+#: How many Tier-2 analyses may run at once, process-wide.
+#:
+#: Each is minutes of photutils over hundreds of FITS on one CPU, so running
+#: several concurrently finishes them all later than running them in order —
+#: measured while analysing the whole archive, which had to serialise itself
+#: precisely because nothing here did. Per-target idempotency was the only
+#: limit, which caps duplicates of ONE target and does nothing about twenty
+#: different ones being started in a row.
+MAX_CONCURRENT_ANALYSES = 2
+
+
+def running_count(registry: "QaJobRegistry") -> int:
+    return sum(1 for job in registry.all() if job.status == STATUS_RUNNING)
 
 
 def mark_inflight(cache_dir: Path, target_id: str, signature: str) -> None:
@@ -222,7 +242,17 @@ def write_cached_report(cache_dir: Path, target_id: str, signature: str, result:
         "analysed_at": _iso(_now()),
         "result": result,
     }
-    _cache_path(cache_dir, target_id).write_text(json.dumps(payload), encoding="utf-8")
+    # Temp-and-replace, not write_text. A crash or a full disk mid-write used
+    # to truncate the cache file in place, destroying the PREVIOUS good report
+    # as well as failing to store the new one. os.replace is atomic on both
+    # POSIX and Windows, so a reader sees either the old file or the new one.
+    path = _cache_path(cache_dir, target_id)
+    tmp = path.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        json.dump(payload, fh)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, path)
 
 
 def _job_view(job: QaJob, include_report: bool) -> dict:
@@ -367,6 +397,18 @@ def start_analysis(
         return out
 
     job = QaJob(target_id=target_id, signature=signature, status=STATUS_RUNNING, started_at=_now())
+    if running_count(registry) >= MAX_CONCURRENT_ANALYSES:
+        # Refused, not queued. A queue would accept work the caller cannot see
+        # the position of and cannot cancel; saying no now is honest and the
+        # caller can retry when something finishes.
+        return {
+            "status": STATUS_FAILED,
+            "error": (
+                f"{running_count(registry)} analyses already running"
+                f" (limit {MAX_CONCURRENT_ANALYSES}) — wait for one to finish"
+            ),
+        }
+
     registry.set(job)
 
     async def _run() -> None:
@@ -385,14 +427,28 @@ def start_analysis(
             job.finished_at = _now()
             clear_inflight(cache_dir, target_id)
             return
+        # Order matters, and it used to be backwards. The job was marked
+        # complete and its interruption marker cleared BEFORE the cache write,
+        # so a restart in that window lost the result AND the evidence that
+        # work had been interrupted — the target simply read not_analysed
+        # again. Persist first, then publish.
+        try:
+            write_cached_report(cache_dir, target_id, signature, result)
+        except OSError as exc:
+            # A result that cannot be stored is not a success. Reporting
+            # complete here would show a report this process happens to hold
+            # in memory and that no restart can ever recover.
+            job.status = STATUS_FAILED
+            job.error = f"analysis finished but its report could not be saved: {exc}"
+            job.finished_at = _now()
+            clear_inflight(cache_dir, target_id)
+            logger.warning("failed to write qa analysis cache for %s", target_id, exc_info=True)
+            return
+
         job.status = STATUS_COMPLETE
         job.result = result
         job.finished_at = _now()
         clear_inflight(cache_dir, target_id)
-        try:
-            write_cached_report(cache_dir, target_id, signature, result)
-        except OSError:
-            logger.warning("failed to write qa analysis cache for %s", target_id, exc_info=True)
 
     mark_inflight(cache_dir, target_id, signature)
     job.task = asyncio.create_task(_run())

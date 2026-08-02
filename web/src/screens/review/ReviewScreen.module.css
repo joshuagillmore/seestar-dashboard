@@ -152,3 +152,17 @@
 .chip.chipOn.reject { background: var(--reject-bg); color: var(--reject); border-color: var(--reject-bg); }
 
 .chipCount { font-variant-numeric: tabular-nums; opacity: 0.75; }
+
+/* Sits between a stale report's header and its charts: the numbers below are
+   real but describe an older sub set, and there has to be a way out. */
+.staleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid var(--marginal-callout-border);
+  border-radius: var(--radius-card);
+  background: var(--marginal-callout-bg);
+}
