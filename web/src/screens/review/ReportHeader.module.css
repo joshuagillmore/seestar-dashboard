@@ -56,9 +56,14 @@
 /* Hairline gaps rather than a border per cell — the container's background
    shows through the 1px gap, the same treatment the other screens' stat
    grids use. */
+/* Five fixed columns truncated the widest label — DOMINANT CAUSE rendered as
+   "ecce…" — as soon as the window narrowed. `auto-fit` with a floor lets the
+   grid drop to three columns and then two rather than squeezing all five,
+   which is the honest trade: a stat that has to be read is worth a second
+   row, and a value clipped mid-word is worse than one that wrapped. */
 .stats {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 1px;
   background: var(--border-faint);
   border: 1px solid var(--border-faint);
@@ -89,9 +94,9 @@
   font-size: 20px;
   line-height: 1.15;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* No ellipsis: these are short, load-bearing values (a verdict cause, a
+     kept count) and clipping one hides the thing the cell exists for. */
+  overflow-wrap: anywhere;
 }
 
 .statValue.pass { color: var(--pass); }

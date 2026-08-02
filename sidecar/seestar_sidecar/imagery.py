@@ -110,6 +110,24 @@ def is_plausible_target_id(target_id: str) -> bool:
     return bool(_TARGET_ID_RE.match(target_id))
 
 
+#: Bumped when the BYTES served at `/api/target_image/<id>` change meaning
+#: for the same id.
+#:
+#: v2: the own-image path began serving the scope's `_thn.jpg` at default size
+#: instead of the full-resolution master (400-840 KB -> 7-21 KB). Same URL,
+#: different resource — and browsers that had already cached v1 kept serving
+#: the old bodies. Measured in a real tab: 22 of 32 images still came from
+#: cache as full-resolution files, so an existing client got none of the
+#: benefit. `Cache-Control: no-cache` fixes it going FORWARD, but a stored
+#: response keeps the freshness rules it was stored with, so entries cached
+#: before that header existed revalidate only when their heuristic freshness
+#: lapses — for 2024-dated files, potentially weeks.
+#:
+#: A changed URL is the only thing that reaches those entries immediately.
+#: Bump this if the served variant ever changes again.
+IMAGE_VARIANT = "2"
+
+
 def resolve_image_pointer(
     target_id: str,
     stacked_images: dict,
@@ -131,12 +149,16 @@ def resolve_image_pointer(
     "Unknown" bucket.
     """
     if target_id in stacked_images:
-        return {"url": f"/api/target_image/{target_id}", "source": "own", "credit": None}
+        return {
+            "url": f"/api/target_image/{target_id}?v={IMAGE_VARIANT}",
+            "source": "own",
+            "credit": None,
+        }
 
     entry = resolve_catalog_entry(target_id, catalog, aliases)
     if entry is not None and entry.get("ra_deg") is not None and entry.get("dec_deg") is not None:
         return {
-            "url": f"/api/target_image/{target_id}",
+            "url": f"/api/target_image/{target_id}?v={IMAGE_VARIANT}",
             "source": "survey",
             "credit": SURVEY_CREDIT,
         }
