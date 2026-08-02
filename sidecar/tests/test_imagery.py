@@ -40,13 +40,13 @@ def _stacked_image(path="dummy.jpg"):
 def test_own_stack_wins_even_when_the_catalogue_would_also_resolve():
     stacked = {"M31": _stacked_image()}
     pointer = resolve_image_pointer("M31", stacked, CATALOG, ALIASES)
-    assert pointer == {"url": "/api/target_image/M31", "source": "own", "credit": None}
+    assert pointer == {"url": "/api/target_image/M31?v=2", "source": "own", "credit": None}
 
 
 def test_survey_fallback_when_no_own_stack_but_catalogue_resolves():
     pointer = resolve_image_pointer("M31", {}, CATALOG, ALIASES)
     assert pointer == {
-        "url": "/api/target_image/M31",
+        "url": "/api/target_image/M31?v=2",
         "source": "survey",
         "credit": SURVEY_CREDIT,
     }
@@ -74,7 +74,7 @@ def test_resolves_through_an_alias_the_same_way_catalog_resolve_does():
     aliases = {"NGC2244": "M31"}
     pointer = resolve_image_pointer("NGC2244", {}, CATALOG, aliases)
     assert pointer["source"] == "survey"
-    assert pointer["url"] == "/api/target_image/NGC2244"
+    assert pointer["url"] == "/api/target_image/NGC2244?v=2"
 
 
 # --- is_plausible_target_id ------------------------------------------------
@@ -261,3 +261,20 @@ async def test_empty_response_body_is_treated_as_no_image(tmp_path):
 
     assert result is None
     assert not (cache_dir / "M31_480.jpg").exists()
+
+
+def test_the_image_url_carries_a_variant_token():
+    """The bytes at `/api/target_image/<id>` changed meaning once already —
+    full-resolution master to the scope's own thumbnail — and browsers holding
+    the old entry kept serving it. Cache-Control fixes that going forward, but
+    a stored response keeps the freshness rules it was stored WITH, so entries
+    cached before the header existed revalidate only when heuristic freshness
+    lapses. For 2024-dated files that is potentially weeks.
+
+    A changed URL is the only thing that reaches them immediately.
+    """
+    from seestar_sidecar.imagery import IMAGE_VARIANT, resolve_image_pointer
+
+    pointer = resolve_image_pointer("M31", {"M31": object()}, {}, {})
+
+    assert pointer["url"].endswith(f"?v={IMAGE_VARIANT}")

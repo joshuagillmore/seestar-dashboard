@@ -112,6 +112,22 @@ indistinguishable from a passing contract until the day it isn't, which is why
 Their semantics: MAJOR removes/renames a required key or changes a unit, sign or reference
 frame — the changes a schema cannot see. MINOR adds a key. PATCH corrects a description.
 
+### Repo visibility — answered
+
+**Staying private for now** (decided 2026-08-02). seestar-mcp asked in round 4 whether this repo
+could go public so both sides could cite commits instead of describing them; we said we would come
+back with an answer rather than leave it open, and this is it.
+
+The repo is nonetheless **prepared** for public showing — README with screenshots and a hero, an
+architecture section, and the read-only guarantee explained — so flipping it later is a setting
+rather than a project. Screenshots are shot under `SEESTAR_REPLAY=1` against the checked-in
+fixtures, which carry a synthetic site (Example Observatory, Greenwich) rather than the real one;
+that is deliberate and must stay true of any screenshot added later.
+
+Nothing here is secret. The one credential that ever passed through was theirs, it was never
+committed, and the history was scrubbed of coordinates, username and key. The blocker is not
+content.
+
 ### What is already done on the dashboard side
 
 Nothing here is waiting on the dashboard. Every item has an honest absent state shipped — the

@@ -108,13 +108,13 @@ def test_unions_store_and_archive(client):
     # M31 has a stacked master on disk (see the fixture) — its image must be
     # the user's own, never the survey fallback, even though M31 also
     # resolves in the real catalogue and could otherwise take that path.
-    assert m31["image"] == {"url": "/api/target_image/M31", "source": "own", "credit": None}
+    assert m31["image"] == {"url": "/api/target_image/M31?v=2", "source": "own", "credit": None}
     # IC405 has no stacked master in this fixture but does resolve in the
     # real, committed catalogue (a data file, not a machine-specific path —
     # unlike the archive, this is safe to depend on in a test) — falls
     # through to the survey source with its attribution string attached.
     assert ic405["image"] == {
-        "url": "/api/target_image/IC405",
+        "url": "/api/target_image/IC405?v=2",
         "source": "survey",
         "credit": SURVEY_CREDIT,
     }
