@@ -190,6 +190,36 @@ def _job_view(job: QaJob, include_report: bool) -> dict:
     return out
 
 
+def verdict_counts(result: dict | None) -> dict | None:
+    """`{pass, marginal, reject, unknown, total}` from a qa_tier2 result, or
+    `None` when there is no report to count.
+
+    Exists so `qa_targets` can carry a target's quality mix without carrying
+    the whole report — a listing that embedded 22 reports of up to ~430 KB is
+    exactly the bloat `include_report=False` is there to avoid. This is five
+    integers per target.
+
+    Verdicts are COUNTED, never re-derived: the key is whatever string the
+    server put on the sub, and anything outside the policy's three lands in
+    `unknown` rather than being coerced into one of them. That mirrors the
+    client's own `toneFor` and keeps a vocabulary change visible instead of
+    silently folded into "pass".
+    """
+    if not result:
+        return None
+    subs = (result.get("summary") or {}).get("subs")
+    if subs is None:
+        return None
+    counts = {"pass": 0, "marginal": 0, "reject": 0, "unknown": 0}
+    for sub in subs:
+        key = {"PASS": "pass", "MARGINAL": "marginal", "REJECT": "reject"}.get(
+            sub.get("verdict"), "unknown"
+        )
+        counts[key] += 1
+    counts["total"] = len(subs)
+    return counts
+
+
 def resolve_status(
     registry: QaJobRegistry,
     cache_dir: Path,

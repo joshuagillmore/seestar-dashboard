@@ -820,11 +820,29 @@ export const RunStateSchema = z.object({
 /** One target the archive scan knows about, with its Tier-2 status attached.
  * `sub_count` is the raw scale, shown BEFORE the user opts into a run — a
  * 1400-sub analysis is minutes long and they deserve to know that first. */
+/** How a target's subs were graded, without the report.
+ *
+ * Five integers, so a listing can carry the quality mix for every target
+ * without embedding reports of up to ~430 KB each. **Absent** — not zeroed —
+ * when a target was never analysed: a row of zeros would draw an empty
+ * quality bar, which is a different claim from "not measured".
+ *
+ * `unknown` is a verdict outside the policy's three. Counted separately
+ * rather than folded into `pass`, so a vocabulary change stays visible. */
+export const QaVerdictCountsSchema = z.object({
+  pass: z.number(),
+  marginal: z.number(),
+  reject: z.number(),
+  unknown: z.number(),
+  total: z.number(),
+})
+
 export const QaTargetSchema = z.intersection(
   z.object({
     target_id: z.string(),
     display_name: z.string(),
     sub_count: z.number(),
+    verdicts: QaVerdictCountsSchema.optional(),
   }),
   QaAnalysisStatusSchema,
 )
@@ -891,6 +909,7 @@ export type QaMedians = z.infer<typeof QaMediansSchema>
 export type QaSummary = z.infer<typeof QaSummarySchema>
 export type Tier2 = z.infer<typeof Tier2Schema>
 export type QaAnalysisStatus = z.infer<typeof QaAnalysisStatusSchema>
+export type QaVerdictCounts = z.infer<typeof QaVerdictCountsSchema>
 export type QaTarget = z.infer<typeof QaTargetSchema>
 export type QaTargets = z.infer<typeof QaTargetsSchema>
 export type QaAnalysisResponse = z.infer<typeof QaAnalysisResponseSchema>

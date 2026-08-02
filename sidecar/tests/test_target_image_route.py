@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from seestar_sidecar import imagery
+from seestar_sidecar.imagery import MAX_IMAGE_SIZE_PX
 from seestar_sidecar.main import create_app
 
 EDT = timezone(timedelta(hours=-4))
@@ -86,10 +87,29 @@ def client(monkeypatch, archive_with_m31, catalog_path, aliases_path, cache_dir)
 # --- own image -----------------------------------------------------------
 
 
-def test_own_image_is_served_with_the_full_resolution_bytes(client):
+def test_the_default_size_serves_the_scopes_own_thumbnail(client):
+    """The Projects grid draws 32 of these at ~90 px. Serving full masters
+    there was 6.1 MB of JPEG decoded to paint postage stamps — the thumbnails
+    are 7-21 KB, already on disk, and need no resizing library.
+
+    Note it is the NEWEST stack's thumbnail, not the older one: the
+    most-recent-stack selection this route has always had still applies, it
+    just picks a different file from within that stack."""
     response = client.get("/api/target_image/M31")
+
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
+    assert response.content == b"m31-newest-thumb"
+
+
+def test_an_explicit_larger_size_still_serves_the_full_resolution_master(client):
+    """An explicit size above the default is a caller asking to actually look
+    at the image rather than at a card. Preserves the property the original
+    version of this test pinned: newest stack, full-res in preference to its
+    thumbnail."""
+    response = client.get(f"/api/target_image/M31?size={MAX_IMAGE_SIZE_PX}")
+
+    assert response.status_code == 200
     assert response.content == b"m31-newest-full"
 
 
