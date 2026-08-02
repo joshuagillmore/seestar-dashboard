@@ -32,8 +32,14 @@ import { z } from 'zod'
  * 1.1.0 made `thresholds.eccentricity_marginal` session-derived rather than a
  * constant — a value-derivation change a schema cannot see, which is exactly
  * why the fixture is re-recorded on a bump and not merely re-read.
+ *
+ * 1.1.1 guarantees that field is finite and never above
+ * `eccentricity_reject`. No shape change, and re-recording confirmed
+ * byte-identical thresholds and verdicts on our own payload — but the
+ * GUARANTEE is new, and MetricChart draws both lines, so their ordering is
+ * now something we may rely on rather than something that happened to hold.
  */
-export const SEESTAR_MCP_CONTRACT_VERSION = '1.1.0'
+export const SEESTAR_MCP_CONTRACT_VERSION = '1.1.1'
 
 export const LocationSchema = z.object({
   matched: z.boolean().nullable(),
