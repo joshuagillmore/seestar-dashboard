@@ -53,6 +53,14 @@ def _expected_routes() -> dict[str, frozenset[str]]:
     # invariant from forcing that route into existence.
     api_names = {"health"} | (ALLOWED_TOOLS - NO_DIRECT_ROUTE_TOOLS) | SIDECAR_ROUTES
     expected = {f"/api/{name}": frozenset({"GET"}) for name in api_names}
+    # The one route that STARTS work rather than reading it. POST is half of
+    # why a third-party page cannot reach it: an <img>, <script> or simple
+    # form can only issue GET, and the other half (CLIENT_HEADER) cannot be
+    # set cross-origin without a preflight this server never answers.
+    #
+    # Declared here rather than derived, so turning this route back into a GET
+    # fails the invariant instead of quietly widening the attack surface.
+    expected["/api/qa_analysis_start"] = frozenset({"POST"})
     expected.update(_FASTAPI_DOC_ROUTES)
     return expected
 
@@ -275,3 +283,42 @@ def test_call_tool_guard_survives_python_dash_o():
     )
     assert result.returncode == 0, result.stderr
     assert "GUARD_HELD" in result.stdout, result.stderr
+
+
+def test_only_the_analysis_route_accepts_a_non_GET_method():
+    """Every other route reads. If a second POST appears here, it is either a
+    new mutation — which needs the same caller guard and a deliberate decision
+    — or a mistake."""
+    app = create_app()
+    posting = {
+        path: methods
+        for path, methods in _registered_routes(app).items()
+        if methods - {"GET", "HEAD"}
+    }
+
+    assert set(posting) == {"/api/qa_analysis_start"}
+
+
+def test_starting_an_analysis_refuses_a_caller_without_the_client_header():
+    """The CSRF-shaped hole this closed: a bare <img src="...qa_analysis_start
+    ?target=M31"> on any page the user had open could spawn minutes of CPU.
+    CORS does not stop the request being SENT, only the response being read,
+    and per-target idempotency is no help when ids can be guessed."""
+    with TestClient(create_app()) as client:
+        response = client.post("/api/qa_analysis_start?target=M31")
+
+    assert response.status_code == 403
+    assert "x-seestar-client" in response.json()["error"]
+
+
+def test_starting_an_analysis_refuses_a_cross_origin_caller():
+    from seestar_sidecar import routes
+
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/qa_analysis_start?target=M31",
+            headers={routes.CLIENT_HEADER: "x", "Origin": "https://evil.example"},
+        )
+
+    assert response.status_code == 403
+    assert "cross-origin" in response.json()["error"]

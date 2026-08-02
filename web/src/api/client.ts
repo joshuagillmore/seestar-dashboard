@@ -48,10 +48,19 @@ export class ApiError extends Error {}
 const SIDECAR_HINT =
   'make sure the sidecar is running (uv run seestar-dashboard) and reachable, by default at http://localhost:8000'
 
-async function get<T>(path: string, schema: ZodType<T>): Promise<T> {
+/** The header the sidecar requires on any request that STARTS work. A
+ * cross-origin simple request cannot set it, and the preflight it would
+ * otherwise need is one this server never answers — see routes.py's
+ * CLIENT_HEADER. */
+const CLIENT_HEADER = 'X-Seestar-Client'
+
+async function request<T>(path: string, schema: ZodType<T>, init?: RequestInit): Promise<T> {
   let response: Response
   try {
-    response = await fetch(path)
+    // Only pass init when there is one: a GET must still call fetch(path)
+    // with a single argument, exactly as it did before this was split into
+    // request/get/post. Refactoring should not change what callers observe.
+    response = init ? await fetch(path, init) : await fetch(path)
   } catch (cause) {
     throw new ApiError(`sidecar unreachable at ${path} — ${SIDECAR_HINT}`, { cause })
   }
@@ -94,6 +103,14 @@ function isToolFailure(body: unknown): body is { ok: false; error?: unknown } {
     (body as { ok: unknown }).ok === false
   )
 }
+
+
+const get = <T>(path: string, schema: ZodType<T>): Promise<T> => request(path, schema)
+
+/** POST with the client header. Used only by startQaAnalysis — see its own
+ * comment for why the one mutating call is not a GET. */
+const post = <T>(path: string, schema: ZodType<T>): Promise<T> =>
+  request(path, schema, { method: 'POST', headers: { [CLIENT_HEADER]: 'console' } })
 
 export const fetchConditions = (): Promise<Conditions> =>
   get('/api/assess_conditions', ConditionsSchema)
@@ -217,8 +234,17 @@ export const fetchQaTargets = (): Promise<QaTargets> =>
 export const fetchQaStatus = (target: string): Promise<QaAnalysisResponse> =>
   get(`/api/qa_analysis_status?target=${encodeURIComponent(target)}`, QaAnalysisResponseSchema)
 
+/** The only call that starts work, and the only non-GET in this client.
+ *
+ * POST plus a custom header, both required by the sidecar (see routes.py's
+ * `_reject_untrusted_caller`). It used to be a GET, which meant any page the
+ * user happened to have open could spawn minutes of CPU with a bare
+ * `<img src="http://127.0.0.1:8787/api/qa_analysis_start?target=M31">` —
+ * CORS does not stop the request being sent, only its response being read.
+ * A simple cross-origin request can issue neither a POST with this header
+ * nor a preflight this server answers. */
 export const startQaAnalysis = (target: string): Promise<QaAnalysisResponse> =>
-  get(`/api/qa_analysis_start?target=${encodeURIComponent(target)}`, QaAnalysisResponseSchema)
+  post(`/api/qa_analysis_start?target=${encodeURIComponent(target)}`, QaAnalysisResponseSchema)
 
 /** Is a run in progress right now — the tool that replaces inferring it from
  * a get_view_state timeout. Reads a file server-side, no Alpaca call, so

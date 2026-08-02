@@ -134,6 +134,16 @@ def app_factory(tmp_path, synthetic_archive):
     return make
 
 
+#: qa_analysis_start is POST and requires CLIENT_HEADER — see routes.py's
+#: _reject_untrusted_caller. A GET that spawns minutes of CPU was reachable
+#: from any page the user had open, via a bare <img src=...>. Tests go through
+#: this helper so the guard is exercised on the real path rather than bypassed.
+def start_analysis(client, target: str):
+    return client.post(
+        f"/api/qa_analysis_start?target={target}", headers={routes.CLIENT_HEADER: "test"}
+    )
+
+
 def _wait_until_not_running(client, target="M31", timeout_s=2.0):
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
@@ -200,7 +210,7 @@ def test_qa_analysis_start_for_an_unknown_target_is_a_404_not_a_tool_call(app_fa
     monkeypatch.setattr(routes, "_call_tool_on_app", boom)
     app = app_factory()
     with TestClient(app) as client:
-        response = client.get("/api/qa_analysis_start?target=NOSUCHTARGET")
+        response = start_analysis(client, "NOSUCHTARGET")
 
     assert response.status_code == 404
     assert response.json()["ok"] is False
@@ -216,7 +226,7 @@ def test_qa_analysis_start_returns_running_immediately_then_completes(app_factor
     monkeypatch.setattr(routes, "_call_tool_on_app", record)
     app = app_factory()
     with TestClient(app) as client:
-        start = client.get("/api/qa_analysis_start?target=M31")
+        start = start_analysis(client, "M31")
         assert start.status_code == 200
         start_body = start.json()
         assert start_body["ok"] is True
@@ -248,7 +258,7 @@ def test_verdicts_and_reasons_pass_through_unmodified(app_factory, monkeypatch):
     monkeypatch.setattr(routes, "_call_tool_on_app", record)
     app = app_factory()
     with TestClient(app) as client:
-        client.get("/api/qa_analysis_start?target=M31")
+        start_analysis(client, "M31")
         final = _wait_until_not_running(client)
 
     subs = final["report"]["summary"]["subs"]
@@ -268,7 +278,7 @@ def test_a_sub_with_metrics_error_survives_unfiltered(app_factory, monkeypatch):
     monkeypatch.setattr(routes, "_call_tool_on_app", record)
     app = app_factory()
     with TestClient(app) as client:
-        client.get("/api/qa_analysis_start?target=M31")
+        start_analysis(client, "M31")
         final = _wait_until_not_running(client)
 
     subs = final["report"]["summary"]["subs"]
@@ -289,8 +299,8 @@ def test_qa_analysis_start_is_idempotent_for_an_already_running_job(app_factory,
     monkeypatch.setattr(routes, "_call_tool_on_app", record)
     app = app_factory()
     with TestClient(app) as client:
-        first = client.get("/api/qa_analysis_start?target=M31").json()
-        second = client.get("/api/qa_analysis_start?target=M31").json()
+        first = start_analysis(client, "M31").json()
+        second = start_analysis(client, "M31").json()
         _wait_until_not_running(client)
 
     assert first["status"] == "running"
@@ -308,12 +318,12 @@ def test_qa_analysis_start_does_not_recompute_after_completion(app_factory, monk
     monkeypatch.setattr(routes, "_call_tool_on_app", record)
     app = app_factory()
     with TestClient(app) as client:
-        client.get("/api/qa_analysis_start?target=M31")
+        start_analysis(client, "M31")
         _wait_until_not_running(client)
 
         # A second, fully independent "start" request after completion must
         # be a cache hit, not a second qa_tier2 call.
-        again = client.get("/api/qa_analysis_start?target=M31").json()
+        again = start_analysis(client, "M31").json()
 
     assert again["status"] == "complete"
     assert len(calls) == 1
@@ -356,7 +366,7 @@ def test_a_failed_analysis_is_reported_not_silently_retried(app_factory, monkeyp
     monkeypatch.setattr(routes, "_call_tool_on_app", boom)
     app = app_factory()
     with TestClient(app) as client:
-        client.get("/api/qa_analysis_start?target=M31")
+        start_analysis(client, "M31")
         final = _wait_until_not_running(client)
 
     assert final["status"] == "failed"
@@ -371,7 +381,7 @@ def test_a_changed_sub_set_is_visible_as_stale_after_completion(app_factory, mon
     monkeypatch.setattr(routes, "_call_tool_on_app", record)
     app = app_factory()
     with TestClient(app) as client:
-        client.get("/api/qa_analysis_start?target=M31")
+        start_analysis(client, "M31")
         _wait_until_not_running(client)
 
         # A new sub lands on disk after the analysis completed.
@@ -405,7 +415,7 @@ def test_start_and_status_return_the_same_identifying_fields(app_factory, monkey
 
     monkeypatch.setattr(routes, "_call_tool_on_app", fake_tool)
     with TestClient(app_factory()) as client:
-        started = client.get("/api/qa_analysis_start?target=M31").json()
+        started = start_analysis(client, "M31").json()
         polled = client.get("/api/qa_analysis_status?target=M31").json()
 
     identifying = {"ok", "target_id", "sub_count"}
@@ -466,10 +476,45 @@ def test_qa_targets_carries_verdict_counts_only_for_analysed_targets(app_factory
         before = client.get("/api/qa_targets").json()["targets"][0]
         assert "verdicts" not in before, "an unanalysed target must not carry a zeroed row"
 
-        client.get("/api/qa_analysis_start?target=M31")
+        start_analysis(client, "M31")
         _wait_until_not_running(client)
         after = next(
             t for t in client.get("/api/qa_targets").json()["targets"] if t["target_id"] == "M31"
         )
 
     assert after["verdicts"] == {"pass": 1, "marginal": 0, "reject": 1, "unknown": 0, "total": 2}
+
+
+def test_verdict_counts_are_withheld_once_the_sub_set_changes(
+    app_factory, synthetic_archive, monkeypatch
+):
+    """A stale report must not advertise a confident keepable count.
+
+    load_cached_report deliberately ignores signatures, so attaching its
+    counts unqualified meant a target whose subs had grown still claimed "N of
+    M keepable" from an older run, silently omitting every new frame. The
+    Projects grid rendered exactly that.
+    """
+    async def fake_tool(app, tool, arguments):
+        return {
+            "ok": True,
+            "summary": {"subs": [{"verdict": "PASS"}, {"verdict": "REJECT"}], "kept": 1},
+            "keep_list": [],
+        }
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", fake_tool)
+    subs = synthetic_archive / "M 31-sub"
+
+    with TestClient(app_factory()) as client:
+        start_analysis(client, "M31")
+        _wait_until_not_running(client)
+        fresh = next(t for t in client.get("/api/qa_targets").json()["targets"] if t["target_id"] == "M31")
+        assert fresh["status"] == "complete"
+        assert fresh["verdicts"]["total"] == 2
+
+        # A new sub lands — the report now describes a different sub set.
+        _write_light_fit(subs, "M 31", "20240102", "172330")
+        stale = next(t for t in client.get("/api/qa_targets").json()["targets"] if t["target_id"] == "M31")
+
+    assert stale["status"] == "stale"
+    assert "verdicts" not in stale, "a stale report must not carry an unqualified count"

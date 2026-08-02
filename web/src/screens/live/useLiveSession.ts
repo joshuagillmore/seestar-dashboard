@@ -308,7 +308,15 @@ export function useLiveSession(): LiveSessionState {
       // this feeds governs a hard stop, so understating elapsed time is the
       // dangerous direction — a dashboard opened three hours into a session
       // used to report the session as three hours younger than it was.
-      const realStart = runState?.run?.session_start_utc ?? null
+      // ONLY when the run is `active`. `unknown` retains a stale `run`
+      // record by design — a stamp too old to vouch for, with the previous
+      // run's fields still attached — so taking session_start_utc from it
+      // feeds an abandoned session's start time into check_night_guardrails,
+      // which governs a hard stop. That is the exact misuse we warned
+      // seestar-mcp about ("a consumer treating run's presence as proof of a
+      // live session would be wrong") and then committed here ourselves.
+      const realStart =
+        runState?.state === 'active' ? (runState.run?.session_start_utc ?? null) : null
       if (realStart !== null) {
         sessionStartedAtRef.current = realStart
       } else if (sessionStartedAtRef.current === null) {

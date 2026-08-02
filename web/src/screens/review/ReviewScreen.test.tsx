@@ -471,3 +471,70 @@ describe('the target list keeps up with the analysis', () => {
     expect(screen.getByRole('button', { name: /^M 42/ })).toHaveTextContent('analysed')
   })
 })
+
+describe('adversarial-review regressions', () => {
+  const complete = (over = {}) => ({
+    qa_analysis_status: {
+      ok: true,
+      target_id: 'M81',
+      sub_count: 25,
+      status: 'complete',
+      analysed_at: '2026-08-02T01:15:00+00:00',
+      report: realReport,
+      ...over,
+    },
+  })
+
+  it('starts an analysis with POST and the client header, never a bare GET', async () => {
+    // The hole this closed: as a GET, any page the user had open could spawn
+    // minutes of CPU with <img src=".../qa_analysis_start?target=M31">. CORS
+    // does not stop the request being sent.
+    stubFetch()
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Analyse 587 subs/ }))
+
+    await waitFor(() => {
+      const call = (globalThis.fetch as unknown as { mock: { calls: [string, RequestInit?][] } })
+        .mock.calls.find(([u]) => u.includes('qa_analysis_start'))
+      expect(call).toBeDefined()
+      expect(call![1]?.method).toBe('POST')
+      expect((call![1]?.headers as Record<string, string>)['X-Seestar-Client']).toBeTruthy()
+    })
+  })
+
+  it('offers a way out of a stale report instead of stranding the user', async () => {
+    // A stale report used to be a dead end: Analyse buttons existed only in
+    // the not_analysed and failed branches, so new subs arriving — an
+    // ordinary event — left obsolete numbers on screen with no refresh.
+    stubFetch(complete({ status: 'stale' }))
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+
+    expect(await screen.findByText('STALE')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: /Re-analyse 587 subs/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not carry an open sub across a target change', async () => {
+    // openSub held only the sub, so switching target paired the NEW target's
+    // id with the OLD target's sub — wrong metrics under the wrong heading,
+    // and an image URL for a sub that target does not contain.
+    stubFetch(complete())
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    await screen.findByText(/of 25 subs/)
+    fireEvent.click(screen.getByTitle(realReport.summary.subs[0].name))
+    expect(await screen.findByTestId('sub-image-card')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^M 42/ }))
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('sub-image-card')).not.toBeInTheDocument(),
+    )
+  })
+})
