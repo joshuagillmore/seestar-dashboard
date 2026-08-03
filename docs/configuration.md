@@ -225,6 +225,30 @@ want the cache to live somewhere else, e.g. outside the repo checkout.
 | macOS | `export SEESTAR_IMAGE_CACHE_DIR=$HOME/Library/Caches/seestar-dashboard/images` |
 | Linux | `export SEESTAR_IMAGE_CACHE_DIR=$HOME/.cache/seestar-dashboard/images` |
 
+## SEESTAR_QA_CACHE_DIR
+
+Where the Review & QA screen's completed analyses are cached, one
+`<target_id>.json` per target plus a `<target_id>.inflight.json` marker while
+a job runs. Read by `sidecar/seestar_sidecar/qa_analysis.py`.
+
+This cache is why the screen is usable at all: `qa_tier2` is a photutils pass
+over 200–1400 raw FITS subs and takes minutes per target (hand-back item 24 —
+there is still no read-only getter for a report the server already wrote), so
+a result is computed once on an explicit user action and read back from here
+forever after. Deleting the directory costs nothing but that recomputation.
+
+**Unset:** defaults to `sidecar/.cache/qa_analysis` — computed relative to the
+installed package (`Path(__file__).resolve().parents[1] / ".cache" /
+"qa_analysis"`), the same portable-by-construction convention
+`SEESTAR_IMAGE_CACHE_DIR` uses, and already covered by `.gitignore`'s
+`sidecar/.cache/` rule. Only override it if you want the cache somewhere else.
+
+| OS | Example |
+|---|---|
+| Windows (PowerShell) | `$env:SEESTAR_QA_CACHE_DIR = "C:\Users\you\AppData\Local\seestar-dashboard\qa"` |
+| macOS | `export SEESTAR_QA_CACHE_DIR=$HOME/Library/Caches/seestar-dashboard/qa` |
+| Linux | `export SEESTAR_QA_CACHE_DIR=$HOME/.cache/seestar-dashboard/qa` |
+
 ## SEESTAR_PORT
 
 The port `uv run seestar-dashboard` serves on. Read by
@@ -262,6 +286,37 @@ set. `record.py` is what (re-)generates the fixtures from a real, running
 |---|---|
 | Windows (PowerShell) | `$env:SEESTAR_REPLAY = "1"; uv run seestar-dashboard` |
 | macOS / Linux | `SEESTAR_REPLAY=1 uv run seestar-dashboard` |
+
+## SEESTAR_CLIENT_ID
+
+**The one variable on this page the sidecar sets rather than reads.** It is
+`seestar-mcp`'s own variable (documented in their `config.py`), and the
+sidecar passes it down to the `seestar_mcp.server` subprocess it spawns, in
+`sidecar/seestar_sidecar/mcp_proxy.py`.
+
+Both this dashboard and the Claude agent append to one shared
+`provenance.jsonl`. `ProvenanceLog` defaults an unnamed process to
+`anon-<8 hex>`, which is stable per process but meaningless to a reader, so
+the sidecar names itself **`console`**.
+
+**Set it yourself and your value wins** (`env.setdefault`, so the sidecar only
+fills in a name that isn't already there). Worth doing if you run two consoles
+against one server and want to distinguish them in the log; otherwise leave it
+alone. It has no effect at all under `SEESTAR_REPLAY=1`, where no subprocess is
+spawned.
+
+This is the client half of hand-back item 10, and **the server half has since
+landed** — every record `ProvenanceLog` writes now carries `client`. Verified
+in the live log rather than taken from the note: 217 records read
+`"client": "console"`, which is this sidecar's own traffic, positively
+identified. The agent does not set the variable, so its processes still read
+`anon-<hex>`; "was this call the agent's" is answerable by elimination, not by
+name, until it does.
+
+| OS | Example |
+|---|---|
+| Windows (PowerShell) | `$env:SEESTAR_CLIENT_ID = "console-shed"` |
+| macOS / Linux | `export SEESTAR_CLIENT_ID=console-shed` |
 
 ## Not an environment variable: the DSO catalogue paths
 

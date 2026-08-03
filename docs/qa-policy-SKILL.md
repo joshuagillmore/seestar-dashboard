@@ -44,9 +44,22 @@ pixel scale, target altitude, and sky vary. Compute the per-session median first
 
 - **FWHM**: REJECT if FWHM > median + 1.5σ (or > 1.5× median, whichever the config sets).
   MARGINAL between median + 1.0σ and median + 1.5σ.
-- **Eccentricity**: REJECT if eccentricity ≥ 0.575 (the canonical PixInsight cutoff —
-  distortion below ~0.42 is generally imperceptible, 0.575 is the standard reject line).
-  MARGINAL between 0.42 and 0.575.
+- **Eccentricity**: REJECT if eccentricity ≥ 0.575 (the canonical PixInsight cutoff, an
+  absolute line that does not move). MARGINAL above `max(median + 1.0σ, 0.42)` — the 0.42
+  is a *perceptibility floor*, not the threshold: distortion below it is generally
+  imperceptible, so MARGINAL never fires beneath it, but on a rig whose own baseline is
+  higher the line rises with the session.
+  **Do not read a high MARGINAL-on-eccentricity count as a bad night on an alt-az rig.**
+  An S50 baselines near 0.49 (stars ~13% elongated) because field rotation is inherent to
+  the mount. Measured over 970 real subs, a fixed 0.42 line graded 96.5% of a *good* night
+  MARGINAL — median FWHM 2.41, zero dropped frames. The line is session-relative now, so
+  ~12–15% is the normal rate; a sustained jump above that is the signal worth chasing.
+  Two guards worth knowing when reading a report: the marginal line is capped so it can
+  never sit above the reject line, and if the session's own median + 1σ would reach the
+  reject cutoff it **falls back to the 0.42 floor** — so on a genuinely poor session you
+  will see a low marginal line and a large MARGINAL count. That is the intended signal
+  ("this whole session is elongated"), not a threshold glitch. Set
+  `qa_eccentricity_marginal_absolute` if you want a fixed cutoff instead.
 - **SNR**: REJECT if SNR falls below a session floor (default: median SNR × 0.5) — usually
   indicates clouds/transparency, not a fixable per-sub flaw.
 - **Star count**: REJECT if star count < 50% of the session median — strong cloud signal.

@@ -10,7 +10,35 @@ this module must never write, rotate, truncate or lock it, and a
 partially-written final line (the writer mid-``handle.write()``) is normal,
 not corruption. See `_tail_lines()`.
 
-## The honesty constraint (hand-back item 10)
+## ⚠️ KNOWN DEFECT (2026-08-03): this module's premise no longer holds
+
+**Everything below this banner was true when written and is not true now.**
+Hand-back item 10 has landed. Records DO carry a `client` field — it is
+unconditional in `ProvenanceLog.log_call()` — and this sidecar already names
+itself: `mcp_proxy.py` passes `SEESTAR_CLIENT_ID=console` to the subprocess it
+spawns. Verified in the live log: 217 records read `"client": "console"`.
+
+Two consequences, neither yet acted on:
+
+1. **The tag heuristic is unnecessary.** `client == mcp_proxy.CLIENT_ID` is a
+   direct answer where this module infers one. `classify_origin()` does not
+   read the field at all; it still takes only a tag.
+2. **The tag heuristic is now WRONG, in the dangerous direction.**
+   `invoke_action()` stopped emitting the fixed `alpaca.put.action` tag on
+   2026-07-31 and now names the method (`seestar.get_view_state`,
+   `seestar.get_device_state`, `seestar.pi_get_info`). None of those are in
+   `_AMBIGUOUS_NATIVE_TAGS`, and the fallback below is `ORIGIN_AGENT` — so the
+   dashboard's own polling is currently being labelled as the agent's, which is
+   precisely the misattribution this module exists to prevent.
+
+The fix is to classify on `client` and delete `_AMBIGUOUS_NATIVE_TAGS`
+outright, which the hand-back note has always said would follow this landing.
+Until then, treat `origin` on this route's records as unreliable.
+
+The rest of this docstring is kept as the record of why the code has the shape
+it has — it is not a description of the current log format.
+
+## The honesty constraint as it stood (hand-back item 10, before it landed)
 
 A provenance record carries no client field — the log cannot distinguish
 this dashboard's own tool calls from the agent's. So every record is
@@ -65,8 +93,12 @@ implementation calls underneath it.
 
 ## No prose in this file
 
-Every record here is a bare `{ts, tool, args}` — there is no free-text
-"assessment" field anywhere in provenance.jsonl. The design's Claude
+Records are structured throughout — `{ts, client, tool, args}` always, plus
+`request` / `client_txn_id` / `server_txn_id` / `response_code` / `note` /
+`elapsed_ms` where they apply. (This section used to say "a bare
+`{ts, tool, args}`"; that was the format at the time.) What matters here is
+unchanged: there is no free-text "assessment" field anywhere in
+provenance.jsonl. The design's Claude
 sentences ("Dropped frames are up to 23, but eccentricity is flat…") are not
 obtainable from this source; this route renders an activity feed of tool
 calls, never a transcript or a summary.
@@ -103,7 +135,12 @@ ORIGIN_AGENT = "agent"
 ORIGIN_AMBIGUOUS = "ambiguous"
 ORIGIN_UNKNOWN = "unknown"
 
-#: See the module docstring's "Why 'ambiguous' is NOT simply ALLOWED_TOOLS".
+#: See the module docstring's "Why 'ambiguous' is NOT simply ALLOWED_TOOLS" —
+#: AND the KNOWN DEFECT banner above it. These tags describe seestar-mcp's
+#: call graph as of 2026-07-30. `alpaca.put.action` has not been emitted since
+#: 2026-07-31; the `seestar.<method>` tags that replaced it are absent here, so
+#: this set no longer covers the traffic it was built to cover. Do not extend
+#: it — the `client` field makes the whole approach obsolete.
 _AMBIGUOUS_NATIVE_TAGS = frozenset(
     {
         "alpaca.put.action",

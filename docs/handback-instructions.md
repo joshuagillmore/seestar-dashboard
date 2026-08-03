@@ -1,9 +1,29 @@
-# Work order for the SeeStar-AI session
+# Work order for the seestar-mcp session
 
-A companion to `handback-to-seestar-ai.md`, which is the reference: twenty items with
-evidence, file references and reasoning. **This document is the instruction set** — what to
-change, in what order, grouped by the edit rather than by item number, because several
-items are one change.
+> **Status, 2026-08-03 — sections 1 and 2 are DONE; do not start them.**
+>
+> - **§1 (item 1), per-sub metric arrays: shipped 2026-07-31.** `_compact_report` returns
+>   `subs[].metrics`, the Review & QA screen was built on it, and a 25-sub recording parses
+>   through our schema. This was the blocking one; nothing blocks a screen now.
+> - **§2 (item 10), provenance: both changes shipped.** `client` is unconditional on every
+>   record — 217 in the live log read `"console"`, our own traffic — and `invoke_action()`
+>   now names the method (`seestar.<method>`) instead of the fixed `alpaca.put.action`,
+>   which stopped appearing on 2026-07-31. The four tools §2 says never appear under their
+>   own names all do.
+> - Also landed since this was written: item 7 (`median_fwhm`, see §5 — diagnosed, and our
+>   guess was wrong), item 20 (`get_run_state`), item 26 (a stale docstring).
+> - **One correction below is ours, not yours: §3 repeats "battery is confirmed not to be in
+>   `get_device_state`". That is false** and item 19 was withdrawn on 2026-07-31 — see the
+>   note in place there.
+>
+> §3 (minus the battery line), §4 and the second half of §5 are still the live work order.
+> Everything else below is unchanged from what was sent.
+
+A companion to `handback-to-seestar-ai.md`, which is the reference — the items with
+evidence, file references and reasoning, deliberately not summarised by a count here since
+the list has grown twice. **This document is the instruction set** — what to change, in
+what order, grouped by the edit rather than by item number, because several items are one
+change.
 
 Everything here was found building the SeeStar Console dashboard against the live
 installation (Example Observatory, Bortle 8). Nothing is a feature request for the dashboard's
@@ -12,7 +32,9 @@ defect. The dashboard ships an honest absent state for every one of them today, 
 is broken while you work — but five screens are showing less than they could.
 
 **The pattern, stated once:** *if a tool names a quantity in prose, return it as a field
-too.* Ten of the twenty items are that.
+too.* It is the single most common shape on the list — items 3, 5, 12, 13, 14, 17, 18 and
+21 are all instances, and 21 is the largest: an entire hourly weather series reduced to one
+worst-case scalar before it leaves.
 
 ---
 
@@ -103,9 +125,17 @@ comes back.
 
 **This likely closes item 19 too.** Battery has no read-only route at all — `pi_get_info` is
 not an MCP tool, and `check_night_guardrails` calls it natively to decide. Folding the
-battery percentage into the per-check results answers both at once. Note battery is
-confirmed *not* to be in `get_device_state`; reading it from there previously caused false
-"battery unknown" trips.
+battery percentage into the per-check results answers both at once.
+
+> **Correction, 2026-07-31 — ignore the sentence that used to end this paragraph.** It read
+> "battery is confirmed *not* to be in `get_device_state`; reading it from there previously
+> caused false 'battery unknown' trips". **Battery IS in `get_device_state`**, nested at
+> `pi_status.battery_capacity` — 8 occurrences in a real bridge log against 4 under
+> `pi_get_info`. Our original diagnosis found it absent from the *top level* and wrongly
+> concluded it was absent altogether. So this needs no new accessor and no extra device
+> round-trip: the value is already in a call the guardrail check makes. Item 19 is withdrawn
+> on that basis; what stands is only that the percentage does not surface on a read-only
+> tool today.
 
 ### `get_status` or `get_view_state` — two fields (items 18 and 20)
 
@@ -170,8 +200,13 @@ structurally incapable of ever suggesting it.
 
 Worth a look regardless of priority.
 
-- **`median_fwhm` is `null` on every session record** (item 7). Not some — every one. That
-  looks like a write-path bug rather than a missing field.
+- ~~**`median_fwhm` is `null` on every session record** (item 7). Not some — every one. That
+  looks like a write-path bug rather than a missing field.~~ **Diagnosed and shipped
+  2026-07-31, and our guess was wrong** — not a write-path bug. `log_session_result` takes
+  it as an optional parameter defaulting to `None` and no caller ever passed one, nor could:
+  Tier-2 scores FITS in the local directory and so needs `download_subs`, which the run-books
+  forbid mid-session. Now backfilled from the newest QA report. Treat it as nullable forever;
+  pre-fix records are not backfilled.
 - **`recommend_projects` returns an unranked list while appearing ranked** (item 15). It
   sorts by remaining minutes with open-ended projects given a sentinel "large remaining"
   (`planning/projects.py:216`). Every real project has `goal_minutes == 0`, so they all tie,

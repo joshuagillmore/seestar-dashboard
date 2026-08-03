@@ -144,7 +144,12 @@ Other decisions worth knowing before reading the code:
 - **Fixtures are recordings, not fabrications.** `fixtures/*.json` come off the
   real server, and are re-recorded whenever the contract version moves — a
   green suite pinning a stale recording is indistinguishable from a passing
-  contract until the day it isn't.
+  contract until the day it isn't. One deliberate exception: the site block in
+  `get_site_profile.json` is replaced with Greenwich, because the real one
+  located a house to about ten metres. `fixtures/synthetic/` holds hand-built
+  payloads for states that can't be recorded on demand, and is named that way
+  so nobody mistakes them for recordings. See
+  [`fixtures/README.md`](fixtures/README.md).
 - **Contract-pinned.** The client records which
   [`seestar-mcp` contract version](https://github.com/OrangeAgente/seestar-mcp/blob/main/docs/CONTRACT.md)
   it was written against (`SEESTAR_MCP_CONTRACT_VERSION` in

@@ -52,14 +52,33 @@ prose since round 3 with neither side able to call them validated.
 
 ### Tier 2 — blocks a feature within a screen that is otherwise buildable
 
-**Item 10: provenance cannot tell one client from another.**
+**Item 10: provenance cannot tell one client from another. — ✅ LANDED (seestar-mcp), verified
+2026-08-03. Tier 2 is now empty.**
 
-Gates the Live session screen's operator panel. The rest of that screen — live preview, stacking
-telemetry, guardrails — can be built against `get_view_state` today, so slice 3 should not wait for
-this. But a panel that says "Claude just slewed to M31" cannot exist while the dashboard's own
-polling is indistinguishable from the agent's calls in the same log. The hook already exists and is
-simply unused: `ProvenanceLog.log_call()` accepts the fields, and the `@mcp.tool()` wrappers pass
-none of them.
+`ProvenanceLog.log_call()` stamps `client` on **every** record — it is built into the record dict
+unconditionally, not passed per call — and `ProvenanceLog.__init__` reads `SEESTAR_CLIENT_ID`,
+falling back to `anon-<8 hex>` per process. Our side already sets it: `mcp_proxy.py` passes
+`SEESTAR_CLIENT_ID=console` down to the subprocess it spawns.
+
+Verified in the live log, not from the note: **217 records read `"client": "console"`** — the
+dashboard's own traffic, positively identified — out of 21,336 stamped records in 22,232 total
+(the unstamped remainder predates the fix). The agent does not set the variable, so its processes
+read `anon-<hex>`; "was this the agent" is answerable by elimination rather than by name until it
+does, which is enough for the panel.
+
+**The smaller observation landed too.** `invoke_action()` no longer logs a fixed
+`alpaca.put.action` — the last such record is dated 2026-07-31T03:30, and native calls now carry
+the method in the tag (`seestar.get_view_state`, `seestar.get_device_state`, `seestar.pi_get_info`).
+The three tools this document said "never appear under their own names" all now do: in the newest
+2,000 records, `get_status` 417, `get_view_state` 76, `get_focuser_position` 40.
+
+**Consequence for us, not yet acted on.** `session_activity.py`'s compensating tag set — the one
+piece of this codebase that hardcodes a mirror of *their* internal call graph — is now both
+obsolete and wrong: it still classifies on tag names, still asserts in its own docstring that "a
+provenance record carries no client field", and does not know the `seestar.*` tags. Our own
+polling therefore classifies as the agent's, which is the exact failure direction this item warned
+about. Deleting the tag set in favour of reading `client` is a dashboard change, tracked here only
+because this item is what unblocks it.
 
 ### Tier 3 — small, and each closes a gap that is visible on screen today
 
@@ -99,7 +118,7 @@ cannot resolve. Both are spelled out in that item.
 
 ### The contract has replaced most of this list
 
-**Pinned to seestar-mcp consumer contract v1.0.1** (`docs/CONTRACT.md` in their repo,
+**Pinned to seestar-mcp consumer contract v1.1.1** (`docs/CONTRACT.md` in their repo,
 enforced by `tests/test_console_contract.py`, which fails *their* build rather than our
 runtime). Recorded on our side as `SEESTAR_MCP_CONTRACT_VERSION` in `web/src/api/schemas.ts`.
 
@@ -146,10 +165,11 @@ further UI work in most cases.
 > 320 B/REJECT — ~412 KB at 1400 subs, well within budget. The Review & QA screen's sidecar half is
 > built against this (docs/superpowers/specs/2026-07-31-slice-4-review-qa.md).
 >
-> **This did not fully unblock the screen — three follow-on gaps, below, are why "Option A" (an
+> **This did not fully unblock the screen — the follow-on gaps below are why "Option A" (an
 > on-demand, cached analysis triggered by the client) was needed instead of a direct passthrough.**
-> They are items 1a/1b/1c in that spec and are restated as their own hand-back asks here: **23**,
-> **24**, **25**.
+> They are facts 1a/1b/1c of that spec's §1, and are restated as their own hand-back asks here:
+> **24** (1a and 1b — no stored reports, and no getter to read one back) and **25** (1c —
+> `_resolve_paths` cannot see the archive layout).
 
 **Blocks:** the entire Review & QA screen — the per-sub eccentricity chart, the star-count chart,
 and every metric column of the per-sub table.
@@ -392,6 +412,13 @@ which is the honest picture.
 
 ## 10. Provenance records cannot tell one client from another
 
+> **✅ LANDED (seestar-mcp), verified against the live log 2026-08-03.** `client` is now on every
+> record `ProvenanceLog` writes, sourced from `SEESTAR_CLIENT_ID`; the tool-tag observation below
+> is fixed too (`alpaca.put.action` retired, `seestar.<method>` in its place, and the three
+> "never appears" tools all logging under their own names). Numbers and the consequence for
+> `session_activity.py` are in the Tier 2 note at the top of this document. **Everything below is
+> the original write-up, kept as the record of what was asked and why.**
+
 **Blocks:** the Live session screen's operator panel (slice 5) — the dashboard
 cannot show what Claude is doing while it runs the `run-session` skill.
 
@@ -510,8 +537,9 @@ generated from OpenNGC by `data/build_catalogue.py`, emitted in
 duplicate ids, nothing outside `TARGET_TYPES`, 91.4% carry both magnitude and
 size.
 
-Also `data/dso_aliases.json` — 28,802 alternative designations mapped to
-canonical ids. This exists because of a failure worth repeating: **two of the
+Also `data/dso_aliases.json` — 28,804 alternative designations mapped to
+canonical ids (28,802 when this item was written; `alias_overrides.json`'s
+Rosette entry has since added two). This exists because of a failure worth repeating: **two of the
 user's targets could not be found by the names they actually use.** `NGC 2244`
 is a `Dup` redirect to `NGC 2239`, and `C33` is Caldwell notation for
 `NGC 6992`. Both objects were present all along. With the alias index,
@@ -554,8 +582,9 @@ none of.** The score (`planning/ranker.py:126`) is:
 
 Every term is about *when and where* the object is, and none about *whether the
 instrument can actually record it*. With 120 curated showpieces that was safe —
-they are all imageable by construction. **86.2% of the extended catalogue is
-galaxies** (10,792 of 12,517), most of them faint, and against that population a
+they are all imageable by construction. **86.6% of the extended catalogue is
+galaxies** (10,840 of 12,517 — this item said 86.2%/10,792 before the SIMBAD
+reclassification moved a further 48 in), most of them faint, and against that population a
 ranker with no feasibility term will happily recommend a 15th-magnitude smudge
 that an f/5 50 mm cannot resolve, purely because it sits high at midnight.
 
@@ -1094,6 +1123,10 @@ working via explicit `paths`.
 
 ## 26. `qa_tier2`'s own docstring says it strips metrics it no longer strips
 
+> **✅ LANDED (seestar-mcp), verified 2026-08-03.** The clause is gone: `server.py` contains no
+> "does not dump full metrics" text anywhere, and `_compact_report`'s docstring now explains why
+> the metrics are included deliberately. Kept below as the record of the ask.
+
 **Affects:** nothing on screen — a documentation-only item, raised because the server team's own
 closing note on item 10 applies here too: *"a comment is evidence about what someone believed, not
 about what the code does."*
@@ -1117,16 +1150,16 @@ updated to match; only the controller method's copy was missed.
 
 | # | Item | Blocks | Already computed server-side? |
 |---|---|---|---|
-| 1 | Per-sub metrics stripped | Review screen entirely | Yes — written to the artifact |
+| 1 | ~~Per-sub metrics stripped~~ — **✅ landed 2026-07-31** | Review screen entirely | Yes — written to the artifact |
 | 2 | Above-floor span timestamps | Timeline grey rail | Yes — mask exists, helper exists |
 | 3 | Precip probability | PRECIP tile | Yes — scored on, gates `go` |
 | 4 | Excluded targets | Excluded card | Yes — known at the `continue` |
 | 5 | Filter recommendation | Filter chip | Yes — `lp_fit` computed |
 | 6 | Three-state verdict | CONDITIONAL state | Partly — `go` is already compound |
-| 7 | `median_fwhm` always null | Projects meta + history column | Unknown — possible write-path bug |
+| 7 | ~~`median_fwhm` always null~~ — **✅ diagnosed and shipped 2026-07-31**; nullable forever, pre-fix records not backfilled | Projects meta + history column | Not a write-path bug — nothing ever called it with a value |
 | 8 | ~~No target imagery~~ — **not a server gap**, the archive is on disk | All thumbnails | N/A — dashboard feature, see `slice-2-backlog.md` |
 | 9 | Only the longest sweet-band span returned | Fragmented-band rendering; ranker figure and chart disagree | Yes — the mask exists, `_longest_run` is one reduction over it |
-| 10 | Provenance cannot distinguish clients | Live operator panel (slice 5) | Partly — `log_call` already accepts the fields, the wrappers never pass them |
+| 10 | ~~Provenance cannot distinguish clients~~ — **✅ landed**, verified 2026-08-03 | Live operator panel (slice 5) | Yes — `client` is now unconditional on every record |
 | 11 | Catalogue covers 120 objects; half the user's targets are absent | Suggested integration targets; **and the ranker can never suggest IC 405, NGC 1499, SH2-142** | No — a 12,517-object OpenNGC extension plus alias index is supplied, but **must not be merged without the two paired ranker changes** (vectorise observability, add a feasibility term) |
 | 12 | `SessionRecord` has no `filter` field | FILTER column of the session-history table | Yes — it is in the session notes as prose, and on every one of the 7,753 archive filenames |
 | 13 | No one-line verdict summary, only `reasons[]` | Headline sentence of the Tonight banner | Partly — the server already composes the reason prose |
@@ -1136,16 +1169,23 @@ updated to match; only the controller method's copy was missed.
 | 17 | `check_night_guardrails` returns the verdict but not the five checks behind it | The guardrails card's per-check rows on Live | Yes — each check is evaluated to reach the verdict |
 | 18 | No instantaneous alt/az for the active target | The sweet-band gauge's current-position marker on Live | Yes — the ranker already does this arithmetic |
 | 19 | Battery has no read-only route (`pi_get_info` is not a tool) | Guardrails Battery row; top-bar `batt` fact | Yes — the guardrail logic reads it natively to decide |
-| 20 | No way to learn when the current session started | Elapsed time on Live; the Max-duration guardrail understates on a mid-session connect | Yes — the session has a start and `SessionManifest` carries an id |
-| 16 | `SiteProfile` has coordinates but no IANA timezone | Every clock on Tonight can name the browser's own zone but not the site's, or detect whether the two agree | No — nothing computes or stores one today |
-| 23 | No read-only getter for a written QA report | Forces the Review screen's on-demand client cache (Option A) instead of reading back a real report | No — `qa_session_report` writes reports today, but nothing reads them back |
-| 24 | `_resolve_paths` is non-recursive | `qa_tier2(target=...)` cannot see the real, nested archive layout | No — needs a recursive glob or a documented sub-dir convention |
-| 25 | `qa_tier2`'s controller-method docstring is stale | Nothing on screen — documentation only | N/A — one-line docstring fix, no behaviour change |
+| 20 | ~~No way to learn when the current session started~~ — **✅ answered 2026-08-02** by `get_run_state`, and wired in on our side | Elapsed time on Live; the Max-duration guardrail understates on a mid-session connect | Yes — the session has a start and `SessionManifest` carries an id |
+| 21 | The hourly weather series is reduced to a worst-case scalar and discarded | A cloud/precip band under the Tonight verdict card — and `cloud_cover_pct` cannot tell a write-off night from a recoverable one | Yes — `_HOURLY_VARS` is fetched and `_window_rows()` already selects the dark-window rows |
+| 22 | The moon penalty ignores whether the target is narrowband | Ranking of every emission target on a bright night | Yes — `lp_suitability()` is computed one line above `moon_term` |
+| 23 | No read-only access to the live accumulating stack | The Live preview shows a single raw sub, not the stack the vendor app shows | Device-side — the scope writes the stacked master only at session end |
+| 24 | No read-only getter for a written QA report | Forces the Review screen's on-demand client cache (Option A) instead of reading back a real report | No — `qa_session_report` writes reports today, but nothing reads them back |
+| 25 | `_resolve_paths` is non-recursive | `qa_tier2(target=...)` cannot see the real, nested archive layout | No — needs a recursive glob or a documented sub-dir convention |
+| 26 | ~~`qa_tier2`'s controller-method docstring is stale~~ — **✅ landed** | Nothing on screen — documentation only | N/A — was a one-line docstring fix |
+
+**Five have landed: 1, 7, 10, 20 and 26.** Nothing on this list blocks a screen from being
+started any more — item 1 did, and the Review & QA screen shipped once it landed; item 10 did, and
+the operator panel's data is now attributable. What remains either degrades a surface or costs the
+dashboard a workaround.
 
 Items 2–5 and 9 **degrade** the Tonight screen rather than block it; the dashboard renders an
 explicit absent state for each rather than a plausible-looking placeholder, so nothing on screen is
-a lie. Item 1 **blocks** the Review screen outright. Item 7 may indicate a real server-side defect.
-Item 10 blocks slice 5. Item 11 is the only one that degrades a tool the *agent* uses rather than
-just the dashboard — the ranker's blind spot is the user's most-imaged object. Item 16 likewise
-degrades rather than blocks: the dashboard now states the zone it *can* name honestly instead of the
-ambiguous "local", it just cannot yet name the site's.
+a lie. Item 11 is the only one that degrades a tool the *agent* uses rather than just the
+dashboard — the ranker's blind spot is the user's most-imaged object. Item 16 likewise degrades
+rather than blocks: the dashboard now states the zone it *can* name honestly instead of the
+ambiguous "local", it just cannot yet name the site's. Items 21 and 23 are the two the user has
+asked for directly — the shape of the night's weather, and the picture the vendor app shows.
