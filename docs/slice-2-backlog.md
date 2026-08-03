@@ -129,14 +129,16 @@ path-constrained, not a general static mount.
 - **Micro-label CSS repeated in three modules.** The no-central-type-scale ruling from Task 5 holds: the final review checked every copy and they have **not** drifted. Revisit only if they do.
 - **`horizon_mask: z.array(z.unknown())`.** Slices 1–2 read only `.length`. Tighten before any mask-rendering screen (slice 5), not on a fixed date.
 - **Global `* { animation: none !important }` for reduced motion.** `livePulse` is the only keyframe and renders nowhere in slice 1. Revisit in slice 3, which is where it first appears.
+
+  > **Revisited 2026-08-03, ruling unchanged.** `livePulse` does now render — `Dot.module.css`'s `.pulse` on the Live screen — so the premise expired even though the decision did not. The blunt global rule switches it off under `prefers-reduced-motion: reduce`, which is what was wanted, and it is still the only keyframe in the codebase.
 - **Crash-path test untimed.** ~20 ms to failure, measured. A timeout wrapper hardens against a hypothetical SDK change and adds a dependency.
 - **`plan_targets?limit=` ignored in replay.** Inherent to one-fixture-per-tool; the fixture is recorded at the default (now 12), so replay always returns that many regardless of the requested limit.
 - **`fetchSite` / `fetchHealth` untested.** Fixed-string one-liners with no interpolation. The real gap was one level up — screen-level prop threading — and that was fixed before merge.
 - **Retained clamp assertion** at `SweetBandTimeline.test.tsx:61-66` is true by construction and contributes nothing, but the test's weight is now carried by the pinned geometry beside it.
 - **Legend-only rail guard.** `not.toMatch(/above floor/i)` guards the legend text; a text-free grey rail div would slip past. A rail without its legend entry is not a failure mode anyone would plausibly introduce.
-- **`Detail` button is enabled and does nothing** — no target screen exists until a later slice.
-- **Fonts load from a CDN.** The sidecar has a full offline replay mode; the typography does not. Degrades to `system-ui`/`ui-monospace`, so the load-bearing Sans/Mono split survives — worth knowing before running this in a field.
-- **`npm run preview` 404s every API call** — the Vite proxy is dev-only. Fine while the dev server is the only way this runs.
+- ~~**`Detail` button is enabled and does nothing**~~ — no target screen exists until a later slice. **Resolved.** The dead button is gone; `ProjectCard` now takes `onOpenQa` and the quality bar hands off to that target's report on Review & QA.
+- ~~**Fonts load from a CDN.**~~ The sidecar has a full offline replay mode; the typography does not. Degrades to `system-ui`/`ui-monospace`, so the load-bearing Sans/Mono split survives — worth knowing before running this in a field. **Resolved.** IBM Plex is self-hosted under `web/public/fonts/` (`web/src/fonts.css`, SIL OFL 1.1), so replay mode is now offline all the way down, typography included. `frontend.py` registers the `.woff2`/`.woff` MIME types Windows lacks, found by curling the running server.
+- ~~**`npm run preview` 404s every API call**~~ — the Vite proxy is dev-only. Fine while the dev server is the only way this runs. **Premise expired.** The dev server is no longer the only way this runs: the sidecar serves `web/dist` and `/api/*` from one process and port, which is the documented production path. `npm run preview` is still proxy-less and still 404s, but nothing depends on it.
 
 ## Server-side
 
@@ -145,6 +147,13 @@ with file:line references into the SeeStar-AI repo. Eight of the nine are values
 server already computes and simply does not return. Item 1 blocks the Review
 screen (slice 4) outright; items 2–5 and 9 degrade the Tonight screen, which
 renders an explicit absent state for each.
+
+> **Out of date as of 2026-08-03 — read that file, not this paragraph.** The list is 26 items
+> now, not nine, and five have landed (1, 7, 10, 20, 26), including the one this paragraph
+> calls blocking. Nothing on it blocks a screen any more. The repo also moved: it is
+> `OrangeAgente/seestar-mcp`, history rewritten, so every SHA and line number cited from the
+> old `SeeStar-AI` remote has changed. Deliberately not restating the count here — it has gone
+> stale twice already, which is the reason the hand-back file itself refuses to keep one.
 
 ## Ruling: timeline scrollbar registration (2026-07-30)
 
