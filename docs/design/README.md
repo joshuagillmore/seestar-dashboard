@@ -1,5 +1,22 @@
 # Handoff: SeeStar Console
 
+> **Read me first (added 2026-08-03). This document is still the authority on
+> tokens, layout, per-screen specs and copy — it is not corrected to match the
+> build, and where the two differ the build is usually what needs justifying.**
+> Four factual notes where following it literally would now be wrong:
+>
+> 1. **`OrangeAgente/SeeStar-AI` (below) is private and 404s.** The public repo
+>    is `github.com/OrangeAgente/seestar-mcp`; history was rewritten, so every
+>    SHA changed.
+> 2. **Review must not call `qa_session_report`** — see the note on that row in
+>    "Server state, by screen", and §3 of the slice-4 spec.
+> 3. **"The repo today has no UI at all" was true at handoff.** Four screens
+>    shipped, each with a phone layout.
+> 4. **There is no agent chat and no approval gate.** Both appear throughout as
+>    Live-screen features; neither was built, and the operator panel that
+>    replaced the chat reads `provenance.jsonl` rather than talking to an agent.
+>    Not an omission — the tool surface has no such channel.
+
 ## Overview
 
 A desktop-web control and review console for a **Seestar S50** smart telescope, sitting on top of the
@@ -767,9 +784,23 @@ Server state, by screen:
 |---|---|---|
 | Tonight | `assess_conditions`, `plan_targets` | On load; refresh on demand. Conditions re-poll ~10 min while a session runs. |
 | Live | `get_view_state`, `qa_tier1`, `check_night_guardrails` | Push (SSE/WS) or poll ~60 s — the prototype's log is one line per minute. |
-| Review | `qa_session_report` | On load, per session. Expensive — cache it. |
+| Review | ~~`qa_session_report`~~ **→ `qa_tier2`** | ~~On load, per session.~~ **Never on load.** See below. |
 | Projects | `list_projects`, `recommend_projects`, `get_project_history` | On load. |
-| Chat | Agent stream | Streaming. |
+| ~~Chat~~ | ~~Agent stream~~ | Not built — there is no such channel on the tool surface. |
+
+> **The Review row is the one place in this handoff that must not be followed
+> (noted 2026-08-03).** `qa_session_report` writes a JSON+MD report and a
+> manifest **and winds down the session**, so calling it on load would generate
+> artifacts and end a session on every page refresh. It is in the sidecar's
+> `FORBIDDEN_TOOLS` and has no route at all — a 404 by absence, not a guard.
+>
+> The shipped screen reads **`qa_tier2`**, which is read-only, and only from an
+> explicit user action: it is minutes of photutils over 200–1400 raw subs, so
+> the result is cached to disk per target and read back thereafter. The
+> instinct behind "Expensive — cache it" was right; the cache just lives on our
+> side, because there is still no read-only getter for a report the server
+> already wrote (hand-back item 24). Full reasoning:
+> `docs/superpowers/specs/2026-07-31-slice-4-review-qa.md` §1.
 
 The three toggles exposed as Tweaks in the prototype (`navLayout: 'rail' | 'topbar'`,
 `showOperatorPanel`, `showAnnotationOverlay`) are design-exploration switches. `navLayout` is a
