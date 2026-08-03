@@ -29,8 +29,9 @@ export interface SessionActivityCardProps {
 }
 
 const ORIGIN_LABEL: Record<SessionActivityRecord['origin'], string> = {
+  console: 'this console',
   agent: 'agent',
-  ambiguous: 'ambiguous',
+  ambiguous: 'unattributed',
   unknown: 'unknown',
 }
 
@@ -48,12 +49,13 @@ const ORIGIN_LABEL: Record<SessionActivityRecord['origin'], string> = {
  * did what, when.
  *
  * `origin` is the field that must never be flattened or hidden. Hand-back
- * item 10 is that the log carries no client identifier at all, so this
- * dashboard's OWN polling sits in the same file as the agent's calls,
- * indistinguishable unless the tag is provably agent-only. So this column
- * is headed "Session activity", never "Claude" — an `ambiguous` record is
- * never presented as the agent's, and every record carries its own origin
- * tag rather than the column carrying one implied tone for all of them.
+ * item 10 has landed, so it is now a real attribution: every record carries
+ * the `client` that wrote it, this console names itself, and a record reads
+ * `this console`, `agent`, `unattributed` (written before the field existed)
+ * or `unknown` (didn't parse). The column is still headed "Session
+ * activity", never "Claude" — `unattributed` must never be presented as the
+ * agent's, and every record carries its own tag rather than the column
+ * carrying one implied tone for all of them.
  *
  * Shown during idle/bridge-down as well as an active session (the user's
  * own call: most of the time this screen is open nothing is running, and

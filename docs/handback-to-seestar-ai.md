@@ -72,13 +72,21 @@ the method in the tag (`seestar.get_view_state`, `seestar.get_device_state`, `se
 The three tools this document said "never appear under their own names" all now do: in the newest
 2,000 records, `get_status` 417, `get_view_state` 76, `get_focuser_position` 40.
 
-**Consequence for us, not yet acted on.** `session_activity.py`'s compensating tag set — the one
-piece of this codebase that hardcodes a mirror of *their* internal call graph — is now both
-obsolete and wrong: it still classifies on tag names, still asserts in its own docstring that "a
-provenance record carries no client field", and does not know the `seestar.*` tags. Our own
-polling therefore classifies as the agent's, which is the exact failure direction this item warned
-about. Deleting the tag set in favour of reading `client` is a dashboard change, tracked here only
-because this item is what unblocks it.
+**Consequence for us — done, 2026-08-03.** `session_activity.py`'s compensating tag set is
+deleted. It was the one piece of this codebase that hardcoded a mirror of *their* internal call
+graph, and it had already gone wrong in the dangerous direction: it did not know the `seestar.*`
+tags, so our own polling was classifying as the agent's. `classify_origin()` now reads `client`
+and compares it to `mcp_proxy.effective_client_id()`, giving four states — `console` (ours, by
+name), `agent` (someone else's, by name), `ambiguous` (a record older than the field) and
+`unknown` (unparsable). Proven by mutation in both directions: always-return-agent, and a
+deliberate drift between the id we stamp and the id we match.
+
+**One thing we would still take, unprompted:** the agent's own processes do not set
+`SEESTAR_CLIENT_ID`, so they log as `anon-<hex>`, a fresh id per process. Attribution therefore
+works by elimination — "not the console" — rather than by name, and a reader cannot tell the
+agent's two concurrent servers apart. Setting it to something stable like `agent` wherever the
+skills spawn a server would close that, and costs a line. Not blocking: our panel says
+`agent`, which is true.
 
 ### Tier 3 — small, and each closes a gap that is visible on screen today
 

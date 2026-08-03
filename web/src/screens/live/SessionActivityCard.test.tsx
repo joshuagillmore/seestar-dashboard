@@ -16,8 +16,8 @@ describe('SessionActivityCard', () => {
   it('renders each record\'s tool and origin, never a synthesised sentence', () => {
     render(<SessionActivityCard activity={activity} sessionRunning={true} />)
     const records = screen.getAllByTestId('session-activity-record')
-    expect(records).toHaveLength(3)
-    expect(records[0]).toHaveTextContent('goto_target')
+    expect(records).toHaveLength(4)
+    expect(records[1]).toHaveTextContent('goto_target')
     // The design's own chat-bubble prose ("Dropped frames are up to 23,
     // but eccentricity is flat...") must never appear — there is no field
     // in the real payload to source it from.
@@ -25,28 +25,43 @@ describe('SessionActivityCard', () => {
     expect(screen.queryByText(/dropped frames are up to/i)).not.toBeInTheDocument()
   })
 
-  it('gives every record a visible, distinct origin tag — agent, ambiguous, and unknown never collapse together', () => {
+  it('gives every record a visible, distinct origin tag — the four states never collapse together', () => {
     render(<SessionActivityCard activity={activity} sessionRunning={true} />)
     const origins = screen.getAllByTestId('session-activity-origin')
-    expect(origins.map((el) => el.getAttribute('data-origin'))).toEqual(['agent', 'ambiguous', 'unknown'])
-    // Distinct visual treatment, not just a distinct attribute — three
+    expect(origins.map((el) => el.getAttribute('data-origin'))).toEqual([
+      'console',
+      'agent',
+      'ambiguous',
+      'unknown',
+    ])
+    // Distinct visual treatment, not just a distinct attribute — four
     // different classes, so a reviewer can't collapse them to one style.
     const classNames = new Set(origins.map((el) => el.className))
-    expect(classNames.size).toBe(3)
+    expect(classNames.size).toBe(4)
   })
 
-  it('never presents an "ambiguous" record as the agent\'s own — the label says ambiguous, not agent', () => {
+  it('labels our own traffic as this console, not as the agent\'s', () => {
+    // The regression. `seestar.get_view_state` is the dashboard's own polling
+    // fanned out below the MCP boundary; the classifier this replaced had
+    // never heard of that tag and reported it as the agent's.
     render(<SessionActivityCard activity={activity} sessionRunning={true} />)
     const origins = screen.getAllByTestId('session-activity-origin')
-    expect(origins[1]).toHaveTextContent(/ambiguous/i)
-    expect(origins[1]).not.toHaveTextContent(/^agent$/i)
+    expect(origins[0]).toHaveTextContent('this console')
+    expect(origins[0]).not.toHaveTextContent(/agent/i)
+  })
+
+  it('never presents an unattributed record as the agent\'s own', () => {
+    render(<SessionActivityCard activity={activity} sessionRunning={true} />)
+    const origins = screen.getAllByTestId('session-activity-origin')
+    expect(origins[2]).toHaveTextContent(/unattributed/i)
+    expect(origins[2]).not.toHaveTextContent(/agent/i)
   })
 
   it('renders an unknown (fully-null) record without crashing, showing an honest placeholder rather than "null"', () => {
     render(<SessionActivityCard activity={activity} sessionRunning={true} />)
     const records = screen.getAllByTestId('session-activity-record')
-    expect(records[2]).toHaveTextContent('(unparsed record)')
-    expect(records[2]).not.toHaveTextContent(/^null/)
+    expect(records[3]).toHaveTextContent('(unparsed record)')
+    expect(records[3]).not.toHaveTextContent(/^null/)
   })
 
   it('shows a truncation notice when the server reports one', () => {
@@ -96,8 +111,9 @@ describe('SessionActivityCard', () => {
     // given, not that it re-sorts by its own idea of "newest".
     render(<SessionActivityCard activity={activity} sessionRunning={true} />)
     const records = screen.getAllByTestId('session-activity-record')
-    expect(records[0]).toHaveTextContent('goto_target')
-    expect(records[1]).toHaveTextContent('alpaca.put.action')
+    expect(records[0]).toHaveTextContent('seestar.get_view_state')
+    expect(records[1]).toHaveTextContent('goto_target')
+    expect(records[2]).toHaveTextContent('alpaca.put.action')
   })
 
   describe('sessionRunning framing', () => {

@@ -10,86 +10,49 @@ this module must never write, rotate, truncate or lock it, and a
 partially-written final line (the writer mid-``handle.write()``) is normal,
 not corruption. See `_tail_lines()`.
 
-## ⚠️ KNOWN DEFECT (2026-08-03): this module's premise no longer holds
+## Attribution: the `client` field, not the tool tag
 
-**Everything below this banner was true when written and is not true now.**
-Hand-back item 10 has landed. Records DO carry a `client` field — it is
-unconditional in `ProvenanceLog.log_call()` — and this sidecar already names
-itself: `mcp_proxy.py` passes `SEESTAR_CLIENT_ID=console` to the subprocess it
-spawns. Verified in the live log: 217 records read `"client": "console"`.
+Every record seestar-mcp writes carries `client` — unconditional in
+`ProvenanceLog.log_call()`, sourced from `SEESTAR_CLIENT_ID`. This sidecar sets
+that variable on the subprocess it spawns (`mcp_proxy.effective_client_id()`,
+`"console"` unless an operator overrides it), so our own traffic is
+identifiable by name. Four states:
 
-Two consequences, neither yet acted on:
+- **console** — `client` equals ours. This dashboard's own call, positively
+  identified, not inferred.
+- **agent** — `client` is present and is somebody else's: the Claude agent, or
+  a second console with its own id.
+- **ambiguous** — the record parsed but carries no `client`. Only records
+  predating the field, a shrinking tail of the log; never a live call.
+- **unknown** — the line didn't parse, or carried no usable ``tool``.
 
-1. **The tag heuristic is unnecessary.** `client == mcp_proxy.CLIENT_ID` is a
-   direct answer where this module infers one. `classify_origin()` does not
-   read the field at all; it still takes only a tag.
-2. **The tag heuristic is now WRONG, in the dangerous direction.**
-   `invoke_action()` stopped emitting the fixed `alpaca.put.action` tag on
-   2026-07-31 and now names the method (`seestar.get_view_state`,
-   `seestar.get_device_state`, `seestar.pi_get_info`). None of those are in
-   `_AMBIGUOUS_NATIVE_TAGS`, and the fallback below is `ORIGIN_AGENT` — so the
-   dashboard's own polling is currently being labelled as the agent's, which is
-   precisely the misattribution this module exists to prevent.
+## Why there is no tag heuristic here any more (hand-back item 10)
 
-The fix is to classify on `client` and delete `_AMBIGUOUS_NATIVE_TAGS`
-outright, which the hand-back note has always said would follow this landing.
-Until then, treat `origin` on this route's records as unreliable.
+Worth knowing, because the deleted code looked careful and was wrong.
 
-The rest of this docstring is kept as the record of why the code has the shape
-it has — it is not a description of the current log format.
+Records used to carry no client id, so this module inferred origin from the
+tool tag, against a hardcoded mirror of seestar-mcp's internal call graph. That
+mirror was needed because one allowlisted tool fans out into differently-named
+lines below the MCP boundary: `invoke_action()` logged a fixed
+`"alpaca.put.action"` whatever native method ran, `get_status` logged five
+`"alpaca.get.<verb>"` tags and never its own name, and so on. A bare
+`ALLOWED_TOOLS` membership test would therefore have called much of this
+dashboard's own traffic "agent".
 
-## The honesty constraint as it stood (hand-back item 10, before it landed)
+Two things then happened, and only the first was noticed at the time:
 
-A provenance record carries no client field — the log cannot distinguish
-this dashboard's own tool calls from the agent's. So every record is
-classified into three states rather than guessed at:
+1. The client id landed, which made the inference unnecessary.
+2. `invoke_action()` started naming the method (`seestar.get_view_state`,
+   `seestar.get_device_state`, …) and stopped emitting `alpaca.put.action`
+   entirely — last seen 2026-07-31. None of the new tags were in the mirror,
+   and the fallback was `agent`, so the module spent that window reporting our
+   own polling as the agent's. Exactly the failure it was built to prevent.
 
-- **agent** — the tag is not something any call this dashboard can make
-  could ever produce. Necessarily someone else.
-- **ambiguous** — the tag IS something our own traffic could produce.
-  Could be either; never attributed further than that.
-- **unknown** — the line didn't parse, or didn't carry a usable ``tool``
-  field.
-
-## Why "ambiguous" is NOT simply `ALLOWED_TOOLS`
-
-A single allowlisted tool call can fan out into one or more DIFFERENTLY
-NAMED log lines below the MCP tool boundary — verified by tracing
-SeeStar-AI's own call graph (`alpaca_client.py`, `qa_tier1.py`) and cross-
-checked against a real 691-line `provenance.jsonl`, not assumed from the
-tool names alone:
-
-- `assess_conditions` and `plan_targets` both reconcile live GPS
-  (`_location_block` -> `_current_gps` -> `alpaca.method_sync("get_device_
-  state")`), which logs the tag `"alpaca.put.action"` — NOT
-  `"assess_conditions"` or `"plan_targets"`.
-- `get_view_state`, `check_night_guardrails`, `qa_tier1` and
-  `get_focuser_position` all call `alpaca.method_sync`/`method_async`
-  internally for their own reasons, and EVERY one of them logs the exact
-  same fixed tag `"alpaca.put.action"` regardless of which native method
-  was invoked — `invoke_action()`'s own log call hardcodes that string, it
-  is not `f"alpaca.put.{method}"`.
-- `get_status` reads five separate ASCOM properties (connected/
-  rightascension/declination/tracking/slewing), each logging its own
-  `"alpaca.get.<verb>"` tag — `"get_status"` itself never appears.
-- `qa_tier1`'s `poll()` ALSO logs its own `"qa_tier1.poll"` tag, in addition
-  to the `"alpaca.put.action"` its two native calls produce.
-
-So `get_view_state`'s, `get_status`'s and `get_focuser_position`'s own tool
-names never appear in the log at all — only their native-layer side effects
-do. A classifier that only checked literal `ALLOWED_TOOLS` membership would
-misclassify a large fraction of this dashboard's OWN genuine traffic as
-"agent" — the opposite of what this feature exists to prevent.
-
-`_AMBIGUOUS_NATIVE_TAGS` below is the one piece of this module NOT
-automatically kept in sync by adding a tool to `ALLOWED_TOOLS` — it encodes
-SeeStar-AI's internal call graph, which lives in a different repo and can
-change independently of this one. If a newly-allowlisted tool reaches the
-native layer some other way, this constant needs a matching update,
-verified the same way (trace the source, check a real tail) — not guessed.
-This is a real, stated limitation, not an oversight: a purely mechanical
-derivation from tool names alone cannot see through to what a tool's own
-implementation calls underneath it.
+The lesson is about the shape, not the tags: **a mirror of another repo's
+internals, maintained by hand, in a third place, fails silently and in the
+direction that looks plausible.** If `client` ever needs supplementing, the
+answer is a field on the record, asked for upstream — not a copy of their call
+graph kept here.
 
 ## No prose in this file
 
@@ -131,27 +94,14 @@ else:
         Path(_seestar_ai_dir) / "data" / "provenance.jsonl" if _seestar_ai_dir else None
     )
 
+#: This console's own traffic, identified by name rather than inferred.
+ORIGIN_CONSOLE = "console"
+#: Some other client — the agent, or a second console. Not us.
 ORIGIN_AGENT = "agent"
+#: Parsed fine, but predates the `client` field, so genuinely unattributable.
 ORIGIN_AMBIGUOUS = "ambiguous"
+#: The line did not parse, or carried no usable `tool`.
 ORIGIN_UNKNOWN = "unknown"
-
-#: See the module docstring's "Why 'ambiguous' is NOT simply ALLOWED_TOOLS" —
-#: AND the KNOWN DEFECT banner above it. These tags describe seestar-mcp's
-#: call graph as of 2026-07-30. `alpaca.put.action` has not been emitted since
-#: 2026-07-31; the `seestar.<method>` tags that replaced it are absent here, so
-#: this set no longer covers the traffic it was built to cover. Do not extend
-#: it — the `client` field makes the whole approach obsolete.
-_AMBIGUOUS_NATIVE_TAGS = frozenset(
-    {
-        "alpaca.put.action",
-        "alpaca.get.connected",
-        "alpaca.get.rightascension",
-        "alpaca.get.declination",
-        "alpaca.get.tracking",
-        "alpaca.get.slewing",
-        "qa_tier1.poll",
-    }
-)
 
 #: Read backward in chunks of this size rather than the whole file at once —
 #: the log grows all night and this route is polled repeatedly. Small enough
@@ -169,21 +119,32 @@ class ActivityRecord:
     origin: str
 
 
-def classify_origin(tool: object, allowed_tools: frozenset, sidecar_routes: frozenset) -> str:
-    """`tool` is whatever a raw record's `tool` field held — may be
-    non-`str` for a malformed record; `_parse_record()` handles that case
-    before this is ever reached, so `tool in allowed_tools` here is always a
-    real string membership test, never a type mismatch.
+def classify_origin(client: object, self_id: str) -> str:
+    """Who wrote this record, from the record's own `client` field.
 
-    `allowed_tools`/`sidecar_routes` are passed in rather than imported
-    directly, so this can be exercised against a small synthetic allowlist
-    in tests without monkeypatching the real one — and so a future caller
-    building this against a differently-scoped allowlist (unlikely, but
-    cheap to keep possible) isn't hardcoded to the module-level one.
+    `client` is whatever the raw record held — a string on any record written
+    since seestar-mcp started stamping it, and absent on anything older. A
+    non-string is treated as absent rather than coerced: a malformed value is
+    not evidence of anything.
+
+    `self_id` is passed in rather than read from the environment here so a
+    test can exercise the match without touching `os.environ`, and so the
+    caller has to have gone through `mcp_proxy.effective_client_id()` — the
+    one place that knows what we actually told the server to call itself.
+
+    Note what this deliberately does NOT do: infer anything from `tool`. The
+    previous implementation matched tool tags against a hardcoded mirror of
+    seestar-mcp's internal call graph, because records carried no client id
+    when this module was written. That mirror went stale the moment
+    `invoke_action()` stopped logging a fixed `alpaca.put.action` tag
+    (2026-07-31), and because the fallback was `agent`, this console's own
+    polling was being reported as the agent's — the precise misattribution the
+    feature exists to prevent. A name beats an inference; there is no reason
+    to keep the inference beside it.
     """
-    if tool in allowed_tools or tool in sidecar_routes or tool in _AMBIGUOUS_NATIVE_TAGS:
+    if not isinstance(client, str) or not client:
         return ORIGIN_AMBIGUOUS
-    return ORIGIN_AGENT
+    return ORIGIN_CONSOLE if client == self_id else ORIGIN_AGENT
 
 
 def _tail_lines(
@@ -244,9 +205,7 @@ def _tail_lines(
     return lines[-count:], truncated
 
 
-def _parse_record(
-    line: str, allowed_tools: frozenset, sidecar_routes: frozenset
-) -> ActivityRecord:
+def _parse_record(line: str, self_id: str) -> ActivityRecord:
     """Never raises: a line that fails to parse, or parses to something
     that isn't a `{tool, args, ts}`-shaped dict, becomes an ORIGIN_UNKNOWN
     record — see the module docstring's "malformed or unrecognised record"
@@ -269,21 +228,19 @@ def _parse_record(
         ts=payload.get("ts"),
         tool=tool,
         args=payload.get("args"),
-        origin=classify_origin(tool, allowed_tools, sidecar_routes),
+        origin=classify_origin(payload.get("client"), self_id),
     )
 
 
-def read_recent_activity(
-    path: Path, limit: int, allowed_tools: frozenset, sidecar_routes: frozenset
-) -> tuple[list[ActivityRecord], bool]:
+def read_recent_activity(path: Path, limit: int, self_id: str) -> tuple[list[ActivityRecord], bool]:
     """Newest-first `ActivityRecord`s, `limit`-bounded — the read-only tail
     plus per-record origin classification, composed for routes.py. A blank
     line (defensive; not expected in a well-formed log) is skipped rather
     than turned into a record.
+
+    `self_id` is this console's client id — see `classify_origin`.
     """
     lines, truncated = _tail_lines(path, limit)
-    records = [
-        _parse_record(line, allowed_tools, sidecar_routes) for line in lines if line.strip()
-    ]
+    records = [_parse_record(line, self_id) for line in lines if line.strip()]
     records.reverse()  # oldest-first on disk -> newest-first for the feed
     return records, truncated
