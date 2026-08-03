@@ -53,10 +53,17 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-/* Neutral, not a health tone — "agent" is the honesty-checked case (this
-   dashboard has no route for the tag at all), not a status to celebrate. */
+/* Our own traffic — the least interesting rows on the panel, since the user
+   is watching to see what the AGENT did. Quietest treatment of the four, so
+   the eye skips them. Not a verdict tone: `accent` marks the live or
+   actionable thing and this is neither. */
+.origin_console { background: var(--bg-cell); color: var(--text-fainter); }
+/* Neutral, not a health tone — "agent" is now a positive identification (the
+   record names a client that isn't ours), not a status to celebrate. */
 .origin_agent { background: var(--neutral-tag-bg); color: var(--text-dimmer); }
-/* Marginal — genuinely could be either source; worth the reader noticing. */
+/* Marginal — a record older than the client field, so genuinely unattributable
+   rather than attributed to anyone. Worth the reader noticing, and expected to
+   disappear from the feed as the log rolls forward. */
 .origin_ambiguous { background: var(--marginal-bg); color: var(--marginal); }
 /* Reject-toned — a line that did not parse, worth flagging distinctly. */
 .origin_unknown { background: var(--reject-bg); color: var(--reject); }

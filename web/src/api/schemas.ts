@@ -566,18 +566,30 @@ export const LastStackSchema = z.object({
  * `ts`/`tool`/`args` are all nullable: a line that failed to parse becomes
  * an `origin: "unknown"` record with every field `null` rather than being
  * dropped silently (`test_a_malformed_line_becomes_an_unknown_record_not_a_
- * 500`). `origin` is the honesty-critical field — hand-back item 10 means
- * the log has no client identifier, so the dashboard's OWN calls sit in
- * here too, indistinguishable from the agent's, unless a tag is provably
- * something only the agent could have produced (`"agent"`) or the record
- * didn't parse (`"unknown"`) — everything else able to come from either
- * source is `"ambiguous"`, never guessed further.
+ * 500`).
+ *
+ * `origin` is the honesty-critical field, and it is now an ANSWER rather
+ * than an inference: hand-back item 10 landed, so every record carries the
+ * `client` that wrote it and the sidecar names itself when it spawns the
+ * server. Four states, in decreasing confidence:
+ *
+ * - `console` — this dashboard's own call, identified by name.
+ * - `agent` — some other client's: the Claude agent, or a second console.
+ * - `ambiguous` — parsed, but written before the `client` field existed.
+ *   A shrinking tail of the log; never a live call.
+ * - `unknown` — the line didn't parse.
+ *
+ * `ambiguous` used to be the common case, because origin was inferred from
+ * the tool tag against a hardcoded mirror of the server's call graph. That
+ * mirror went stale and started reporting our own polling as the agent's —
+ * see session_activity.py's module docstring. Do not reintroduce a
+ * client-side version of the same idea.
  */
 export const SessionActivityRecordSchema = z.object({
   ts: z.string().nullable(),
   tool: z.string().nullable(),
   args: z.record(z.string(), z.unknown()).nullable(),
-  origin: z.enum(['agent', 'ambiguous', 'unknown']),
+  origin: z.enum(['console', 'agent', 'ambiguous', 'unknown']),
 })
 
 export const SessionActivitySchema = z.object({

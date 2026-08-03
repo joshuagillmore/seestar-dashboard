@@ -2,6 +2,12 @@
   "ok": true,
   "records": [
     {
+      "ts": "2026-07-30T03:53:00+00:00",
+      "tool": "seestar.get_view_state",
+      "args": { "action": "method_sync", "method": "get_view_state" },
+      "origin": "console"
+    },
+    {
       "ts": "2026-07-30T03:52:00+00:00",
       "tool": "goto_target",
       "args": { "target": "M31" },

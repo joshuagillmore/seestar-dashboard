@@ -1,19 +1,21 @@
 """Unit-level tests for session_activity.py's tail-reading and classification
 logic — synthetic files under `tmp_path`, no HTTP, no real provenance.jsonl.
 
-The property that matters most here is the one the module docstring argues
-for at length: "ambiguous" is NOT a bare ALLOWED_TOOLS membership check.
-Several tests below exist specifically to prove the low-level native tags
-(alpaca.put.action, alpaca.get.*, qa_tier1.poll) classify as ambiguous even
-though none of them is a literal ALLOWED_TOOLS/SIDECAR_ROUTES name — the
-concrete bug this module's design avoids.
+The property that matters here is that origin comes from the record's own
+`client` field and from nothing else. The previous version of this file proved
+the opposite property at length — that a set of hardcoded native tool tags
+classified as "ambiguous" rather than "agent" — and those tests passed right up
+until the tags changed upstream, which is the whole reason the tag heuristic is
+gone. Tests that pin a mirror of another repo's internals go green on stale
+data; this file must not acquire another one.
 """
+import json
+
 import pytest
 
 from seestar_sidecar import session_activity as sa
 
-ALLOWED = frozenset({"list_projects", "get_site_profile"})
-SIDECAR = frozenset({"projects_combined"})
+SELF = "console"
 
 
 def _write(path, lines, trailing_newline=True):
@@ -23,99 +25,102 @@ def _write(path, lines, trailing_newline=True):
     path.write_text(text, encoding="utf-8")
 
 
-def _record(tool, **args):
-    import json
-
-    return json.dumps({"ts": "2026-07-30T00:00:00+00:00", "tool": tool, "args": args})
+def _record(tool, client=SELF, **args):
+    payload = {"ts": "2026-07-30T00:00:00+00:00", "tool": tool, "args": args}
+    if client is not None:
+        payload["client"] = client
+    return json.dumps(payload)
 
 
 # --- classify_origin ---------------------------------------------------------
 
 
-def test_a_literal_allowed_tool_is_ambiguous():
-    assert sa.classify_origin("list_projects", ALLOWED, SIDECAR) == sa.ORIGIN_AMBIGUOUS
+def test_our_own_client_id_is_console():
+    assert sa.classify_origin("console", SELF) == sa.ORIGIN_CONSOLE
 
 
-def test_a_literal_sidecar_route_is_ambiguous():
-    assert sa.classify_origin("projects_combined", ALLOWED, SIDECAR) == sa.ORIGIN_AMBIGUOUS
+def test_any_other_client_is_the_agent():
+    assert sa.classify_origin("anon-fd80208c", SELF) == sa.ORIGIN_AGENT
 
 
-@pytest.mark.parametrize(
-    "tag",
-    [
-        "alpaca.put.action",
-        "alpaca.get.connected",
-        "alpaca.get.rightascension",
-        "alpaca.get.declination",
-        "alpaca.get.tracking",
-        "alpaca.get.slewing",
-        "qa_tier1.poll",
-    ],
-)
-def test_known_native_side_effect_tags_are_ambiguous_not_agent(tag):
-    """The core property this module exists for: a tag produced as a side
-    effect of a tool we DO call (get_status, get_view_state, qa_tier1, ...)
-    must never read as "necessarily the agent" just because it isn't a
-    literal ALLOWED_TOOLS name — see the module docstring's traced call
-    graph for exactly which tool produces each of these.
+def test_a_second_console_with_its_own_id_is_not_us():
+    """An operator running two consoles sets SEESTAR_CLIENT_ID on one. The
+    other one's records are somebody else's, and saying so is the point of
+    letting the id be overridden at all."""
+    assert sa.classify_origin("console-shed", SELF) == sa.ORIGIN_AGENT
+
+
+def test_an_operator_overridden_id_is_matched_not_the_default():
+    """Proves the match is against the id passed in — what
+    mcp_proxy.effective_client_id() resolved — and not a hardcoded "console".
     """
-    assert sa.classify_origin(tag, ALLOWED, SIDECAR) == sa.ORIGIN_AMBIGUOUS
+    assert sa.classify_origin("console-shed", "console-shed") == sa.ORIGIN_CONSOLE
+    assert sa.classify_origin("console", "console-shed") == sa.ORIGIN_AGENT
 
 
-@pytest.mark.parametrize("tag", ["goto_target", "set_filter", "park", "download_subs"])
-def test_a_forbidden_or_unrelated_tool_is_agent(tag):
-    """A tool this dashboard has no route for at all — including one this
-    project has explicitly forbidden — cannot have been us.
+def test_a_record_with_no_client_field_is_ambiguous_not_agent():
+    """Pre-fix records. Calling them "agent" would be a guess in the
+    direction that misattributes our own history to Claude."""
+    assert sa.classify_origin(None, SELF) == sa.ORIGIN_AMBIGUOUS
+
+
+@pytest.mark.parametrize("value", [123, [], {}, True, ""])
+def test_a_malformed_or_empty_client_is_ambiguous(value):
+    """A non-string or empty client is not evidence of anything, and
+    seestar-mcp treats a falsy client_id as absent too (it generates
+    anon-<hex>), so an empty string can never legitimately be ours."""
+    assert sa.classify_origin(value, SELF) == sa.ORIGIN_AMBIGUOUS
+
+
+def test_the_tool_name_does_not_affect_classification():
+    """The regression this file exists for. `seestar.get_view_state` is a tag
+    that did not exist when the old classifier was written; under it, that tag
+    fell through to ORIGIN_AGENT and reported our own polling as Claude's.
+    A forbidden tool with our client id is likewise not reclassified — origin
+    answers "who", never "should they have".
     """
-    assert sa.classify_origin(tag, ALLOWED, SIDECAR) == sa.ORIGIN_AGENT
-
-
-def test_adding_a_tool_to_allowed_tools_moves_it_from_agent_to_ambiguous():
-    """Proves the classification is actually derived from the passed-in
-    allowlist, not a hardcoded copy — the exact staleness failure mode the
-    module docstring warns against.
-    """
-    assert sa.classify_origin("qa_tier2", ALLOWED, SIDECAR) == sa.ORIGIN_AGENT
-    widened = ALLOWED | {"qa_tier2"}
-    assert sa.classify_origin("qa_tier2", widened, SIDECAR) == sa.ORIGIN_AMBIGUOUS
+    assert sa.classify_origin(SELF, SELF) == sa.ORIGIN_CONSOLE
+    for tool in ("seestar.get_view_state", "alpaca.put.action", "goto_target", "park"):
+        line = _record(tool)
+        assert sa._parse_record(line, SELF).origin == sa.ORIGIN_CONSOLE, tool
 
 
 # --- _parse_record ------------------------------------------------------------
 
 
 def test_parse_record_classifies_a_well_formed_line():
-    record = sa._parse_record(_record("list_projects"), ALLOWED, SIDECAR)
+    record = sa._parse_record(_record("list_projects"), SELF)
     assert record.tool == "list_projects"
-    assert record.origin == sa.ORIGIN_AMBIGUOUS
+    assert record.origin == sa.ORIGIN_CONSOLE
     assert record.ts == "2026-07-30T00:00:00+00:00"
 
 
+def test_parse_record_reads_the_client_off_the_record():
+    record = sa._parse_record(_record("list_projects", client="anon-abc123"), SELF)
+    assert record.tool == "list_projects"
+    assert record.origin == sa.ORIGIN_AGENT
+
+
 def test_parse_record_handles_invalid_json_as_unknown():
-    record = sa._parse_record("not json at all {{{", ALLOWED, SIDECAR)
+    record = sa._parse_record("not json at all {{{", SELF)
     assert record.origin == sa.ORIGIN_UNKNOWN
     assert record.tool is None
 
 
 def test_parse_record_handles_a_json_scalar_as_unknown():
-    record = sa._parse_record("42", ALLOWED, SIDECAR)
-    assert record.origin == sa.ORIGIN_UNKNOWN
+    assert sa._parse_record("42", SELF).origin == sa.ORIGIN_UNKNOWN
 
 
 def test_parse_record_handles_a_missing_tool_field_as_unknown_but_keeps_ts():
-    import json
-
-    line = json.dumps({"ts": "2026-07-30T00:00:00+00:00", "args": {}})
-    record = sa._parse_record(line, ALLOWED, SIDECAR)
+    line = json.dumps({"ts": "2026-07-30T00:00:00+00:00", "client": SELF, "args": {}})
+    record = sa._parse_record(line, SELF)
     assert record.origin == sa.ORIGIN_UNKNOWN
     assert record.ts == "2026-07-30T00:00:00+00:00"
 
 
 def test_parse_record_handles_a_non_string_tool_as_unknown():
-    import json
-
-    line = json.dumps({"ts": None, "tool": 123, "args": {}})
-    record = sa._parse_record(line, ALLOWED, SIDECAR)
-    assert record.origin == sa.ORIGIN_UNKNOWN
+    line = json.dumps({"ts": None, "tool": 123, "client": SELF, "args": {}})
+    assert sa._parse_record(line, SELF).origin == sa.ORIGIN_UNKNOWN
 
 
 # --- _tail_lines ---------------------------------------------------------------
@@ -204,12 +209,23 @@ def test_tail_lines_boundary_case_reports_truncated_even_at_the_exact_count_edge
 
 def test_read_recent_activity_is_newest_first(tmp_path):
     path = tmp_path / "p.jsonl"
-    _write(path, [_record("list_projects"), _record("get_site_profile"), _record("goto_target")])
+    _write(
+        path,
+        [
+            _record("list_projects"),
+            _record("goto_target", client="anon-9f2c"),
+            _record("get_site_profile", client=None),
+        ],
+    )
 
-    records, truncated = sa.read_recent_activity(path, limit=10, allowed_tools=ALLOWED, sidecar_routes=SIDECAR)
+    records, truncated = sa.read_recent_activity(path, limit=10, self_id=SELF)
 
-    assert [r.tool for r in records] == ["goto_target", "get_site_profile", "list_projects"]
-    assert [r.origin for r in records] == [sa.ORIGIN_AGENT, sa.ORIGIN_AMBIGUOUS, sa.ORIGIN_AMBIGUOUS]
+    assert [r.tool for r in records] == ["get_site_profile", "goto_target", "list_projects"]
+    assert [r.origin for r in records] == [
+        sa.ORIGIN_AMBIGUOUS,
+        sa.ORIGIN_AGENT,
+        sa.ORIGIN_CONSOLE,
+    ]
     assert truncated is False
 
 
@@ -217,7 +233,7 @@ def test_read_recent_activity_skips_blank_lines(tmp_path):
     path = tmp_path / "p.jsonl"
     _write(path, [_record("list_projects"), "", _record("goto_target")])
 
-    records, _truncated = sa.read_recent_activity(path, limit=10, allowed_tools=ALLOWED, sidecar_routes=SIDECAR)
+    records, _truncated = sa.read_recent_activity(path, limit=10, self_id=SELF)
 
     assert len(records) == 2
 
@@ -226,7 +242,7 @@ def test_read_recent_activity_includes_a_malformed_line_as_unknown_rather_than_d
     path = tmp_path / "p.jsonl"
     _write(path, [_record("list_projects"), "{not valid json", _record("goto_target")])
 
-    records, _truncated = sa.read_recent_activity(path, limit=10, allowed_tools=ALLOWED, sidecar_routes=SIDECAR)
+    records, _truncated = sa.read_recent_activity(path, limit=10, self_id=SELF)
 
     assert len(records) == 3
     origins = {r.origin for r in records}

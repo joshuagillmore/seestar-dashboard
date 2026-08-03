@@ -157,8 +157,13 @@ describe('api client', () => {
     it('parses session_activity, including a fully-null unknown record', async () => {
       mockFetch(sessionActivity())
       const activity = await fetchSessionActivity(30)
-      expect(activity.records.map((r) => r.origin)).toEqual(['agent', 'ambiguous', 'unknown'])
-      expect(activity.records[2].tool).toBeNull()
+      expect(activity.records.map((r) => r.origin)).toEqual([
+        'console',
+        'agent',
+        'ambiguous',
+        'unknown',
+      ])
+      expect(activity.records[3].tool).toBeNull()
     })
 
     it('raises ApiError (not a hang) when get_view_state times out on an idle scope — the sidecar 502s, it does not leave the request open', async () => {

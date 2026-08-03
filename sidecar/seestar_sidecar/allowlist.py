@@ -117,15 +117,13 @@ NO_DIRECT_ROUTE_TOOLS = frozenset({"qa_tier2"})
 #: directly off disk — read-only in the strict sense (never writes, rotates,
 #: truncates or locks a file the server itself is actively appending to; see
 #: session_activity.py). No MCP tool by this name exists either. Each
-#: returned record is classified agent/ambiguous/unknown — see
-#: session_activity.py's module docstring for why that classification is
-#: deliberately NOT a mechanical function of ALLOWED_TOOLS's tool-name
-#: strings alone. NOTE (2026-08-03): that classifier now rests on a false
-#: premise. Hand-back item 10 has landed — every provenance record carries
-#: `client`, and ours reads "console" — so the tag-matching heuristic is both
-#: unnecessary and, since the `alpaca.put.action` tag it keys on is no longer
-#: emitted, wrong. Nothing here changes until the classifier is rewritten to
-#: read `client`; this note exists so the next reader does not trust it.
+#: returned record is classified console/agent/ambiguous/unknown from the
+#: record's own `client` field (hand-back item 10 landed; ours reads
+#: "console"). Note that this classification is deliberately NOT a function of
+#: ALLOWED_TOOLS — it never was, and the previous attempt to derive it from
+#: tool names against a hardcoded mirror of seestar-mcp's call graph went
+#: stale and misattributed our own traffic. See session_activity.py's module
+#: docstring; do not reintroduce a tool-name heuristic here or there.
 #:
 #: "qa_targets" / "qa_analysis_start" / "qa_analysis_status" (slice 4,
 #: Review & QA screen — see docs/superpowers/specs/

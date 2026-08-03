@@ -18,8 +18,27 @@ class ProxyTransportError(RuntimeError):
     """The MCP subprocess could not be reached, started, or answered."""
 
 
-#: What this process calls itself in seestar-mcp's provenance log.
+#: What this process calls itself in seestar-mcp's provenance log, absent an
+#: operator override. See effective_client_id() — read that, not this, when
+#: you need the id records will actually carry.
 CLIENT_ID = "console"
+
+
+def effective_client_id() -> str:
+    """The id the spawned seestar-mcp server will stamp on every record.
+
+    One function so the value we PASS DOWN and the value session_activity.py
+    MATCHES AGAINST cannot drift apart — a mismatch between those two would
+    make the console fail to recognise its own traffic, silently, which is
+    the exact bug the tag-matching classifier had.
+
+    An operator-set value wins; someone running two consoles against one
+    server deserves to tell them apart. An empty string does not count as
+    set: `ProvenanceLog` treats a falsy client_id as absent and generates
+    `anon-<hex>`, so honouring `SEESTAR_CLIENT_ID=""` would produce records
+    neither side could attribute — a worse outcome than ignoring it.
+    """
+    return os.environ.get("SEESTAR_CLIENT_ID") or CLIENT_ID
 
 
 class McpConnection:
@@ -46,10 +65,11 @@ class McpConnection:
             # and the agent append to one seestar-mcp log; without this our
             # records read `client: "anon-<hex>"` and neither side can tell
             # whose traffic is whose. seestar-mcp's config.py documents
-            # SEESTAR_CLIENT_ID for exactly this. An operator-set value wins —
-            # someone running two consoles deserves to distinguish them.
+            # SEESTAR_CLIENT_ID for exactly this, and stamps it on every
+            # record — which is what lets session_activity.py attribute a
+            # record instead of guessing from its tool tag.
             env = {**os.environ}
-            env.setdefault("SEESTAR_CLIENT_ID", CLIENT_ID)
+            env["SEESTAR_CLIENT_ID"] = effective_client_id()
             params = StdioServerParameters(
                 command=self._command, args=self._args, env=env
             )

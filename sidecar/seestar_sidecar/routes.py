@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 
-from seestar_sidecar.allowlist import ALLOWED_TOOLS, SIDECAR_ROUTES
+from seestar_sidecar.allowlist import ALLOWED_TOOLS
 from seestar_sidecar.archive import (
     DEFAULT_ARCHIVE_DIR,
     SUB_THUMBNAIL_SUFFIX,
@@ -53,7 +53,7 @@ from seestar_sidecar.live_preview import (
     extract_target_name,
     is_frame_stale,
 )
-from seestar_sidecar.mcp_proxy import ProxyTransportError
+from seestar_sidecar.mcp_proxy import ProxyTransportError, effective_client_id
 from seestar_sidecar.redaction import redact_payload, redact_secrets
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar import qa_analysis
@@ -831,10 +831,9 @@ async def session_activity(
     request: Request, limit: int = Query(default=100, ge=1, le=500)
 ) -> JSONResponse:
     """Newest-first tail of SeeStar-AI's provenance.jsonl, each record
-    classified agent/ambiguous/unknown — see session_activity.py's module
-    docstring for the honesty constraint this exists under (hand-back item
-    10: there is no client field in the log) and for why the classification
-    is not a bare `ALLOWED_TOOLS` membership check.
+    classified console/agent/ambiguous/unknown from its own `client` field —
+    see session_activity.py's module docstring, which also records why this
+    used to infer origin from the tool tag and why that had to go.
 
     Not a tool call — see allowlist.SIDECAR_ROUTES — and read-only in the
     strict sense: this only ever reads bytes off a file SeeStar-AI itself
@@ -853,7 +852,7 @@ async def session_activity(
         return JSONResponse(
             {"ok": True, "records": [], "truncated": False, "source_configured": True}
         )
-    records, truncated = read_recent_activity(path, limit, ALLOWED_TOOLS, SIDECAR_ROUTES)
+    records, truncated = read_recent_activity(path, limit, effective_client_id())
     return JSONResponse(
         {
             "ok": True,

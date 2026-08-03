@@ -1,8 +1,9 @@
 """HTTP-level tests for GET /api/session_activity — proves the route wires
 session_activity.py's tail-reading and classification together correctly,
-including through the REAL allowlist (not a synthetic one, unlike
-test_session_activity.py's unit tests) so a real ALLOWED_TOOLS/SIDECAR_ROUTES
-drift would actually be caught here.
+including through the REAL client id the route resolves
+(`mcp_proxy.effective_client_id()`), not a synthetic one, so a drift between
+the id we stamp on the subprocess and the id we match against would be caught
+here rather than in production.
 """
 import json
 
@@ -10,10 +11,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from seestar_sidecar.main import create_app
+from seestar_sidecar.mcp_proxy import effective_client_id
 
 
-def _record(tool, ts="2026-07-30T00:00:00+00:00", **args):
-    return json.dumps({"ts": ts, "tool": tool, "args": args})
+def _record(tool, ts="2026-07-30T00:00:00+00:00", client=None, **args):
+    payload = {"ts": ts, "tool": tool, "args": args}
+    if client is not None:
+        payload["client"] = client
+    return json.dumps(payload)
 
 
 @pytest.fixture
@@ -57,18 +62,20 @@ def test_configured_but_file_missing_is_a_normal_empty_degrade(client, tmp_path)
     assert body["records"] == []
 
 
-def test_real_allowed_tools_classify_ambiguous_through_the_actual_route(client, tmp_path):
-    """Uses the REAL ALLOWED_TOOLS import, not a synthetic stand-in — proves
-    the route's own wiring, and would catch a real allowlist/classifier
-    drift that a synthetic-allowlist unit test cannot.
+def test_the_route_resolves_our_real_client_id_not_a_hardcoded_one(client, tmp_path):
+    """Uses `effective_client_id()` — the same function `mcp_proxy` uses to
+    name the subprocess — rather than the literal "console", so the two
+    cannot drift apart without this failing. A drift would make the console
+    unable to recognise its own traffic, silently.
     """
+    ours = effective_client_id()
     path = tmp_path / "provenance.jsonl"
     path.write_text(
         "\n".join(
             [
-                _record("list_projects"),  # a real ALLOWED_TOOLS member
-                _record("alpaca.put.action"),  # a known native side-effect tag
-                _record("goto_target"),  # a real FORBIDDEN_TOOLS member
+                _record("list_projects", client=ours),  # us
+                _record("goto_target", client="anon-9f2c"),  # somebody else
+                _record("get_status"),  # pre-fix: no client field at all
             ]
         )
         + "\n",
@@ -78,9 +85,33 @@ def test_real_allowed_tools_classify_ambiguous_through_the_actual_route(client, 
     body = client(path).get("/api/session_activity").json()
 
     by_tool = {r["tool"]: r["origin"] for r in body["records"]}
-    assert by_tool["list_projects"] == "ambiguous"
-    assert by_tool["alpaca.put.action"] == "ambiguous"
+    assert by_tool["list_projects"] == "console"
     assert by_tool["goto_target"] == "agent"
+    assert by_tool["get_status"] == "ambiguous"
+
+
+def test_our_own_native_fan_out_is_no_longer_attributed_to_the_agent(client, tmp_path):
+    """The regression. `seestar.get_view_state` is what `invoke_action()` logs
+    since 2026-07-31; the old tag-matching classifier had never heard of it and
+    fell through to "agent", so this console reported its own polling as
+    Claude's. With the client id, the tag is irrelevant.
+    """
+    ours = effective_client_id()
+    path = tmp_path / "provenance.jsonl"
+    path.write_text(
+        "\n".join(
+            _record(tool, ts=f"t{i}", client=ours)
+            for i, tool in enumerate(
+                ["seestar.get_view_state", "seestar.get_device_state", "alpaca.get.tracking"]
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    body = client(path).get("/api/session_activity").json()
+
+    assert {r["origin"] for r in body["records"]} == {"console"}
 
 
 def test_records_are_newest_first_end_to_end(client, tmp_path):

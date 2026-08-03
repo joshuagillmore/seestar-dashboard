@@ -236,11 +236,11 @@ describe('live-session schemas', () => {
     expect(none.reason).toBeTruthy()
   })
 
-  it('parses session_activity\'s three origin states, including a fully-null unknown record', () => {
+  it('parses session_activity\'s four origin states, including a fully-null unknown record', () => {
     const parsed = SessionActivitySchema.parse(sessionActivity())
     const origins = parsed.records.map((r) => r.origin)
-    expect(origins).toEqual(['agent', 'ambiguous', 'unknown'])
-    const unknown = parsed.records[2]
+    expect(origins).toEqual(['console', 'agent', 'ambiguous', 'unknown'])
+    const unknown = parsed.records[3]
     expect(unknown.ts).toBeNull()
     expect(unknown.tool).toBeNull()
     expect(unknown.args).toBeNull()
