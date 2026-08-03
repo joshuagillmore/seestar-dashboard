@@ -63,15 +63,30 @@ thresholds behind them are owned by the server:
 - `docs/qa-policy-SKILL.md` (copied here for reference) — the policy and how to
   explain a verdict
 
-Current defaults, for display context only:
+**Most of these are session-relative, not constants** — they are computed from
+the session's own median and sigma, so they differ per target and per night.
+That is why `qa_tier2` returns a `thresholds` object alongside the verdicts,
+and why the chart draws its cutoff lines from *that* rather than from anything
+written here. Current shape of the policy, for display context only:
 
 | Metric | REJECT | MARGINAL |
 |---|---|---|
-| Eccentricity | ≥ 0.575 (canonical PixInsight cutoff) | 0.42 – 0.575 |
+| Eccentricity | ≥ 0.575 (canonical PixInsight cutoff — the one fixed line) | session-relative: `min(max(median + 1.0σ, 0.42), 0.575)` |
 | FWHM | > median + 1.5σ | median + 1.0σ … + 1.5σ |
 | SNR | < median × 0.5 | — |
 | Star count | < 50% of session median (cloud signal) | — |
-| Scatter | > median + 2.0σ | — |
+| Scatter | > median + 2.0σ | > median + 1.0σ |
+
+The eccentricity MARGINAL line **was** a flat 0.42 and stopped being one in
+contract 1.1.0. `0.42` survives as a perceptibility *floor*, not the cutoff:
+an alt-az rig baselines near 0.49, so measured over 970 real subs the flat
+constant graded 96.5% of a good night MARGINAL. Contract 1.1.1 then guaranteed
+the derived value is finite and never above the REJECT line, which is what lets
+`MetricChart` draw both lines without checking their order.
+
+A stale copy of these numbers in the client is exactly the failure this section
+exists to prevent, so **read `summary.thresholds` off the payload** and treat
+the table above as orientation, never as a source.
 
 **The UI renders verdicts; it never computes or re-derives them, and never
 hardcodes these numbers.** A sub is PASS only if it clears everything; any single
@@ -100,14 +115,23 @@ legible in the UI rather than reducing it to a colour.
 
 ## Conventions
 
-- **Stack (decided 2026-07-27):** React + TypeScript + Vite, Vitest for the gate,
-  Playwright from slice 2. Python + FastAPI for the sidecar. **No charting
+- **Stack (decided 2026-07-27):** React + TypeScript + Vite, Vitest for the gate.
+  Python + FastAPI for the sidecar. **No charting
   library** — the sweet-band timeline and the per-sub charts are
   absolutely-positioned and flex-div bars driven by the token table; a chart lib
   fights both. Reconsider only if a screen needs axes/scales these don't cover.
 - The sidecar exposes MCP tools over HTTP behind a **route allowlist**: a tool
   with side effects has no route at all. Never add one to make a screen easier.
 - Add a real test gate early; this repo is a candidate for orchestrated
-  refinement, which requires a fast deterministic gate.
+  refinement, which requires a fast deterministic gate. The gate as it stands
+  is `npm test` + `npm run build` in `web/` and `uv run pytest` in `sidecar/`.
+  **`npx tsc --noEmit` checks nothing here** — the root `tsconfig.json` is a
+  solution file with `"files": []`, so it exits 0 having read no source. Use
+  `tsc -b`, which `npm run build` already runs.
+- **Playwright was planned for slice 2 and never adopted.** Slices 1–4 shipped
+  without it; browser behaviour has been verified by hand instead. Worth
+  knowing before writing a plan that assumes an e2e layer exists — there is
+  none, and the phone layouts in particular have no automated viewport
+  coverage.
 - Never commit secrets. SeeStar-AI uses age+sops (`.env.enc` committable, key
   never leaves the machine) — follow the same pattern if secrets appear.
