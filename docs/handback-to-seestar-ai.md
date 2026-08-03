@@ -582,8 +582,9 @@ none of.** The score (`planning/ranker.py:126`) is:
 
 Every term is about *when and where* the object is, and none about *whether the
 instrument can actually record it*. With 120 curated showpieces that was safe —
-they are all imageable by construction. **86.2% of the extended catalogue is
-galaxies** (10,792 of 12,517), most of them faint, and against that population a
+they are all imageable by construction. **86.6% of the extended catalogue is
+galaxies** (10,840 of 12,517 — this item said 86.2%/10,792 before the SIMBAD
+reclassification moved a further 48 in), most of them faint, and against that population a
 ranker with no feasibility term will happily recommend a 15th-magnitude smudge
 that an f/5 50 mm cannot resolve, purely because it sits high at midnight.
 
