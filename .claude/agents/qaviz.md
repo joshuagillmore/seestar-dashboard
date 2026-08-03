@@ -18,11 +18,20 @@ The numbers live in `SeeStar-AI/src/seestar_mcp/config.py`; the policy lives in
 `docs/qa-policy-SKILL.md`. If a threshold should change, that is a `config.py`
 change in the **SeeStar-AI session** — never a UI constant.
 
-Current defaults, for display context only (eccentricity REJECT ≥ 0.575 /
-MARGINAL 0.42–0.575; FWHM REJECT > median+1.5σ / MARGINAL +1.0–1.5σ; SNR REJECT
-< median×0.5; star count REJECT < 50% of session median; scatter REJECT >
-median+2.0σ). Most are **session-relative**, not absolute — a chart axis that
+Current shape, for display context only (eccentricity REJECT ≥ 0.575 —
+the one fixed line — / MARGINAL at `min(max(median + 1.0σ, 0.42), 0.575)`;
+FWHM REJECT > median+1.5σ / MARGINAL +1.0–1.5σ; SNR REJECT < median×0.5; star
+count REJECT < 50% of session median; scatter REJECT > median+2.0σ / MARGINAL
+> median+1.0σ). Most are **session-relative**, not absolute — a chart axis that
 implies fixed cutoffs will misrepresent them.
+
+**Read the numbers off `summary.thresholds`, which `qa_tier2` returns with
+every report.** They differ per target and per night. The eccentricity MARGINAL
+line was a flat 0.42 until contract 1.1.0 and is now a floor under a
+session-derived value — a real recording of a good night has it at 0.4449, not
+0.42, and the flat constant graded 96.5% of that night MARGINAL. Contract 1.1.1
+guarantees the derived value is finite and never above the REJECT line, which
+is why `MetricChart` can draw both without checking their order.
 
 ## Every verdict stays traceable
 
@@ -53,6 +62,17 @@ and the UI should not smooth that into looking like a 1386-sub result.
 
 ## When the data isn't there
 
-There is currently **no read-only tool returning per-sub metric arrays**, and no
-read-only report getter. Don't fabricate a client-side approximation — hand the
-requirement back to the SeeStar-AI session.
+Per-sub metric arrays **do** arrive now — `qa_tier2` returns `subs[].metrics`
+(`star_count`, `fwhm`, `hfr`, `eccentricity`, `snr`, `background`,
+`scattered_light`, each nullable, with `metrics.error` when a sub could not be
+scored). Hand-back item 1 shipped 2026-07-31; this file said otherwise until
+2026-08-03.
+
+Every metric is nullable, so render an unscored sub as an unanalysed row — not
+as a zero, and not as a rejection.
+
+There is still **no read-only getter for an already-written report** (item 24),
+which is why the Review screen runs `qa_tier2` on demand and caches the result
+itself rather than reading one back. Don't fabricate a client-side
+approximation of anything that is genuinely missing — hand it back to the
+seestar-mcp session.
