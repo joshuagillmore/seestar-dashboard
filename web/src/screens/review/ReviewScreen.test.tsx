@@ -499,8 +499,15 @@ describe('adversarial-review regressions', () => {
       const call = (globalThis.fetch as unknown as { mock: { calls: [string, RequestInit?][] } })
         .mock.calls.find(([u]) => u.includes('qa_analysis_start'))
       expect(call).toBeDefined()
-      expect(call![1]?.method).toBe('POST')
-      expect((call![1]?.headers as Record<string, string>)['X-Seestar-Client']).toBeTruthy()
+      // Bind the init before indexing into it. `call![1]?.headers[...]` reads
+      // as safe and is not: the optional chain short-circuits to undefined and
+      // the index then throws a TypeError, which inside waitFor() is retried
+      // until timeout and surfaces as "timed out" rather than as the assertion
+      // that actually failed.
+      const init = call?.[1]
+      expect(init).toBeDefined()
+      expect(init!.method).toBe('POST')
+      expect((init!.headers as Record<string, string>)['X-Seestar-Client']).toBeTruthy()
     })
   })
 

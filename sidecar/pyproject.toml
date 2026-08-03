@@ -5,7 +5,11 @@ requires-python = ">=3.11,<3.13"
 dependencies = [
   "fastapi==0.121.2",
   "uvicorn==0.41.0",
-  "mcp[cli]==1.28.1",
+  # Base package, not mcp[cli]: the `cli` extra exists to install typer for
+  # the `mcp` command-line tool, which nothing here runs. We use
+  # ClientSession/StdioServerParameters/stdio_client, and tests/stub_mcp_
+  # server.py uses mcp.server.fastmcp — all of which are in the base package.
+  "mcp==1.28.1",
   "httpx==0.28.1",
   "python-dotenv==1.2.2",
 ]
