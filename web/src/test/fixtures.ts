@@ -62,10 +62,29 @@ export const lastStackFound = () => loadFixture('synthetic/last_stack_found')
 export const lastStackAbsent = () => loadFixture('synthetic/last_stack_absent')
 
 /** `/api/session_activity` also has no recorded fixture — hand-built to
- * mirror the three `origin` states `session_activity.py`'s own tests use as
- * worked examples: a tool with no dashboard route at all (`agent`), the
- * shared native tag both this dashboard and the agent can produce
+ * carry one of each `origin` state: our own traffic identified by its
+ * `client` (`console`, and deliberately under a `seestar.*` tag, the shape
+ * the old tag-matching classifier misread as the agent's), another client's
+ * (`agent`), a record written before the `client` field existed
  * (`ambiguous`), and a line that failed to parse (`unknown`, every field
  * null). See schemas.ts's own doc comment on the honesty constraint this
  * exists under. */
 export const sessionActivity = () => loadFixture('synthetic/session_activity')
+
+/** `get_run_state`'s three states, kept apart on purpose.
+ *
+ * `recordedRunState` is the REAL recording and it caught `unknown` — a stamp
+ * older than the staleness window with the previous run's record still
+ * attached. That is the state worth having recorded, because it contradicts
+ * the shorthand in the note announcing the tool ("run: null when idle"): a
+ * consumer reading `run` as proof of a live session is wrong here.
+ *
+ * The other two could not be recorded on demand, so they are hand-built from
+ * `run_state.py`'s own dataclass rather than invented — and the distinctions
+ * they encode are the ones a test should be exercising: `targets_remaining`
+ * is PRESENT on an active run and OMITTED when not tracked (`[]` and "not
+ * tracked" mean opposite things), and an idle run has no `stamped_utc` key at
+ * all. Each file's `_comment` cites the source. */
+export const recordedRunState = () => loadFixture('get_run_state')
+export const runStateActive = () => loadFixture('synthetic/run_state.active')
+export const runStateIdle = () => loadFixture('synthetic/run_state.idle')

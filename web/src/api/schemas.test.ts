@@ -7,6 +7,7 @@ import {
   LivePreviewSchema,
   PlanTargetsSchema,
   ProjectsCombinedSchema,
+  RunStateSchema,
   SessionActivitySchema,
   SiteProfileSchema,
   StatusSchema,
@@ -27,7 +28,10 @@ import {
   recordedObservability,
   recordedPlan,
   recordedProjectsCombined,
+  recordedRunState,
   recordedSite,
+  runStateActive,
+  runStateIdle,
   recordedStatus,
   recordedTier1,
   recordedViewState,
@@ -257,5 +261,49 @@ describe('live-session schemas', () => {
     })
     expect(parsed.records).toEqual([])
     expect(parsed.source_configured).toBe(false)
+  })
+})
+
+/**
+ * `get_run_state`'s three states, each against the fixture that documents it.
+ *
+ * RunStateSchema had no fixture coverage at all: it was used in client.ts and
+ * nowhere else, while three payloads sat in fixtures/ carrying exactly the
+ * distinctions it has to get right. That is the gap this repo warns about in
+ * its own words — a schema nothing parses a recording through is a schema
+ * nobody has checked.
+ */
+describe('get_run_state states', () => {
+  it('parses the real recording, which caught `unknown` — and unknown KEEPS its run record', () => {
+    // The note announcing the tool said "run: null when idle", which is true
+    // of idle and misleading about unknown. A consumer reading `run` as proof
+    // of a live session is wrong here, and this is the recording that shows it.
+    const parsed = RunStateSchema.parse(recordedRunState())
+    expect(parsed.state).toBe('unknown')
+    expect(parsed.run).not.toBeNull()
+    expect(parsed.run?.session_start_utc).toBeTruthy()
+  })
+
+  it('distinguishes present-and-null from omitted on the real recording', () => {
+    const parsed = RunStateSchema.parse(recordedRunState())
+    expect(parsed.run?.slot_ends_utc).toBeNull()
+    expect(parsed.run?.park_deadline_utc).toBeNull()
+    expect(parsed.run?.targets_remaining).toBeUndefined()
+  })
+
+  it('parses an active run, where targets_remaining is PRESENT', () => {
+    // `[]` and "not tracked" mean opposite things, so present-vs-omitted is
+    // the distinction, not empty-vs-full.
+    const parsed = RunStateSchema.parse(runStateActive())
+    expect(parsed.state).toBe('active')
+    expect(parsed.run?.targets_remaining).toEqual(['M76', 'NGC7635'])
+    expect(parsed.run?.resolved_id).toBe('NGC7380')
+  })
+
+  it('parses idle, which carries no run and no stamped_utc at all', () => {
+    const parsed = RunStateSchema.parse(runStateIdle())
+    expect(parsed.state).toBe('idle')
+    expect(parsed.run).toBeNull()
+    expect(parsed.stamped_utc).toBeUndefined()
   })
 })

@@ -18,6 +18,8 @@ import {
   recordedStatus,
   recordedTier1,
   recordedViewState,
+  runStateActive as runStateActiveFixture,
+  runStateIdle,
   sessionActivity,
 } from '../../test/fixtures'
 import { formatStackDate, lastStackReasonLabel } from './lastStack'
@@ -535,27 +537,27 @@ async function waitForFetch(fragment: string): Promise<string> {
   return found!
 }
 
-describe('get_run_state', () => {
-  const runStateActive = (sessionStart: string) => ({
-    ok: true,
-    state: 'active',
-    stamped_utc: '2026-08-02T22:41:03.118402+00:00',
-    run: {
-      session_start_utc: sessionStart,
-      target: 'M27',
-      slot_ends_utc: null,
-      park_deadline_utc: null,
-      resolved_id: 'M27',
-      stamped_utc: '2026-08-02T22:41:03.118402+00:00',
-    },
-  })
+/** The recorded/hand-built payloads, with only the field under test varied.
+ *
+ * These used to be two near-identical object literals declared in two
+ * `describe` blocks, while `fixtures/synthetic/run_state.{active,idle}.json`
+ * sat unreferenced — and the literals were the weaker copy: they dropped
+ * `targets_remaining`, whose PRESENT-vs-OMITTED distinction is the thing
+ * those fixtures were built to pin (`[]` and "not tracked" mean opposite
+ * things). Starting from the fixture means a shape change upstream reaches
+ * these tests instead of stopping at a hand-written stand-in. */
+const runState = (state: string, sessionStart: string) => {
+  const base = runStateActiveFixture() as { run: Record<string, unknown> }
+  return { ...base, state, run: { ...base.run, session_start_utc: sessionStart } }
+}
 
+describe('get_run_state', () => {
   it('passes the scope’s real session start to the guardrail, not browser-open', async () => {
     // Handback item 20. This governs a hard stop, and the old behaviour —
     // timing from when the tab opened — UNDERSTATED elapsed time for anyone
     // who connected mid-session, which is the dangerous direction.
     const REAL_START = '2026-08-02T19:04:11.500000+00:00'
-    stubApi({ '/api/get_run_state': runStateActive(REAL_START) })
+    stubApi({ '/api/get_run_state': runState('active', REAL_START) })
 
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
 
@@ -567,7 +569,7 @@ describe('get_run_state', () => {
   it('falls back to since-I-started-watching when the run carries no start', async () => {
     // An idle scope driven by hand writes no run_state.json, so there is no
     // real start to use. The old fallback stays — narrower, not gone.
-    stubApi({ '/api/get_run_state': { ok: true, state: 'idle', run: null } })
+    stubApi({ '/api/get_run_state': runStateIdle() })
 
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
 
@@ -584,7 +586,7 @@ describe('get_run_state', () => {
     // call every tick. After the probe inversion, an active tick never calls
     // get_status at all, so asserting on it would pass or fail for reasons
     // unrelated to whether the device was checked.
-    stubApi({ '/api/get_run_state': { ok: true, state: 'idle', run: null } })
+    stubApi({ '/api/get_run_state': runStateIdle() })
 
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
 
@@ -607,19 +609,6 @@ describe('get_run_state', () => {
 })
 
 describe('run state is only trusted when active', () => {
-  const runState = (state: string, sessionStart: string) => ({
-    ok: true,
-    state,
-    stamped_utc: '2026-08-02T22:41:03.118402+00:00',
-    run: {
-      session_start_utc: sessionStart,
-      target: 'M27',
-      slot_ends_utc: null,
-      park_deadline_utc: null,
-      resolved_id: 'M27',
-      stamped_utc: '2026-08-02T22:41:03.118402+00:00',
-    },
-  })
 
   it('ignores session_start_utc from an unknown (stale) run record', async () => {
     // `unknown` retains the previous run's fields by design — a stamp too old
