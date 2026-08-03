@@ -13,6 +13,10 @@ import { AppShell } from '../../shell/AppShell'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
 import type { View } from '../../shell/view'
+import { MOBILE_QUERY } from '../../shell/breakpoints'
+import { MobileNav } from '../../shell/MobileNav'
+import { useMediaQuery } from '../../shell/useMediaQuery'
+import { MobileProjectsView } from './MobileProjectsView'
 import { ProjectCard } from './ProjectCard'
 import { setPendingReviewTarget } from '../review/pendingTarget'
 import { SessionHistory } from './SessionHistory'
@@ -128,6 +132,40 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
     ? `recommend_projects: ${topRecommendation.target_name} first`
     : 'recommend_projects: no recommendation available'
 
+  const isMobile = useMediaQuery(MOBILE_QUERY)
+  const headline = data
+    ? `${data.combined.count} projects · ${totalHours} collected` +
+      (needsDataCount > 0 ? ` · ${needsDataCount} need data` : '')
+    : 'Projects'
+
+  // Mobile — an extension, not a design deliverable (phone frames were
+  // specified for Tonight and Live only). Same shape as those two: no
+  // AppShell, MobileNav for reachability. See MobileProjectsView for what
+  // the row drops relative to the desktop card, and why.
+  if (isMobile) {
+    return (
+      <div className={styles.mobileRoot}>
+        <MobileNav view={view} onNavigate={onNavigate} />
+        {error && (
+          <div className={styles.error} role="alert">
+            {error}
+          </div>
+        )}
+        {data && (
+          <MobileProjectsView
+            projects={merged}
+            headline={headline}
+            qa={data.qa}
+            onOpenQa={(targetId) => {
+              setPendingReviewTarget(targetId)
+              onNavigate('review')
+            }}
+          />
+        )}
+      </div>
+    )
+  }
+
   return (
     <AppShell
       topBar={<TopBar site={site} replay={health?.replay ?? false} />}
@@ -148,10 +186,7 @@ export function ProjectsScreen({ view, onNavigate, site, health }: ProjectsScree
           <div>
             <div className={styles.eyebrow}>list_projects · multi-night integration</div>
             <h1 className={styles.heading}>
-              {data
-                ? `${data.combined.count} projects · ${totalHours} collected` +
-                  (needsDataCount > 0 ? ` · ${needsDataCount} need data` : '')
-                : 'Projects'}
+              {headline}
             </h1>
           </div>
           {data && (
