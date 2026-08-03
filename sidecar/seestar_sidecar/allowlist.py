@@ -117,10 +117,15 @@ NO_DIRECT_ROUTE_TOOLS = frozenset({"qa_tier2"})
 #: directly off disk — read-only in the strict sense (never writes, rotates,
 #: truncates or locks a file the server itself is actively appending to; see
 #: session_activity.py). No MCP tool by this name exists either. Each
-#: returned record is classified agent/ambiguous/unknown (hand-back item 10:
-#: there is no client field in provenance.jsonl) — see session_activity.py's
-#: module docstring for why that classification is deliberately NOT a
-#: mechanical function of ALLOWED_TOOLS's tool-name strings alone.
+#: returned record is classified agent/ambiguous/unknown — see
+#: session_activity.py's module docstring for why that classification is
+#: deliberately NOT a mechanical function of ALLOWED_TOOLS's tool-name
+#: strings alone. NOTE (2026-08-03): that classifier now rests on a false
+#: premise. Hand-back item 10 has landed — every provenance record carries
+#: `client`, and ours reads "console" — so the tag-matching heuristic is both
+#: unnecessary and, since the `alpaca.put.action` tag it keys on is no longer
+#: emitted, wrong. Nothing here changes until the classifier is rewritten to
+#: read `client`; this note exists so the next reader does not trust it.
 #:
 #: "qa_targets" / "qa_analysis_start" / "qa_analysis_status" (slice 4,
 #: Review & QA screen — see docs/superpowers/specs/
@@ -132,12 +137,22 @@ NO_DIRECT_ROUTE_TOOLS = frozenset({"qa_tier2"})
 #: request handler (see NO_DIRECT_ROUTE_TOOLS above for why there is no
 #: bare `/api/qa_tier2`).
 #:
-#: "qa_analysis_start" is the one route in this app whose GET has a
-#: deliberate, expensive side effect (kicking off a multi-minute analysis)
-#: rather than being purely a read — the same precedent target_image's GET
-#: already sets for a cache-populating network fetch (see imagery.py). It is
-#: idempotent per target: a job already running, or a job/cache hit for the
-#: CURRENT sub set, is returned as-is, never re-run (see qa_analysis.
+#: "qa_analysis_start" is the one route in this app with a deliberate,
+#: expensive side effect (kicking off a multi-minute analysis) rather than
+#: being purely a read. **It is POST, and the method is part of the
+#: guarantee** — it began as a GET, on the precedent target_image's GET sets
+#: for a cache-populating network fetch (see imagery.py), and that was wrong:
+#: a bare `<img src="…/qa_analysis_start?target=M31">` on any page the user
+#: happened to have open could spawn minutes of CPU here. CORS does not stop
+#: the request being sent, only the response being read, and per-target
+#: idempotency is no defence when target ids are guessable. It now also
+#: requires the `x-seestar-client` header and checks Origin (see routes.
+#: _reject_untrusted_caller). test_allowlist.py declares this path's method
+#: set literally, so turning it back into a GET fails the invariant rather
+#: than quietly widening the surface.
+#:
+#: It is idempotent per target: a job already running, or a job/cache hit for
+#: the CURRENT sub set, is returned as-is, never re-run (see qa_analysis.
 #: start_analysis()). It is also never called on a page load — only from an
 #: explicit user action on the client, per CLAUDE.md and the spec's "Do not
 #: start an analysis on a page load, ever."
