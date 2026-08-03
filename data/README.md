@@ -2,9 +2,27 @@
 
 An extended deep-sky-object catalogue for the observing planner, generated from
 OpenNGC, plus a small alias index and two manually-sourced objects OpenNGC
-doesn't cover. This directory is **data and its generator only** — nothing
-here is consumed yet; wiring it into `seestar-mcp`'s planner is separate,
-hand-back work (see `handback-to-seestar-ai.md` at the repo root).
+doesn't cover.
+
+This directory is **data and its generator only** — no code here is imported by
+anything. The two JSON files, however, **are** read at runtime: the sidecar
+loads them through `seestar_sidecar/catalog.py` (`DEFAULT_CATALOG_PATH` /
+`DEFAULT_ALIASES_PATH`, resolved relative to the repo root) so that
+`projects_union.py` can turn a target id into a catalogue record and hand it to
+`integration_goal.suggest_integration_goal()`, and so `imagery.py` can find a
+target's coordinates for a survey cutout. The alias index is what makes `C33`
+and `NGC2244` resolve at all.
+
+`catalog.py` duplicates `build_catalogue.py`'s `normalise_alias()` rather than
+importing it, precisely because `data/` is a generator directory and not a
+package the sidecar depends on — the two must be kept in step by hand, which
+`sidecar/tests/test_catalog.py` checks against known transforms.
+
+Wiring the catalogue into **`seestar-mcp`'s own planner** is the part that is
+still outstanding, and it is hand-back work — see
+[`docs/handback-to-seestar-ai.md`](../docs/handback-to-seestar-ai.md) item 11,
+which also records why the catalogue must not be adopted there without
+vectorising the observability computation first.
 
 ## Files
 
