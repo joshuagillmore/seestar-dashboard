@@ -1,0 +1,149 @@
+.root { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-fainter);
+}
+
+.heading {
+  margin: 2px 0 0;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.15;
+  color: var(--text-primary);
+}
+
+/* A native select rather than a rebuilt list: on a phone this gets the
+   platform's own picker, which is better than anything reimplemented here,
+   and it collapses twenty-two targets into one control. */
+.pickerLabel { display: flex; flex-direction: column; gap: 5px; }
+
+.pickerCaption {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-fainter);
+}
+
+.picker {
+  width: 100%;
+  /* 44px is the minimum comfortable touch target — the same floor MobileNav
+     uses. */
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--border-quiet);
+  border-radius: var(--radius-control);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.state {
+  padding: 16px;
+  border: 1px solid var(--border-quiet);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+}
+
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+
+.tile { padding: 9px 10px; background: var(--bg-cell); border-radius: 8px; min-width: 0; }
+
+.tileLabel {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-fainter);
+}
+
+.tileValue {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.2;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.tileValue.pass { color: var(--pass); }
+.tileValue.marginal { color: var(--marginal); }
+
+.tileSub { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dimmer); }
+
+/* The desktop table's seven columns cannot be read at this width, so each
+   sub becomes a card. */
+.subs { display: flex; flex-direction: column; gap: 7px; }
+
+.sub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 11px;
+  border: 1px solid var(--border-faint);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.subHead { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+.badge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: var(--radius-chip);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.badge.pass { background: var(--pass-bg); color: var(--pass); }
+.badge.marginal { background: var(--marginal-bg); color: var(--marginal); }
+.badge.reject { background: var(--reject-bg); color: var(--reject); }
+.badge.unknown,
+.badge.unanalysed { background: var(--neutral-tag-bg); color: var(--text-dimmer); }
+
+/* `dir="rtl"` on the element truncates from the LEFT, keeping the timestamp
+   that actually distinguishes one sub from the next. */
+.subName {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.reason {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dimmer);
+}
+
+.more {
+  margin: 2px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}

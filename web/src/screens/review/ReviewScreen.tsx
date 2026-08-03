@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import type { Health, QaSubVerdict, SiteProfile } from '../../api/schemas'
 import { AppShell } from '../../shell/AppShell'
+import { MOBILE_QUERY } from '../../shell/breakpoints'
+import { MobileNav } from '../../shell/MobileNav'
+import { useMediaQuery } from '../../shell/useMediaQuery'
+import { MobileReviewView } from './MobileReviewView'
 import { Sidebar } from '../../shell/Sidebar'
 import { TopBar } from '../../shell/TopBar'
 import type { View } from '../../shell/view'
@@ -95,6 +99,7 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
   // another's heading and requesting an image URL for a sub that target does
   // not contain. Keyed this way, a mismatch simply renders nothing.
   const [openSub, setOpenSub] = useState<{ targetId: string; sub: QaSubVerdict } | null>(null)
+  const isMobile = useMediaQuery(MOBILE_QUERY)
 
   const selectedTarget = targets?.targets.find((t) => t.target_id === selected) ?? null
   // Narrowed once, here, so the render below never has to re-test the union.
@@ -103,6 +108,64 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
   const finished =
     status != null && (status.status === 'complete' || status.status === 'stale') ? status : null
   const report = finished?.report
+
+  // Mobile — not in the design handoff (phone frames were specified for
+  // Tonight and Live only), so this is an extension. Same shape as those two:
+  // skip AppShell entirely rather than squeezing a 300px target picker and a
+  // seven-column table into a phone viewport, and use MobileNav to stay
+  // reachable. See MobileReviewView for what it drops and why.
+  if (isMobile) {
+    return (
+      <div className={styles.mobileRoot}>
+        <MobileNav view={view} onNavigate={onNavigate} />
+        {phase === 'loading' && <div className={styles.skeleton} />}
+        {phase === 'error' && (
+          <div className={styles.state}>
+            <p className={styles.stateText}>
+              Could not read the archive listing.{error ? ` ${error}` : ''}
+            </p>
+          </div>
+        )}
+        {phase === 'ready' && targets && (
+          <MobileReviewView
+            targets={targets.targets}
+            selected={selected}
+            onSelect={select}
+            summary={report?.summary ?? null}
+            displayName={selectedTarget?.display_name ?? null}
+            state={
+              selected == null ? (
+                <p className={styles.stateText}>
+                  Pick a target to see its analysis. Nothing runs until you ask for it.
+                </p>
+              ) : status?.status === 'running' ? (
+                <p className={styles.stateText}>
+                  Analysing {selectedTarget?.sub_count ?? 0} subs — {status.elapsed_seconds}s
+                  elapsed.
+                </p>
+              ) : (
+                <>
+                  <p className={styles.stateText}>
+                    {status?.status === 'failed'
+                      ? `The analysis failed.${status.error ? ` ${status.error}` : ''}`
+                      : 'No analysis yet for this target. That is the ordinary state of a fresh archive, not a problem.'}
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.action}
+                    onClick={analyse}
+                    disabled={starting}
+                  >
+                    {starting ? 'Starting…' : `Analyse ${selectedTarget?.sub_count ?? 0} subs`}
+                  </button>
+                </>
+              )
+            }
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <AppShell

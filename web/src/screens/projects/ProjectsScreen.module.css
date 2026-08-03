@@ -14,3 +14,7 @@
 .skeleton { height: 96px; border-radius: var(--radius-card); background: var(--bg-card-sunken); border: 1px solid var(--border-quiet); }
 .error { padding: 14px 16px; border: 1px solid var(--reject-btn-border); border-radius: var(--radius-card); background: var(--reject-btn-bg); color: var(--reject); font-family: var(--font-sans); font-size: 13px; }
 .empty { padding: 16px; border: 1px solid var(--border-quiet); border-radius: var(--radius-card); background: var(--bg-card-sunken); color: var(--text-dimmer); font-family: var(--font-sans); font-size: 12.5px; }
+
+/* Mobile drops AppShell entirely — no sidebar or top bar squeezed into a
+   phone viewport. Same treatment as Tonight, Live and Review. */
+.mobileRoot { min-height: 100vh; background: var(--bg-root); padding: 8px 16px 0; overflow-y: auto; }

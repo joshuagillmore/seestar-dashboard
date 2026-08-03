@@ -1,0 +1,71 @@
+.root { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-fainter);
+}
+
+.heading {
+  margin: 2px 0 0;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+.rows { display: flex; flex-direction: column; gap: 8px; }
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-faint);
+  border-radius: 9px;
+  background: var(--bg-card);
+}
+
+.head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.name {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.tag {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: var(--radius-chip);
+  background: var(--neutral-tag-bg);
+  color: var(--text-dimmer);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+.tag.complete { background: var(--pass-bg); color: var(--pass); }
+.tag.needsData { background: var(--marginal-bg); color: var(--marginal); }
+
+.figures { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+
+.hours {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 19px;
+  color: var(--text-primary);
+}
+
+.goal { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dimmer); }
+
+/* Collected-vs-goal. The quality bar under it is a separate component and a
+   separate question — how much of that time is keepable. */
+.track { height: 4px; border-radius: 2px; background: var(--chart-rail); overflow: hidden; }
+.fill { height: 100%; border-radius: 2px; background: var(--accent); }
+.fill.complete { background: var(--pass); }
