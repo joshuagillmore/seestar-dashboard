@@ -1,5 +1,6 @@
 import { formatHours, goalLabel, goalProgressPct } from '../../api/integrationGoal'
-import type { IntegrationGoal, PlanTarget } from '../../api/schemas'
+import type { IntegrationGoal, PlanTarget, QaVerdictCounts } from '../../api/schemas'
+import { QualityBar } from '../../ui/QualityBar'
 import { TargetThumb } from '../../ui/TargetThumb'
 import { targetTypeLabel } from './targetType'
 import { localHhMm, parse, zoneLabel } from './timeline'
@@ -37,9 +38,15 @@ export function PlanCard({
   target,
   progress = null,
   onOpenQa,
+  verdicts,
 }: {
   target: PlanTarget
   progress?: PlanCardProgress | null
+  /** Per-sub QA verdict counts for this target, when one has been analysed.
+   * Absent for a target never shot or never scored — the bar is then omitted
+   * entirely rather than rendered empty, because an empty bar reads as
+   * "nothing passed" when the truth is that nobody measured. */
+  verdicts?: QaVerdictCounts
   /** Open this target's Review & QA report. Passed ONLY when the target has
    * subs on disk — see TonightScreen, which decides that from the same
    * archive scan the Review picker is built from. Absent means there is
@@ -123,6 +130,13 @@ export function PlanCard({
               />
             )}
           </div>
+          {/* How much of that time is actually keepable — the question the
+              hours bar above cannot answer. Same component and same three
+              tones as Projects and the QA screen, so a bar here means what a
+              bar there means. Not clickable on this screen: Detail below is
+              already the route to the report, and two affordances to one
+              place on one card is noise. */}
+          {verdicts && <QualityBar verdicts={verdicts} />}
         </div>
       )}
 

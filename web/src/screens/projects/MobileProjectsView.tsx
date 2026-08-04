@@ -1,5 +1,5 @@
 import type { QaTargets } from '../../api/schemas'
-import { QualityBar } from './QualityBar'
+import { QualityBar } from '../../ui/QualityBar'
 import { goalLabel } from '../../api/integrationGoal'
 import { progressPct, projectStatus, type MergedProject } from './projects'
 import styles from './MobileProjectsView.module.css'

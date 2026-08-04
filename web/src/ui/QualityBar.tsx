@@ -1,4 +1,4 @@
-import type { QaVerdictCounts } from '../../api/schemas'
+import type { QaVerdictCounts } from '../api/schemas'
 import styles from './QualityBar.module.css'
 
 export interface QualityBarProps {

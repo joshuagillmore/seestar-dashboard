@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { goalLabel as describeGoalLabel, hasNumericGoal } from '../../api/integrationGoal'
 import type { QaVerdictCounts } from '../../api/schemas'
 import { TargetThumb } from '../../ui/TargetThumb'
-import { QualityBar } from './QualityBar'
+import { QualityBar } from '../../ui/QualityBar'
 import { isGoalDoubled, toggleGoalDoubled } from './doubling'
 import {
   formatHours,
