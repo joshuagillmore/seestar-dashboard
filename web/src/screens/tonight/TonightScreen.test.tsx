@@ -291,3 +291,78 @@ describe('TonightScreen', () => {
     })
   })
 })
+
+describe('Detail hands a target to Review & QA', () => {
+  /** The plan fixture's targets against a projects_combined response we
+   * control: the first has subs on disk, the second has store minutes only
+   * (a session the server logged with no local FITS — nothing to score). */
+  const combinedFor = (withArchive: string, storeOnly: string) => ({
+    ok: true,
+    count: 2,
+    totals: { store_minutes: 60, archive_minutes: 120, total_minutes: 180 },
+    projects: [
+      { target_id: withArchive, target_name: withArchive, store_minutes: 0, archive_minutes: 120,
+        sources: ['archive'], nights: [], total_minutes: 120, goal: null },
+      { target_id: storeOnly, target_name: storeOnly, store_minutes: 60, archive_minutes: 0,
+        sources: ['store'], nights: [], total_minutes: 60, goal: null },
+    ],
+  })
+
+  /** The Detail button on the CARD for `targetId`.
+   *
+   * Scoped through `<article>` deliberately: the id also appears as a lane
+   * name in the sweet-band timeline, so a bare getByText matches twice and
+   * throws — the multiple-match trap this repo has hit before. */
+  const cardFor = (targetId: string) => {
+    const card = screen
+      .getAllByText(targetId)
+      .map((el) => el.closest('article'))
+      .find((el): el is HTMLElement => el != null)
+    if (!card) throw new Error(`no plan card for ${targetId}`)
+    return card
+  }
+
+  const detailFor = (targetId: string) => {
+    const btn = [...cardFor(targetId).querySelectorAll('button')].find((b) => b.textContent === 'Detail')
+    if (!btn) throw new Error(`no Detail button for ${targetId}`)
+    return btn
+  }
+
+  it('enables Detail only for targets with subs on disk, and navigates with the target', async () => {
+    const [a, b] = plan.targets
+    stubApi({ '/api/projects_combined': combinedFor(a.id, b.id) })
+    const onNavigate = vi.fn()
+    stubMatchMedia(false)
+
+    render(<TonightScreen view="tonight" onNavigate={onNavigate} site={site} health={notReplaying} />)
+    await waitFor(() => expect(detailFor(a.id)).toBeEnabled())
+
+    // store_minutes alone is not reviewable — qa_targets is built from the
+    // archive scan, so the Review picker would not contain this target.
+    expect(detailFor(b.id)).toBeDisabled()
+
+    fireEvent.click(detailFor(a.id))
+    expect(onNavigate).toHaveBeenCalledWith('review')
+    expect(window.sessionStorage.getItem('seestar.review.pendingTarget')).toBe(JSON.stringify(a.id))
+  })
+
+  it('leaves Detail disabled for every target when projects_combined fails', async () => {
+    // The progress fetch is deliberately non-fatal (it degrades the cards
+    // rather than the screen), so a failure must not leave Detail looking
+    // clickable and doing nothing — the exact bug this replaced.
+    const [a] = plan.targets
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === '/api/projects_combined') return { ok: false, status: 502, json: async () => ({ ok: false, error: 'down' }) }
+      const bodies: Record<string, unknown> = {
+        '/api/assess_conditions': recordedConditions(),
+        '/api/plan_targets?limit=12': recordedPlan(),
+      }
+      return { ok: true, status: 200, json: async () => bodies[url] }
+    }))
+    stubMatchMedia(false)
+
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(cardFor(a.id)).toBeInTheDocument())
+    expect(detailFor(a.id)).toBeDisabled()
+  })
+})
