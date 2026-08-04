@@ -112,7 +112,20 @@
 
 .fill { height: 100%; border-radius: 3px; }
 .fillProgress { background: var(--accent); }
-.fillComplete { background: var(--pass); }
+/* Accent-family, NOT `--pass`, and that is the whole point.
+   The QualityBar sits immediately below this one — same width, 1px shorter,
+   zero gap — and there `--pass` means "these subs cleared QA". This bar
+   answers a different question: whether enough HOURS have been collected.
+   Painting a full progress bar in the verdict green put those two meanings
+   in touching 5-6px strips, and it did it in exactly the case the README
+   says this screen exists to expose: M42 renders 100% complete above a
+   quality bar that is 38% reject, and at a glance the pair reads as good
+   news. Goal-completion is not a verdict, so it does not get a verdict
+   colour — tokens.css states the rule in the other direction ("accent is
+   never a verdict") and this is the same principle.
+   The brighter accent still distinguishes complete from in-progress, which
+   ProjectCard.test.tsx requires ("must not read as still in-progress"). */
+.fillComplete { background: var(--accent-text); }
 
 /* Sits inside the card's own rounded box (see .cardWrap) but is still never
    nested inside the card-select button — a small corner affordance layered

@@ -75,13 +75,25 @@ export function MetricChart({
     <div className={styles.chart}>
       <div className={styles.eyebrow}>{eyebrow}</div>
       <div className={styles.plot} style={{ height: `${height}px` }}>
+        {/* Labels are pinned to opposite ends by TONE, not by index: marginal
+            left, reject right. Two cutoffs can sit arbitrarily close together
+            — on a real M 42 report they are 0.02 apart on a domain of ~0.6, so
+            both labels landed in the same few pixels at the right edge and
+            neither could be read. Staggering them vertically instead would
+            detach a label from the line it names, which is worse than
+            crowding. Charts with a single cutoff all use tone `reject`
+            (`THRESHOLD_FIELDS` in qa.ts), so they are unaffected. */}
         {thresholds.map((line) => (
           <div
             key={line.label}
             className={`${styles.threshold} ${styles[`line_${line.tone}`]}`}
             style={{ bottom: `${(line.value / domain) * 100}%` }}
           >
-            <span className={styles.thresholdLabel}>{line.label}</span>
+            <span
+              className={`${styles.thresholdLabel} ${line.tone === 'marginal' ? styles.labelStart : ''}`}
+            >
+              {line.label}
+            </span>
           </div>
         ))}
 

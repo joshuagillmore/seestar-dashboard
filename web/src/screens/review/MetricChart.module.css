@@ -46,6 +46,10 @@
   white-space: nowrap;
 }
 
+/* The marginal cutoff's label, moved to the opposite end so it cannot collide
+   with the reject one when the two values are close — see MetricChart.tsx. */
+.labelStart { right: auto; left: 0; }
+
 .line_reject .thresholdLabel { color: var(--reject); }
 .line_marginal .thresholdLabel { color: var(--marginal); }
 
