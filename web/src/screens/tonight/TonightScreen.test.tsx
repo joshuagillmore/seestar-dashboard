@@ -252,10 +252,17 @@ describe('TonightScreen', () => {
       expect(screen.queryByTestId('fact-row')).not.toBeInTheDocument()
       expect(screen.queryByText(/sweet-band windows/i)).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Hand to run-session/ })).not.toBeInTheDocument()
-      // No Sidebar nav (no Projects/Review rows, no site profile block), no
-      // TopBar wordmark — MobileNav's own two tabs are the one exception.
-      expect(screen.queryByRole('button', { name: /Projects/ })).not.toBeInTheDocument()
+      // No Sidebar, no TopBar wordmark — the only nav present is MobileNav.
+      //
+      // This used to assert "no button named /Projects/" as a stand-in for
+      // "the Sidebar is gone", and broke the moment MobileNav legitimately
+      // gained a Projects tab. A proxy for the property, not the property:
+      // assert the chrome itself is absent and that the surviving nav is the
+      // mobile one, which stays true however many tabs it carries.
       expect(screen.queryByText('seestar')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Site profile/i)).not.toBeInTheDocument()
+      const navs = screen.getAllByRole('navigation')
+      expect(navs.map((n) => n.getAttribute('aria-label'))).toEqual(['Mobile navigation'])
       expect(screen.getByRole('button', { name: 'Tonight' })).toHaveAttribute('aria-current', 'page')
       expect(screen.getByRole('button', { name: 'Live' })).toBeInTheDocument()
     })
