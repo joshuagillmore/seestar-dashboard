@@ -66,7 +66,15 @@
   letter-spacing: 0.06em;
 }
 
-.status.pass { color: var(--pass); }
+/* A report EXISTS. Deliberately not `--pass`: that token is the PASS verdict,
+   and this row says nothing about whether the subs passed — a 90%-REJECT
+   target is just as "analysed" as a clean one. Ready-vs-not is carried by
+   brightness against `.idle` below, which cannot be misread as a verdict the
+   way a green chip on this screen can. See statusLabel() in TargetPicker.tsx. */
+.status.ready { color: var(--text-secondary); }
+/* These two keep the verdict palette on purpose: their valence matches it
+   (amber = wants attention, red = something went wrong) and both are
+   conventional well beyond this app's PASS/MARGINAL/REJECT vocabulary. */
 .status.marginal { color: var(--marginal); }
 .status.reject { color: var(--reject); }
 .status.running { color: var(--accent); }

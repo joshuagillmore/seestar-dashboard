@@ -9,11 +9,20 @@ export interface TargetPickerProps {
 
 /** What each status means to someone standing in front of the screen. The
  * words matter: "not analysed" is the ordinary state of a fresh archive, not
- * a failure, and must not read like one. */
+ * a failure, and must not read like one.
+ *
+ * These are JOB states — does a report exist, is one running, did one error —
+ * and none of them is a statement about sub quality. `complete` used to carry
+ * the tone `pass`, which painted it in `--pass`, the PASS verdict green, on
+ * the one screen whose whole vocabulary is PASS/MARGINAL/REJECT. Every
+ * analysed row read as a good result: a target that scored 90% REJECT still
+ * showed green. It is `ready` now, and toned by brightness rather than hue —
+ * bright means a report exists, faint means it does not, and neither claims
+ * anything about what the report says. */
 function statusLabel(target: QaTarget): { text: string; tone: string } {
   switch (target.status) {
     case 'complete':
-      return { text: 'analysed', tone: 'pass' }
+      return { text: 'analysed', tone: 'ready' }
     case 'stale':
       return { text: 'stale', tone: 'marginal' }
     case 'running':

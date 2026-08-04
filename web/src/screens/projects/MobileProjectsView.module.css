@@ -65,7 +65,11 @@
 .goal { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-dimmer); }
 
 /* Collected-vs-goal. The quality bar under it is a separate component and a
-   separate question — how much of that time is keepable. */
+   separate question — how much of that time is keepable. Which is exactly why
+   the complete state is accent-family and not `--pass`: that token means "this
+   sub cleared QA" on the bar directly below, and on a phone the two are closer
+   together than anywhere else. See ProjectCard.module.css's .fillComplete for
+   the full reasoning. */
 .track { height: 4px; border-radius: 2px; background: var(--chart-rail); overflow: hidden; }
 .fill { height: 100%; border-radius: 2px; background: var(--accent); }
-.fill.complete { background: var(--pass); }
+.fill.complete { background: var(--accent-text); }
