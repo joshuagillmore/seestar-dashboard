@@ -3,15 +3,33 @@ import { join } from 'node:path'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { MobileNav } from './MobileNav'
+import { VIEWS } from './view'
 
 describe('MobileNav', () => {
-  it('renders exactly the two mobile screens — no Review, no Projects, neither of which has a mobile layout', () => {
+  // This replaced a test that asserted the opposite — "renders exactly the two
+  // mobile screens, no Review, no Projects" — which was true when written and
+  // then quietly cemented a bug: MobileReviewView and MobileProjectsView were
+  // built later and had no way in, on the only device they exist for. The old
+  // assertion would have stayed green forever. Enumerating VIEWS instead means
+  // a new view fails here until the nav can reach it.
+  it('can reach every view the app has, not a hardcoded subset', () => {
+    const onNavigate = vi.fn()
+    render(<MobileNav view="tonight" onNavigate={onNavigate} />)
+
+    const tabs = screen.getAllByRole('button')
+    expect(tabs).toHaveLength(VIEWS.length)
+
+    tabs.forEach((tab) => fireEvent.click(tab))
+    expect(new Set(onNavigate.mock.calls.map((c) => c[0]))).toEqual(new Set(VIEWS))
+  })
+
+  it('labels every tab with something short enough not to wrap at 393px', () => {
+    // Four tabs share ~361px of usable width (393 minus the design's 16px
+    // side padding), so ~84px each. Long forms like "Review & QA" clip.
     render(<MobileNav view="tonight" onNavigate={vi.fn()} />)
-    expect(screen.getByRole('button', { name: 'Tonight' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Live' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Review/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Projects/i })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(2)
+    for (const tab of screen.getAllByRole('button')) {
+      expect(tab.textContent!.length).toBeLessThanOrEqual(9)
+    }
   })
 
   it('marks whichever screen is current with aria-current, not the other one', () => {

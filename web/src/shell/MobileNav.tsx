@@ -1,9 +1,15 @@
 import type { View } from './view'
 import styles from './MobileNav.module.css'
 
+/** Every view with a mobile layout — which, since Review & QA and Projects
+ * got phone layouts of their own, is all four. Labels are the short forms:
+ * at 393px the four tabs get ~84px each, and "Review & QA"/"Tonight's plan"
+ * would wrap or clip where "Review"/"Tonight" do not. */
 const ITEMS: { view: View; label: string }[] = [
   { view: 'tonight', label: 'Tonight' },
   { view: 'live', label: 'Live' },
+  { view: 'review', label: 'Review' },
+  { view: 'projects', label: 'Projects' },
 ]
 
 export interface MobileNavProps {
@@ -21,12 +27,25 @@ export interface MobileNavProps {
  * `onNavigate` — without this, the two mobile screens built from that
  * section would be mutually unreachable on a real phone.
  *
- * Deliberately NOT a port of `Sidebar`: no site-profile block, no verdict/
- * live status dots, no disabled Review/Projects rows for screens that have
- * no mobile layout at all (design README.md: "Mobile covers exactly two
- * screens"). Two targets, sized to the design's own 44px minimum
- * (README.md:723-724) — the smallest thing that makes both screens
- * reachable, nothing more.
+ * Deliberately NOT a port of `Sidebar`: no site-profile block, no verdict or
+ * live status dots. Just the targets, sized to the design's own 44px minimum
+ * (README.md:723-724).
+ *
+ * **It carried two items until 2026-08-04, and that had become a bug.** The
+ * original two matched the design, which specifies phone frames for Tonight
+ * and Live only — but `MobileReviewView` and `MobileProjectsView` were built
+ * afterwards, and nothing was ever added here to reach them. `App` holds
+ * `view` in plain `useState` with no router and no persistence, so a phone
+ * lands on Tonight and could only ever get to Live: two finished, tested
+ * screens were unreachable on the one device they exist for. They rendered
+ * only if you narrowed a desktop window that was already on them.
+ *
+ * The lesson for the next screen: a mobile layout is not done when it
+ * renders, it is done when something navigates to it. Adding a view to
+ * `View` and a `MobileXView` component leaves this file as the missing half,
+ * and nothing in the type system or the test suite notices — which is why
+ * MobileNav.test.tsx now asserts coverage of the whole `View` union rather
+ * than a hardcoded list of tabs.
  */
 export function MobileNav({ view, onNavigate }: MobileNavProps) {
   return (
