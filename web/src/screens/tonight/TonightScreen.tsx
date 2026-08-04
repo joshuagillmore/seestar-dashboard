@@ -9,6 +9,7 @@ import { TopBar } from '../../shell/TopBar'
 import { AppShell } from '../../shell/AppShell'
 import { useMediaQuery } from '../../shell/useMediaQuery'
 import type { View } from '../../shell/view'
+import { setPendingReviewTarget } from '../review/pendingTarget'
 import { MobileTonightView } from './MobileTonightView'
 import { PlanCard } from './PlanCard'
 import { shortlistOrderLabel } from './shortlist'
@@ -19,6 +20,23 @@ import styles from './TonightScreen.module.css'
 interface Data {
   conditions: Conditions
   plan: PlanTargets
+}
+
+/**
+ * Is there anything for Review & QA to show for this target?
+ *
+ * `archive_minutes > 0` means the archive scan found subs on disk, and that
+ * same scan is what `/api/qa_targets` builds the Review picker from — so this
+ * is the picker's own membership test, not a proxy for it. `store_minutes`
+ * deliberately does NOT count: a session logged by the server with no FITS
+ * locally has nothing to score, and `useQaReview` would drop the handoff.
+ *
+ * An absent entry is `false` for the ordinary reason — the planner suggests
+ * targets you have never shot, and most of a night's shortlist has no archive
+ * at all.
+ */
+function canReview(entry: ProjectsCombinedEntry | undefined): boolean {
+  return entry != null && entry.archive_minutes > 0
 }
 
 export interface TonightScreenProps {
@@ -41,6 +59,14 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
   // it, so a failure here degrades every card to "no progress bar" instead
   // of taking down Tonight the way a conditions/plan failure does.
   const [progressById, setProgressById] = useState<Map<string, ProjectsCombinedEntry>>(new Map())
+
+  // Same handoff the Projects grid's quality bar uses: park the target in
+  // sessionStorage, then navigate. There is no router to carry it — see
+  // pendingTarget.ts, which also explains why it is consumed once.
+  const openQa = (targetId: string) => {
+    setPendingReviewTarget(targetId)
+    onNavigate('review')
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -187,6 +213,7 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
                         key={target.id}
                         target={target}
                         progress={entry ? { totalMinutes: entry.total_minutes, goal: entry.goal } : null}
+                        onOpenQa={canReview(entry) ? () => openQa(target.id) : undefined}
                       />
                     )
                   })}

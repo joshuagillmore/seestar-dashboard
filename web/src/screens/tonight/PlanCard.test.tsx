@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { PlanCard, type PlanCardProgress } from './PlanCard'
 import { targetTypeLabel } from './targetType'
 import { PlanTargetsSchema, type IntegrationGoal } from '../../api/schemas'
@@ -145,4 +145,41 @@ describe('PlanCard', () => {
       expect(css).toMatch(/\.secondary:hover\s*\{[^}]*color:\s*var\(--text-primary\)/)
     })
   })
+
+  describe('Detail', () => {
+    // Was a dead button for four slices: rendered, enabled, wired to nothing.
+    // It now opens the target's Review & QA report — but only when there is a
+    // report to open, which is the minority case on a planner shortlist.
+    it('opens the target on Review & QA when there are subs on disk', () => {
+      const onOpenQa = vi.fn()
+      render(<PlanCard target={target} onOpenQa={onOpenQa} />)
+
+      const detail = screen.getByRole('button', { name: 'Detail' })
+      expect(detail).toBeEnabled()
+      fireEvent.click(detail)
+
+      expect(onOpenQa).toHaveBeenCalledTimes(1)
+    })
+
+    it('disables itself, and says why, when the archive holds nothing', () => {
+      // The ordinary case: the planner suggests targets precisely because you
+      // have not shot them. Navigating anyway would land on Review with the
+      // handoff silently dropped (useQaReview only selects a target it can
+      // find), which reads as a broken button.
+      render(<PlanCard target={target} />)
+
+      const detail = screen.getByRole('button', { name: 'Detail' })
+      expect(detail).toBeDisabled()
+      expect(detail).toHaveAttribute('title', expect.stringContaining('nothing to review'))
+    })
+
+    it('names the target in both titles, so the tooltip is not generic', () => {
+      const { rerender } = render(<PlanCard target={target} onOpenQa={vi.fn()} />)
+      expect(screen.getByRole('button', { name: 'Detail' }).getAttribute('title')).toContain(target.id)
+
+      rerender(<PlanCard target={target} />)
+      expect(screen.getByRole('button', { name: 'Detail' }).getAttribute('title')).toContain(target.id)
+    })
+  })
+
 })

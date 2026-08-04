@@ -36,9 +36,17 @@ export interface PlanCardProgress {
 export function PlanCard({
   target,
   progress = null,
+  onOpenQa,
 }: {
   target: PlanTarget
   progress?: PlanCardProgress | null
+  /** Open this target's Review & QA report. Passed ONLY when the target has
+   * subs on disk — see TonightScreen, which decides that from the same
+   * archive scan the Review picker is built from. Absent means there is
+   * nothing to review, and Detail renders disabled rather than navigating to
+   * a screen that would silently ignore the target (useQaReview drops a
+   * pending target it cannot find, which would look like a dead button). */
+  onOpenQa?: () => void
 }) {
   const [from, to] = target.best_window_utc
   const reasons = target.reasons.filter((r) => !r.startsWith('best window '))
@@ -138,9 +146,22 @@ export function PlanCard({
         >
           Hand to run-session
         </button>
-        {/* Not wired yet, not forgotten: there is no detail screen in slice 1
-            for it to open. Revisit when a target-detail view exists. */}
-        <button className={styles.secondary}>Detail</button>
+        {/* Opens this target's report on Review & QA. Disabled — with the
+            reason on the button — when the archive holds no subs for it,
+            which is the ordinary case for a target the planner is suggesting
+            precisely because you have not shot it yet. */}
+        <button
+          className={styles.secondary}
+          onClick={onOpenQa}
+          disabled={!onOpenQa}
+          title={
+            onOpenQa
+              ? `Open ${target.id} on Review & QA`
+              : `No subs on disk for ${target.id} yet — nothing to review`
+          }
+        >
+          Detail
+        </button>
       </div>
     </article>
   )
