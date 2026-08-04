@@ -24,7 +24,16 @@
 .progressTrack { margin-top: 7px; height: 6px; border-radius: 3px; background: var(--bg-track); overflow: hidden; }
 .progressTrackEmpty { background: var(--chart-rail-empty); }
 .progressFill { height: 100%; border-radius: 3px; background: var(--accent); }
-.progressFillComplete { background: var(--pass); }
+/* Accent-family, NOT `--pass` — the third instance of the same category
+   error, after ProjectCard and MobileProjectsView. This bar means "enough
+   HOURS collected"; `--pass` means "this sub cleared QA". Nothing sits under
+   this one today so it never collided visually, but it was still the verdict
+   green making a non-verdict claim, and it would become the exact Projects
+   defect the moment a quality bar joined it on this card.
+   Unlabelled bars cannot share the verdict palette. Labelled chips can — the
+   word "complete" on `.tagComplete` carries the meaning and the colour only
+   reinforces it — which is why those are left alone. */
+.progressFillComplete { background: var(--accent-text); }
 
 .reasons { flex: 1; padding: 12px 15px; border-bottom: 1px solid var(--border-subtle); }
 .reasonList { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
