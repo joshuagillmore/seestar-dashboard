@@ -1154,6 +1154,84 @@ updated to match; only the controller method's copy was missed.
 
 ---
 
+## 27. A failing meteoblue key removes ALL weather, with no fallback to Open-Meteo
+
+**Found 2026-08-03**, live, when the Tonight banner read UNKNOWN and every weather field was
+absent on a cloudless night.
+
+`resolve_source()` (`planning/weather.py:449`) is:
+
+```python
+return MeteoblueSource(key) if key else OpenMeteoSource()
+```
+
+The choice is made on the key's **presence**, never on whether it works. `MeteoblueSource`
+catches `HTTPStatusError` and degrades to `_unknown(...)`, so when meteoblue answered
+
+```
+HTTP 429 {"error_message":"Available credits exceeded for this API key","error":true}
+```
+
+the assessment collapsed to `go: null`, `source: "unknown"`, `cloud_cover_pct: null`,
+`dew_risk: "unknown"`, `wind_kph: null`, `transparency: null`, `seeing: null`. Only the
+locally-computed moon and dark window survived.
+
+**A key that exists but fails is therefore worse than no key at all** — with the key removed,
+the same installation immediately returned `go: true`, `source: "open-meteo"`, cloud 0%, from
+the free key-less API that was reachable the whole time. Verified both ways on the same
+machine, minutes apart.
+
+**Asked for:** fall back to `OpenMeteoSource` when the meteoblue call fails, rather than
+returning `_unknown`. The fallback source already exists, needs no key, and was confirmed
+working for this site during the outage. A one-line `except` path recovers the entire weather
+block. Worth distinguishing "no weather anywhere" from "the paid provider is down" in
+`source` too, so a client can say which happened — right now both read `"unknown"`.
+
+**Workaround in place:** `SEESTAR_METEOBLUE_API_KEY` is commented out in that installation's
+`.env`, which routes through Open-Meteo. It must be re-enabled by hand when credits reset,
+and nothing will remind anyone.
+
+---
+
+## 28. `check_night_guardrails` fetches weather on every call, uncached — 951 fetches in 15 hours
+
+**Found 2026-08-03** while diagnosing item 27. This is what spent the credits.
+
+`check_night_guardrails` calls `assess_conditions_weather(site, dark, 0.0, api_key=...)` on
+**every invocation**, with no caching or minimum interval. Its own comment notes that
+"guardrails now run inside each slot, not just at target boundaries", which multiplied the
+call rate without changing the fetch behaviour.
+
+Measured from `data/provenance.jsonl`, calls that reach the weather API per day:
+
+| Day | Calls |
+|---|---|
+| 2026-07-28 | 16 |
+| 2026-07-29 | 4 |
+| 2026-07-30 | 54 |
+| **2026-07-31** | **984** |
+| 2026-08-01 | 17 |
+| 2026-08-02 | 11 |
+
+951 of that day's 984 were `check_night_guardrails`, at a **median gap of 60 seconds across a
+15.1-hour span** (03:17 → 18:24 UTC) — an autonomous run that kept polling roughly nine hours
+past local sunrise. That single day exhausted an 8,000,000-credit meteoblue allowance.
+
+Two things are wrong independently of the runaway:
+
+1. **The forecast is re-fetched every 60 seconds for data that changes hourly.** 951 identical
+   requests where ~15 would have carried the same information.
+2. **A guardrail whose job is to stop a run kept running for 15 hours.** Approaching dawn is
+   one of its own hard-stop conditions, so either the verdict was not being acted on or the
+   loop restarted itself. That part is yours to trace — we only see the call record.
+
+**Asked for:** cache the weather assessment inside the guardrail path with a sane TTL (the
+data is hourly; even 10 minutes cuts this by ~10x), and consider a floor on how often a
+guardrail check may hit a paid API at all. The dashboard does not call this tool in a loop —
+every one of those 951 calls was the agent's.
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
