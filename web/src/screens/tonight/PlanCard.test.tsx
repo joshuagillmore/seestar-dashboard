@@ -182,4 +182,29 @@ describe('PlanCard', () => {
     })
   })
 
+
+  describe('quality bar', () => {
+    const counts = { pass: 60, marginal: 10, reject: 30, unknown: 0, total: 100 }
+
+    it('shows how much of the captured time is keepable', () => {
+      // The hours bar says "you have 3.3 h of a 1.2 h goal". It cannot say
+      // that 30% of it is unusable. That is this bar's whole job.
+      render(<PlanCard target={target} progress={{ totalMinutes: 90, goal: goal() }} verdicts={counts} />)
+      expect(screen.getByTestId('quality-bar')).toBeInTheDocument()
+    })
+
+    it('renders NO bar for a target that was never analysed', () => {
+      // Absent, not empty. An empty bar reads as "nothing passed", when the
+      // truth is nobody measured.
+      render(<PlanCard target={target} progress={{ totalMinutes: 90, goal: goal() }} />)
+      expect(screen.queryByTestId('quality-bar')).not.toBeInTheDocument()
+    })
+
+    it('is not clickable here — Detail is the single route to the report', () => {
+      render(<PlanCard target={target} progress={{ totalMinutes: 90, goal: goal() }} verdicts={counts} />)
+      const bar = screen.getByTestId('quality-bar')
+      expect(bar.closest('button')).toBeNull()
+    })
+  })
+
 })

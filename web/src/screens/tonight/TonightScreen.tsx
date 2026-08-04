@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
-import { fetchConditions, fetchPlan, fetchProjectsCombined } from '../../api/client'
-import type { Conditions, Health, PlanTargets, ProjectsCombinedEntry, SiteProfile } from '../../api/schemas'
+import { fetchConditions, fetchPlan, fetchProjectsCombined, fetchQaTargets } from '../../api/client'
+import type {
+  Conditions,
+  Health,
+  PlanTargets,
+  ProjectsCombinedEntry,
+  QaVerdictCounts,
+  SiteProfile,
+} from '../../api/schemas'
 import { verdictFor } from '../../api/verdict'
 import { MOBILE_QUERY } from '../../shell/breakpoints'
 import { MobileNav } from '../../shell/MobileNav'
@@ -59,6 +66,14 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
   // it, so a failure here degrades every card to "no progress bar" instead
   // of taking down Tonight the way a conditions/plan failure does.
   const [progressById, setProgressById] = useState<Map<string, ProjectsCombinedEntry>>(new Map())
+  // Keyed by target_id — the quality bar under each card's progress bar.
+  // Same soft-fail contract as progressById: this is context on a screen that
+  // is already useful without it, so a failure leaves the bars off rather
+  // than taking Tonight down. Only targets with a COMPLETE analysis appear —
+  // qa_targets attaches `verdicts` on nothing else — which is also why an
+  // unanalysed target renders no bar instead of an empty one (an empty bar
+  // reads as "nothing passed"; the truth is nobody measured).
+  const [verdictsById, setVerdictsById] = useState<Map<string, QaVerdictCounts>>(new Map())
 
   // Same handoff the Projects grid's quality bar uses: park the target in
   // sessionStorage, then navigate. There is no router to carry it — see
@@ -91,6 +106,25 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
       })
       .catch(() => {
         // Soft-fail by design — see the state's own doc comment above.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchQaTargets()
+      .then((qa) => {
+        if (cancelled) return
+        setVerdictsById(
+          new Map(
+            qa.targets.flatMap((t) => (t.verdicts ? [[t.target_id, t.verdicts] as const] : [])),
+          ),
+        )
+      })
+      .catch(() => {
+        // Soft-fail by design — see verdictsById's own doc comment above.
       })
     return () => {
       cancelled = true
@@ -214,6 +248,7 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
                         target={target}
                         progress={entry ? { totalMinutes: entry.total_minutes, goal: entry.goal } : null}
                         onOpenQa={canReview(entry) ? () => openQa(target.id) : undefined}
+                        verdicts={verdictsById.get(target.id)}
                       />
                     )
                   })}
