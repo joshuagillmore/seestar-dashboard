@@ -17,29 +17,5 @@ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE OTHER DEALINGS IN THE
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-NOT COVERED BY THE ABOVE
-========================
-
-Two sets of files in this repository carry their own terms, and the MIT grant
-above does not extend to them.
-
-1. The DSO catalogue data — `data/dso_catalog_extended.json` and
-   `data/dso_aliases.json` — is adapted from OpenNGC (© Mattia Verga) and is
-   licensed CC BY-SA 4.0. Its share-alike condition binds those two files and
-   anything adapted from them; it does NOT bind the application code, which is
-   MIT as above. Required attribution, the full list of modifications, and the
-   Sharpless/Lynds citations for the two manually-added objects are in
-   `data/ATTRIBUTION-OpenNGC.md`, which must travel with the data.
-
-2. IBM Plex Sans and IBM Plex Mono, self-hosted under `web/public/fonts/`, are
-   licensed under the SIL Open Font License 1.1. See the `LICENSE.txt` beside
-   each family's files.
-
-Sky-survey imagery fetched at runtime (DSS2, via CDS hips2fits) is not
-redistributed in this repository, but its required acknowledgment is recorded
-in `docs/ATTRIBUTION-DSS.md` for anyone publishing images obtained through it.
