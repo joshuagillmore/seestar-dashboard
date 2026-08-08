@@ -14,7 +14,7 @@ export interface MobileLiveViewProps {
   targetId: string | null
   /** Common name — only present once `get_target_observability` resolves;
    * `null` renders no subtitle rather than repeating the id. Design
-   * README.md:701 shows both ("SH2-142" big, "Wizard Nebula" as a subtitle)
+   * README.md:727 shows both ("SH2-142" big, "Wizard Nebula" as a subtitle)
    * — real fields on `ObservabilityTarget`, not invented for mobile. */
   targetName: string | null
   stack: StackState | null
@@ -25,7 +25,7 @@ export interface MobileLiveViewProps {
 }
 
 /**
- * Mobile — Live (design README.md:698–711), the phone-frame composition for
+ * Mobile — Live (design README.md:724–711), the phone-frame composition for
  * the 'active' phase only — LiveScreen.tsx renders this instead of the
  * desktop three-column layout when `useMediaQuery(MOBILE_QUERY)` matches.
  * Three things the design shows that this component deliberately does not:

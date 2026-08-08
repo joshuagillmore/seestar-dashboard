@@ -54,8 +54,14 @@ dashboard that shows a red error whenever nobody is observing is wrong.
 - **No hex literals.** Colour, spacing and type come from the 52-token table in
   `web/src/tokens.css`; a test fails the build on a raw value.
 - There is **no e2e layer.** Playwright was planned for slice 2 and never
-  adopted, so anything about layout at a given viewport is unverified unless
-  you check it in a browser yourself. The phone layouts in particular have unit
-  tests but no viewport coverage.
+  adopted, so no test asserts anything about layout at a given viewport — if
+  you change a layout, checking it means opening a browser. All four phone
+  layouts were read by hand at 393×852 on 2026-08-08 and were correct then;
+  treat that as a dated observation, not coverage.
+- **To see a phone layout, do not resize the window** — the automation tooling
+  reports success and leaves `innerWidth` unchanged, every time. Render the
+  app in a same-origin `<iframe>` at 393×852 instead: media queries key off
+  the iframe's viewport, so the mobile branch genuinely mounts. Narrowing a
+  real browser window by hand also works.
 - Prefer a small number of focused components over large multi-purpose ones.
 - No secrets in client code, ever.

@@ -1,7 +1,7 @@
 /**
  * Pure geometry over `get_view_state`'s `View.Stack.Annotate` block —
  * `pixelx`/`pixely` against the S50's fixed 1080×1920 portrait sub frame
- * (docs/seestar-mcp-design.md, design README.md:391). No network call, no
+ * (docs/seestar-mcp-design.md, design README.md:417). No network call, no
  * server knowledge beyond the two numbers the solve already returned.
  *
  * The design's own worked example — pixel (512, 934) reads "offset 28 px
@@ -9,7 +9,7 @@
  * this arithmetic, not a value to special-case: `computeFraming(512, 934)`
  * must reproduce it from the general formula. Overlay coordinates must be
  * *derived* from the real solve, never a hardcoded percentage (design
- * README.md:407) — that's the whole reason this lives in its own testable
+ * README.md:433) — that's the whole reason this lives in its own testable
  * module rather than being inlined as JSX math in PreviewCard.
  */
 

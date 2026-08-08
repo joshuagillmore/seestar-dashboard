@@ -134,8 +134,8 @@ describe('Sidebar', () => {
   })
 
   // Design-review item B4, resolved: the design has a GPS row in BOTH the
-  // sidebar (README.md:249-250, short form) and the Tonight verdict banner
-  // (README.md:273-274, the full sentence) — complementary, not duplicated.
+  // sidebar (README.md:275-276, short form) and the Tonight verdict banner
+  // (README.md:299-300, the full sentence) — complementary, not duplicated.
   // Printing the same long sentence in both places (briefly the case here)
   // was the actual bug; deleting the sidebar's row entirely would have been
   // the wrong fix, since the design specifies both.
@@ -192,7 +192,7 @@ describe('Sidebar', () => {
 
   it('folds the mask state into the GPS row rather than a separate line', () => {
     // Regression guard for the smaller divergence the same fix corrects:
-    // "mask …" used to be its own siteMeta line: README.md:249-250 has it
+    // "mask …" used to be its own siteMeta line: README.md:275-276 has it
     // sharing the GPS row instead.
     render(
       <Sidebar site={withMask} verdict="NO-GO" gpsWarning={null} gpsMatched={true} view="tonight" onNavigate={vi.fn()} />,

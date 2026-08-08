@@ -123,7 +123,7 @@ export function VerdictBanner({ conditions }: { conditions: Conditions }) {
           </ul>
         )}
 
-        {/* Moved in from Sidebar's site block (design README.md:265-280 puts
+        {/* Moved in from Sidebar's site block (design README.md:291-306 puts
             the GPS row in the banner, not the sidebar) — Sidebar still has
             its own copy for now (VerdictBanner and Sidebar are populated from
             the same `conditions.location`/`gpsWarning` source but neither

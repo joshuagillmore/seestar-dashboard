@@ -45,7 +45,7 @@
 
 .rows { display: flex; flex-direction: column; gap: 8px; }
 
-/* The design's own hard requirement (README.md:723-724): shortlist rows
+/* The design's own hard requirement (README.md:749-750): shortlist rows
    carry an explicit min-height of 44px — cold hands in the dark. This is a
    presentational row (no destination screen exists yet, the same reason
    PlanCard's own "Detail" button is enabled and does nothing today), so it

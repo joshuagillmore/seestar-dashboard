@@ -8,7 +8,7 @@ import styles from './MobileTonightView.module.css'
 const VERDICT_TONE_CLASS = { pass: styles.pass, marginal: styles.marginal, reject: styles.reject } as const
 const TILE_TONE_CLASS = { pass: styles.pass, marginal: styles.marginal, reject: styles.reject } as const
 
-/** Design shows exactly three rows (SH2-142/M31/M45, README.md:717-719) — a
+/** Design shows exactly three rows (SH2-142/M31/M45, README.md:743-745) — a
  * deliberate field-density cap, not a bug: the full ranked shortlist is
  * already on desktop Tonight, and a phone glance wants the top few options,
  * not all twelve. */
@@ -21,7 +21,7 @@ export interface MobileTonightViewProps {
 }
 
 /**
- * Mobile — Tonight (design README.md:712–722). Rendered by TonightScreen.tsx
+ * Mobile — Tonight (design README.md:738–722). Rendered by TonightScreen.tsx
  * in place of the desktop VerdictBanner/SweetBandTimeline/PlanCard-grid
  * composition once `useMediaQuery(MOBILE_QUERY)` matches.
  *

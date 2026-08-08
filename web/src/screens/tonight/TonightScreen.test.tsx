@@ -161,7 +161,7 @@ describe('TonightScreen', () => {
 
   it('threads the GPS warning from assess_conditions to both the sidebar and the banner', async () => {
     // This briefly asserted exactly twice: the design puts the GPS row in
-    // the banner (README.md:265-280), and Sidebar kept its own copy for an
+    // the banner (README.md:291-306), and Sidebar kept its own copy for an
     // interim period as an acknowledged double-render, not a regression
     // (see VerdictBanner.tsx's doc comment). Sidebar's copy has since been
     // removed (shell/), collapsing this back to the single render the design

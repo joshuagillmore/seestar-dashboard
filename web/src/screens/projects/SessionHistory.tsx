@@ -52,7 +52,7 @@ function ArchiveNightRow({ night }: { night: ArchiveNight }) {
  * (handback item 7). Both render as an honest "—" rather than the design
  * mockup's fabricated "IRCUT · alt-az" / numeric FWHM.
  *
- * The micro-label names `log_session_result` (README.md:669), matching the
+ * The micro-label names `log_session_result` (README.md:695), matching the
  * design exactly — not `list_projects`, which is what this screen actually
  * calls to read the rows. `log_session_result` is the write tool that
  * produced each session record historically; `list_projects` only reads what

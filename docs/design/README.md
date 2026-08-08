@@ -1,5 +1,14 @@
 # Handoff: SeeStar Console
 
+> ⚠️ **The codebase cites LINE NUMBERS in this file** — 56 of them, written as
+> `README.md:NNN` in component doc comments and tests. Inserting or deleting
+> lines here silently invalidates every citation below the edit, and nothing
+> checks them. It has already happened once: a note added at the top on
+> 2026-08-03 shifted all 56 by 17, and the rot was found by hand five days
+> later. If you edit this file, prefer appending over inserting — and if you
+> must insert, re-point the citations afterwards
+> (`git grep -oE "README[.]md:[0-9]+"`).
+>
 > **Read me first (added 2026-08-03). This document is still the authority on
 > tokens, layout, per-screen specs and copy — it is not corrected to match the
 > build, and where the two differ the build is usually what needs justifying.**

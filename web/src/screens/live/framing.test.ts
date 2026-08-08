@@ -3,7 +3,7 @@ import { computeFraming, FRAME_CENTER_X, FRAME_CENTER_Y, FRAME_HEIGHT_PX, FRAME_
 
 describe('computeFraming', () => {
   it('reproduces the design\'s own worked example from the general formula', () => {
-    // design README.md:399/402 — pixel (512, 934) against a 540/960 centre
+    // design README.md:425/402 — pixel (512, 934) against a 540/960 centre
     // reads "512, 934" / "offset 28 px left — in frame". Not special-cased:
     // this is computeFraming's general arithmetic landing on the same number.
     const framing = computeFraming(512, 934)

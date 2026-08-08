@@ -1,6 +1,6 @@
 .nav { display: flex; gap: 8px; padding: 8px 0; }
 
-/* The design's own hard requirement (README.md:723-724) — every interactive
+/* The design's own hard requirement (README.md:749-750) — every interactive
    element on mobile is >= 44px tall. */
 .tab {
   flex: 1;

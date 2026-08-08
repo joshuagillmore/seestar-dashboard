@@ -57,7 +57,7 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
  * `LastStackCard` (the previous session's dated stacked master for the same
  * target, since the scope only ever writes that file at session end — see
  * LastStackCard's own doc comment for the whole honesty rule this carries).
- * Desktop only — the mobile phone-frame design (README.md:698-711) has no
+ * Desktop only — the mobile phone-frame design (README.md:724-737) has no
  * second preview element, and MobileLiveView already drops several things
  * for the same "not in that spec" reason, so this doesn't add one there
  * either.
@@ -89,7 +89,7 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
  * each entry is from, but the card adds a plain-language note too, so a
  * three-nights-old entry can't read as something happening right now.
  *
- * **Mobile breakpoint** (slice added later, design README.md:685-711): below
+ * **Mobile breakpoint** (slice added later, design README.md:711-737): below
  * `MOBILE_QUERY` (600px), this screen skips `AppShell` entirely rather than
  * squeezing Sidebar/TopBar next to narrowed content — the design's own phone
  * frame shows zero chrome, just the screen content padded `8px 16px 0` on
@@ -101,17 +101,18 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
  * Dropping AppShell also drops the only thing that ever called `onNavigate`
  * (Sidebar) — the design's phone frames show both mobile screens at once in
  * one static mockup, so it never had to answer how a phone user moves
- * between them. `MobileNav` is this repo's own answer, not a design spec:
- * two targets at the 44px minimum, added so the two mobile screens aren't
- * mutually unreachable — see its own doc comment. This is a design
- * divergence worth tracking, not a gap to leave silent.
+ * between them. `MobileNav` is this repo's own answer, not a design spec: one
+ * target per view at the 44px minimum, so no mobile screen is unreachable —
+ * see its own doc comment, including why it carried only two for a while and
+ * why that turned out to be a bug. This is a design divergence worth
+ * tracking, not a gap to leave silent.
  */
 export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) {
   const state = useLiveSession()
   const isMobile = useMediaQuery(MOBILE_QUERY)
   const { tone: liveTone, meta: liveMeta } = sidebarStatus(state.phase)
 
-  // Mobile — Live (design README.md:698-711) only has a dedicated
+  // Mobile — Live (design README.md:724-737) only has a dedicated
   // composition for the 'active' phase — there's no mobile design for
   // loading/idle/bridge-down at all, so those three keep the exact desktop
   // markup below (LiveScreen.module.css's own `.idleColumns`/`.stateCard`),

@@ -59,7 +59,7 @@
 }
 .badgeStale { color: var(--marginal); }
 
-/* Three stat tiles (design README.md:705-706) — DROPS, FOCUS, PLATE SOLVE.
+/* Three stat tiles (design README.md:731-732) — DROPS, FOCUS, PLATE SOLVE.
    Not ALT/BAND: see MobileLiveView.tsx's own doc comment for why those two
    are replaced rather than shown as placeholders. */
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }

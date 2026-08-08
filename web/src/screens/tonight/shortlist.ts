@@ -15,7 +15,7 @@ import type { PlanTarget } from '../../api/schemas'
 const CHAIN_CAP = 3
 
 /**
- * The ranked-shortlist section header's order line (README.md:320-321):
+ * The ranked-shortlist section header's order line (README.md:346-347):
  * `Order: SH2-142 → M31 → M45 · earliest-setting first, 2 slews`. Both parts
  * are derived client-side from data already on the page — no server field
  * needed. The order IS `plan_targets`' own array order (the ranker already

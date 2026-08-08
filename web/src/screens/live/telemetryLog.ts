@@ -2,7 +2,7 @@ import type { Tier1 } from '../../api/schemas'
 import { parse } from '../tonight/timeline'
 
 /**
- * `qa_tier1` is a snapshot (design README.md:478: "Tier-1 is cheap health
+ * `qa_tier1` is a snapshot (design README.md:504: "Tier-1 is cheap health
  * polling"), not a pre-built log — the Telemetry log card is this client's
  * own rolling history of snapshots, one appended per poll. Never carries a
  * per-sub quality verdict; that is Tier-2's job, at wind-down only (see
