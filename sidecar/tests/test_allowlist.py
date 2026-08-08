@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from starlette.routing import Route
+from starlette.routing import Mount, Route
 
 from seestar_sidecar.allowlist import (
     ALLOWED_TOOLS,
@@ -43,7 +43,41 @@ def _registered_routes(app) -> dict[str, frozenset[str]]:
     so it never appears here — see test_the_only_non_route_entry_is_the_
     frontend_mount for the check that covers it instead.
     """
-    return {route.path: frozenset(route.methods) for route in app.routes if isinstance(route, Route)}
+    return {route.path: frozenset(route.methods) for route in _walk_routes(app.routes)}
+
+
+def _walk_routes(entries) -> list[Route]:
+    """Every `Route`, however deeply nested, EXCLUDING anything under a Mount.
+
+    Flat iteration over `app.routes` was enough until starlette 1.3: routes
+    added by `include_router()` used to be spliced into `app.routes`
+    directly. They are now wrapped in an `_IncludedRouter`, whose real
+    `APIRouter` hangs off `.original_router`, so a flat pass saw only
+    FastAPI's four doc routes and none of this app's 24.
+
+    That is precisely the blindness this invariant exists to prevent, so the
+    walk recurses on anything router-shaped rather than special-casing one
+    class name. Mounts are stepped over deliberately — the frontend's
+    StaticFiles mount is not a Route and is covered by
+    test_the_only_non_route_entry_is_the_frontend_mount instead.
+
+    The upgrade did not fail silently, which is the point: an exact-set
+    comparison broke loudly the moment it could no longer see the routes.
+    """
+    found: list[Route] = []
+    for entry in entries:
+        if isinstance(entry, Mount):
+            continue
+        if isinstance(entry, Route):
+            found.append(entry)
+            continue
+        nested = getattr(entry, "routes", None)
+        if nested is None:
+            inner = getattr(entry, "original_router", None)
+            nested = getattr(inner, "routes", None)
+        if nested:
+            found.extend(_walk_routes(nested))
+    return found
 
 
 def _expected_routes() -> dict[str, frozenset[str]]:
@@ -196,8 +230,28 @@ def test_the_only_non_route_entry_is_the_frontend_mount():
     """
     app = create_app()
     non_routes = [route for route in app.routes if not isinstance(route, Route)]
-    assert len(non_routes) == 1
-    assert non_routes[0].name == "frontend"
+
+    # Exactly one MOUNT, and it is the frontend. A mount is the thing that can
+    # hide a whole sub-application behind a prefix, which is what this guards.
+    mounts = [route for route in non_routes if isinstance(route, Mount)]
+    assert [mount.name for mount in mounts] == ["frontend"]
+
+    # Anything else non-Route must be router-shaped AND fully visible to
+    # _registered_routes. This used to be `len(non_routes) == 1`, which broke
+    # on starlette 1.3's `_IncludedRouter` — a container for our own router,
+    # not a stray sub-app. Asserting the count would have forced a choice
+    # between failing forever and bumping 1 to 2 and hoping; asserting that
+    # every route inside it is accounted for is the property that was meant.
+    registered = _registered_routes(app)
+    for entry in non_routes:
+        if isinstance(entry, Mount):
+            continue
+        hidden = [
+            route.path
+            for route in _walk_routes([entry])
+            if route.path not in registered
+        ]
+        assert hidden == [], f"routes not covered by the invariant: {hidden}"
 
 
 def test_a_post_added_to_an_allowed_path_would_be_caught():
