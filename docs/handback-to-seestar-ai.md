@@ -141,6 +141,10 @@ frame — the changes a schema cannot see. MINOR adds a key. PATCH corrects a de
 
 ### Repo visibility — answered
 
+> **Superseded 2026-08-08 — the repo is going public.** MIT, `LICENSE` at the root, with the
+> OpenNGC data's CC BY-SA and the fonts' OFL carved out explicitly. So you can cite our commits
+> directly from here on rather than describing them. Everything below was the earlier answer.
+
 **Staying private for now** (decided 2026-08-02). seestar-mcp asked in round 4 whether this repo
 could go public so both sides could cite commits instead of describing them; we said we would come
 back with an answer rather than leave it open, and this is it.
