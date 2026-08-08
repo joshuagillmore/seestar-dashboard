@@ -222,8 +222,9 @@ checks *nothing* here: the root `tsconfig.json` is a solution file with
 
 ## Licence
 
-**MIT** — see [`LICENSE`](LICENSE), which also records the two sets of files it
-does *not* cover.
+**MIT** — see [`LICENSE`](LICENSE). [`NOTICE`](NOTICE) records the two sets of
+files it does *not* cover: the OpenNGC catalogue data (CC BY-SA 4.0) and the
+IBM Plex fonts (SIL OFL 1.1).
 
 IBM Plex Sans and IBM Plex Mono are self-hosted under
 `web/public/fonts/` (SIL Open Font License 1.1 — see the `LICENSE.txt` next to

@@ -43,7 +43,7 @@ vectorising the observability computation first.
 `dso_catalog_extended.json` and `dso_aliases.json` are adapted from OpenNGC
 (CC BY-SA 4.0, © Mattia Verga). That licence's share-alike condition binds
 **these two data files and anything adapted from them — not this repository's
-application code**, which stays under the repo's own licence ([MIT](../LICENSE)). Full notice,
+application code**, which stays under the repo's own licence ([MIT](../LICENSE); see also [NOTICE](../NOTICE)). Full notice,
 required attribution text, and the exact list of modifications: see
 `ATTRIBUTION-OpenNGC.md`. The CC BY-SA 4.0 legal code itself allows satisfying
 its "include the licence" condition with a link rather than the full text
