@@ -27,6 +27,12 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
       globals: true,
+      // Default is 5s, which this suite runs close enough to that a loaded
+      // machine fails tests that have nothing wrong with them — reproduced by
+      // running four suites at once, where a file-scanning test took 6.1s.
+      // A timeout is a hang detector, not an assertion: widening it costs no
+      // coverage, and 15s still catches anything genuinely stuck.
+      testTimeout: 15_000,
     },
   }
 })

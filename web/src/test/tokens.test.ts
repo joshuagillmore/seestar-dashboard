@@ -1,3 +1,10 @@
+// @vitest-environment node
+//
+// Pure file I/O — walks src/ and regex-matches every file. It imports nothing
+// from the DOM, so the default jsdom environment was ~1.7s of setup bought for
+// nothing. Under load that overhead pushed this test past the 5s default
+// timeout and failed a suite that had no actual defect (observed 2026-08-08
+// under four concurrent runs: 6.1s, "Test timed out in 5000ms").
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
