@@ -129,9 +129,16 @@ legible in the UI rather than reducing it to a colour.
   solution file with `"files": []`, so it exits 0 having read no source. Use
   `tsc -b`, which `npm run build` already runs.
 - **Playwright was planned for slice 2 and never adopted.** Slices 1–4 shipped
-  without it; browser behaviour has been verified by hand instead. Worth
-  knowing before writing a plan that assumes an e2e layer exists — there is
-  none, and the phone layouts in particular have no automated viewport
-  coverage.
+  without it; browser behaviour is verified by hand instead. Worth knowing
+  before writing a plan that assumes an e2e layer exists — there is none, so
+  **no test in this repo asserts anything about layout at a given viewport.**
+  All four phone layouts were checked by hand at 393×852 on 2026-08-08 and
+  render correctly; that is a snapshot of one afternoon, not a standing
+  guarantee, and nothing will tell you when it stops being true.
+  - Resizing the browser window through the automation tooling has failed
+    every time it has been tried (it reports success while `innerWidth` does
+    not change). Rendering the app in a same-origin `<iframe>` sized to
+    393×852 does work — media queries key off the iframe's own viewport — and
+    is how those checks were done.
 - Never commit secrets. SeeStar-AI uses age+sops (`.env.enc` committable, key
   never leaves the machine) — follow the same pattern if secrets appear.
