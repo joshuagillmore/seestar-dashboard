@@ -196,7 +196,7 @@ describe('ProjectCard', () => {
     expect(label.textContent).not.toMatch(/needed|required|remaining|short of/i)
   })
 
-  describe('hours/goal row layout (space-between, per README.md:654-655)', () => {
+  describe('hours/goal row layout (space-between, per README.md:680-681)', () => {
     it('keeps hours and the goal text as the same two flex-row siblings, in order, so a right-aligned layout separates them without reordering the DOM', () => {
       render(
         <ProjectCard

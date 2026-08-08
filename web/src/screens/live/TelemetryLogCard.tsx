@@ -4,7 +4,7 @@ import styles from './TelemetryLogCard.module.css'
 export interface TelemetryLogCardProps {
   log: TelemetryEntry[]
   /**
-   * Mobile's "log tail" (design README.md:710) is a fixed-height list of the
+   * Mobile's "log tail" (design README.md:736) is a fixed-height list of the
    * most recent entries, not the desktop card's scrolling 132px window —
    * there's no room to scroll on a phone screen and the point of a tail is
    * "what just happened", not the whole history. Slices the newest-first
@@ -23,7 +23,7 @@ export interface TelemetryLogCardProps {
 }
 
 /**
- * design README.md:463-476 (desktop) / :710 (mobile tail). Newest first. Each
+ * design README.md:489-502 (desktop) / :710 (mobile tail). Newest first. Each
  * line is `qa_tier1`'s own `status_line`, rendered verbatim — the server
  * already composes "stacked 211 (+1) | rejected 0 | solve OK | focus Δ=+3 |
  * hfd 2.40" from its own `snapshot`/`trends`, so this client does not

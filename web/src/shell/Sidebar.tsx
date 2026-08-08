@@ -47,7 +47,7 @@ export interface SidebarProps {
    * (`SeeStar-AI/src/seestar_mcp/server.py`'s `_location_block`): its
    * `mask_applied` field is `false` if and only if `matched` is `false` — so
    * this one field is a complete, non-inferred, non-prose-parsed source for
-   * both halves of the row (design README.md:249-250: `GPS matched · mask ON
+   * both halves of the row (design README.md:275-276: `GPS matched · mask ON
    * (3 arcs)`), and the three states render as three distinct labels rather
    * than collapsing "never checked" and "confirmed elsewhere" into one
    * generic word:
@@ -76,7 +76,7 @@ export interface SidebarProps {
    * fabricated number.
    *
    * Kept as hours rather than switched to a "N need data" count (the
-   * design's own sample meta, README.md:241): the header above the grid
+   * design's own sample meta, README.md:267): the header above the grid
    * already spells out the need-data count in full, so repeating it in the
    * nav row would show the same number twice while dropping the one figure
    * (total hours) that's only visible here.
@@ -87,7 +87,7 @@ export interface SidebarProps {
    * screens/projects/projects.ts's projectStatus) — drives the Projects nav
    * row's dot tone, the same way `verdict` drives Tonight's (see the design's
    * "the dot encodes each screen's health … both must be live",
-   * README.md:243-244). `null` — the default, and what every screen other
+   * README.md:269-270). `null` — the default, and what every screen other
    * than the mounted ProjectsScreen passes — renders `idle` rather than a
    * fabricated health signal.
    */
@@ -190,7 +190,7 @@ export function Sidebar({
             {profile.field_rotation_ceiling_deg}°
           </div>
           {/* Short form, one row: GPS state and mask state together, per
-              README.md:249-250. Three distinct states, not a binary — see
+              README.md:275-276. Three distinct states, not a binary — see
               SidebarProps.gpsMatched's doc comment for the mapping and its
               source verification. Never the full warning sentence, which
               stays VerdictBanner's job alone. */}

@@ -136,7 +136,7 @@ describe('MobileTonightView', () => {
     expect(screen.queryByText(/Backyard/)).not.toBeInTheDocument()
   })
 
-  // Regression guard for the design's own hard requirement (README.md:723-724):
+  // Regression guard for the design's own hard requirement (README.md:749-750):
   // shortlist rows carry an explicit min-height of 44px. jsdom does not
   // compute real CSS layout (see LiveScreen.test.tsx's matching
   // minmax(0,1fr) guard for the same reason), so this reads the actual rule

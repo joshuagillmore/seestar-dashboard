@@ -25,7 +25,7 @@ interface Cell {
 const signed = (n: number): string => `${n >= 0 ? '+' : ''}${n}`
 
 /**
- * Six cells, `repeat(3, minmax(0,1fr))` (design README.md:420-425). The
+ * Six cells, `repeat(3, minmax(0,1fr))` (design README.md:446-451). The
  * design's own warning is load-bearing: `1fr`'s default minimum is
  * `min-content`, which overflowed the prototype's container twice when a
  * label couldn't shrink. See TelemetryGrid.module.css.

@@ -86,7 +86,7 @@
 .spacer { flex: 1; min-height: 14px; }
 
 /* space-between, not adjacent-left: the design puts hours collected at the
-   left edge and the goal right-aligned at the far edge (README.md:654-655),
+   left edge and the goal right-aligned at the far edge (README.md:680-681),
    including for the honest absent-state phrases ("no catalogued magnitude",
    "photometry not credible", "not in DSO catalogue", "beyond practical
    reach") that replace the goal text — the design's own sample table

@@ -108,7 +108,7 @@ export type LiveSessionState =
       log: TelemetryEntry[]
       /** Every distinct `stage` value observed this mount, in order,
        * de-duplicating only consecutive repeats — "3PPA → AutoGoto → Stack"
-       * (design README.md:434). A recorded history of what the server
+       * (design README.md:460). A recorded history of what the server
        * already reported, not a derived state machine. */
       stageHistory: string[]
       /** The catalogue id (e.g. "M27") this client is currently treating as

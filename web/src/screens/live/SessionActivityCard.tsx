@@ -36,7 +36,7 @@ const ORIGIN_LABEL: Record<SessionActivityRecord['origin'], string> = {
 }
 
 /**
- * The design's operator panel (README.md:481-510) pictures a chat transcript
+ * The design's operator panel (README.md:507-536) pictures a chat transcript
  * — Claude's own sentences in message bubbles, plus an approval gate. The
  * real `/api/session_activity` is neither of those things: it is a plain,
  * newest-first activity feed off `provenance.jsonl`, and every record is

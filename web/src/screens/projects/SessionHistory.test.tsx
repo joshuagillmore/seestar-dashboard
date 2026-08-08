@@ -87,7 +87,7 @@ describe('SessionHistory', () => {
     expect(screen.getByText(/No sessions logged for Crab Nebula/)).toBeInTheDocument()
   })
 
-  it('labels the section with the selected target id and log_session_result — the tool that wrote the records, per the design (README.md:669), not list_projects, which only reads them back', () => {
+  it('labels the section with the selected target id and log_session_result — the tool that wrote the records, per the design (README.md:695), not list_projects, which only reads them back', () => {
     render(<SessionHistory project={merged({ targetId: 'M31', store: project({ sessions: [session()] }) })} />)
     expect(screen.getByText('M31 · SESSION HISTORY — log_session_result')).toBeInTheDocument()
   })

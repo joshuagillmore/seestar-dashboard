@@ -45,7 +45,7 @@ interface Data {
  * stored order truncated to `limit` — byte-identical, not reordered — because
  * every real project has `goal_minutes: 0` (see ProjectsScreen's own comment
  * below and the phase-2 spec). There is no shortfall figure anywhere in the
- * payload, so the design's "N h short of goal" clause (README.md:649) has no
+ * payload, so the design's "N h short of goal" clause (README.md:675) has no
  * honest source yet: computing one from this screen's own suggested-goal
  * model (projects_combined's `goal` field) would attribute a number to a pick
  * that wasn't actually made using it — two independent computations that

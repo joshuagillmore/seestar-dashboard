@@ -512,7 +512,7 @@ describe('LiveScreen', () => {
 
   it('the telemetry grid uses minmax(0,1fr), not a bare 1fr, so a label cannot overflow the container', () => {
     // Regression guard for the exact bug the design's own handoff warns
-    // about twice (README.md:424) — a bare `1fr`'s min-content default
+    // about twice (README.md:450) — a bare `1fr`'s min-content default
     // overflowed the prototype's container. Read from source: jsdom does not
     // compute intrinsic min-content sizing, so this property cannot be
     // observed by measuring a rendered grid in this test environment.

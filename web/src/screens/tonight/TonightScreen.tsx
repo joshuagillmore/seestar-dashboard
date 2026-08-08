@@ -134,7 +134,7 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
   const verdict = data ? verdictFor(data.conditions.go) : null
   const isMobile = useMediaQuery(MOBILE_QUERY)
 
-  // Mobile — Tonight (design README.md:712-722) replaces the whole desktop
+  // Mobile — Tonight (design README.md:738-748) replaces the whole desktop
   // composition (VerdictBanner/SweetBandTimeline/PlanCard grid) with
   // MobileTonightView, and — like LiveScreen's own mobile branch — skips
   // AppShell entirely rather than squeezing Sidebar/TopBar chrome into a

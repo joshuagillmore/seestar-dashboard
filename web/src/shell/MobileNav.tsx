@@ -19,7 +19,7 @@ export interface MobileNavProps {
 
 /**
  * Design divergence, not a design spec — write-up for the divergence record:
- * the design's Mobile section (README.md:685-727) shows both phone screens
+ * the design's Mobile section (README.md:711-753) shows both phone screens
  * side by side in one static mockup, so it never had to answer "how does a
  * phone user get from one screen to the other." Dropping AppShell's chrome
  * below the mobile breakpoint (see LiveScreen.tsx/TonightScreen.tsx's own
@@ -29,7 +29,7 @@ export interface MobileNavProps {
  *
  * Deliberately NOT a port of `Sidebar`: no site-profile block, no verdict or
  * live status dots. Just the targets, sized to the design's own 44px minimum
- * (README.md:723-724).
+ * (README.md:749-750).
  *
  * **It carried two items until 2026-08-04, and that had become a bug.** The
  * original two matched the design, which specifies phone frames for Tonight

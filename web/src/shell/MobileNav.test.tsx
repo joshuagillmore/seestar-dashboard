@@ -49,7 +49,7 @@ describe('MobileNav', () => {
     expect(onNavigate).toHaveBeenCalledExactlyOnceWith('live')
   })
 
-  // Regression guard for the design's own hard requirement (README.md:723-724)
+  // Regression guard for the design's own hard requirement (README.md:749-750)
   // — every interactive element on mobile is >= 44px tall. jsdom does not
   // compute real CSS layout (see LiveScreen.test.tsx's matching guard for the
   // telemetry grid), so this reads the actual rule from the CSS module

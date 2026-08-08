@@ -1,4 +1,4 @@
-/* The design's own warning (README.md:424): use minmax(0,1fr), NOT 1fr. The
+/* The design's own warning (README.md:450): use minmax(0,1fr), NOT 1fr. The
    1fr default minimum is min-content, which overflows this container the
    moment a label can't shrink below its own width — it bit the prototype
    twice. gap:1px on a border/subtle background is what reads as hairlines

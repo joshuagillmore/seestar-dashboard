@@ -9,7 +9,7 @@ export interface GuardrailsCardProps {
 }
 
 /**
- * design README.md:448-461 pictures five named, individually-toned rows
+ * design README.md:474-487 pictures five named, individually-toned rows
  * (Dawn/Battery/Weather/Connection/Max duration). The real
  * `check_night_guardrails` returns a flat `{proceed, action, reasons[],
  * hard_stops[]}` instead — no per-check id, label or tone to render as five

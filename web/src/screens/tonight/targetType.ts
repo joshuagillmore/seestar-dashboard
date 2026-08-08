@@ -1,6 +1,6 @@
 /**
  * The type chip is presentation, not a verdict or a threshold — the design's
- * card-data table (README.md:350-351) shows a coarse family label (`nebula`,
+ * card-data table (README.md:376-377) shows a coarse family label (`nebula`,
  * `galaxy`, `cluster`), not the server's snake_case TARGET_TYPES enum
  * (`planetary_nebula`, `globular_cluster`, …). Relabelling a fixed,
  * server-owned vocabulary for display is a client concern the same way the

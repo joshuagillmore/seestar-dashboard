@@ -23,7 +23,7 @@ export interface TargetHeaderProps {
 }
 
 /**
- * Design README.md:412-418, with one thing slice-3 §0 explicitly drops: no
+ * Design README.md:438-444, with one thing slice-3 §0 explicitly drops: no
  * button row. `Refocus` / `Stop stack` / `Wind down & park` each mapped to a
  * forbidden write tool; the rule from CLAUDE.md's own hand-off note is
  * "never a disabled button", so there is nothing here in their place, not a

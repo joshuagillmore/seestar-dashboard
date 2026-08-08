@@ -17,7 +17,7 @@ export interface SweetBandGaugeProps {
 }
 
 /**
- * Vertical 0°(horizon)–90°(zenith) altitude gauge (design README.md:436-446),
+ * Vertical 0°(horizon)–90°(zenith) altitude gauge (design README.md:462-472),
  * showing the static band plus this target's own peak-altitude marker for
  * tonight — not a moving "where it is right now" indicator, since nothing
  * this client can reach provides one. `transits_above_ceiling` is the

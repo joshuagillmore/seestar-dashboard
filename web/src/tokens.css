@@ -65,7 +65,7 @@
   --chart-rail-empty: #3a4046;
 
   /* Live preview overlay (slice 3) — a translucent scrim behind the
-     framing-readout pill (design README.md:401: `rgba(10, 11, 13, .72)`).
+     framing-readout pill (design README.md:427: `rgba(10, 11, 13, .72)`).
      Kept here, not inlined in PreviewCard.module.css, for the same reason
      every other color literal lives in this file alone: one place to check,
      never a second file to grep when the palette changes. */

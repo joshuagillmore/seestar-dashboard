@@ -32,14 +32,14 @@ specific, mostly small list.
 
 **A1. The type chip renders a raw enum.** `PlanCard.tsx:54` emits `{target.type}`
 directly, so the chip reads `planetary_nebula` and `globular_cluster`. The design's
-card-data table (`README.md:350`) specifies `nebula`, `galaxy`, `cluster`. The
+card-data table (`README.md:376`) specifies `nebula`, `galaxy`, `cluster`. The
 Fidelity caveat exempts "numbers, filenames, timestamps and log lines" as
 representative — it does not exempt copy, and snake_case in a user-facing chip is
 plainly not what the design shows. **Most visible single divergence on Tonight.**
 
 **A2. Projects hours/goal row is not space-between.** The design puts collected hours
 at the left and the goal right-aligned at the far edge (`3.0 h` … `of 6 h goal`,
-`README.md:654-655`). Ours renders them adjacent on the left. Most visible divergence
+`README.md:680-681`). Ours renders them adjacent on the left. Most visible divergence
 on Projects.
 
 **A3. The `2×` doubling control renders outside the card.** It floats above the card's
@@ -48,7 +48,7 @@ it controls.
 
 **A4. Ranked-shortlist section header is missing entirely.** No eyebrow
 `plan_targets · ranked shortlist`, and no right-aligned order line
-`Order: … · earliest-setting first, 2 slews` (`README.md:320-321`). Not a server gap —
+`Order: … · earliest-setting first, 2 slews` (`README.md:346-347`). Not a server gap —
 target order is the array order and slew count is `targets.length - 1`. Every other
 section on the screen has its eyebrow, so this reads as an oversight.
 
@@ -60,12 +60,12 @@ through. The meta is live; the dot is not.
 
 **A6. No hover states on the plan-card actions.** `PlanCard.module.css:33,35` — design
 specifies primary hover `accent/hover` and secondary hover brightening border and text
-(`README.md:341-342`). Both tokens already exist and are used on `ProjectCard`. The
+(`README.md:367-368`). Both tokens already exist and are used on `ProjectCard`. The
 `Detail` button is enabled, so this is visibly reachable, not moot.
 
 **A7. Session-history micro-label names the wrong tool.** `SessionHistory.tsx:36`
 renders `… · SESSION HISTORY — list_projects`; the design says `log_session_result`
-(`README.md:669`). No comment records the substitution.
+(`README.md:695`). No comment records the substitution.
 
 **~~A8. Timeline legend has one entry, should have two.~~ Withdrawn — this finding was
 wrong.** It claimed the grey above-floor rails were drawn and only the legend key was
