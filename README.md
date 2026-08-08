@@ -35,9 +35,15 @@ shortlist with the server's own reasoning attached to each card.
 ### Live session
 The camera view while it stacks — frames kept and dropped, plate-solve state,
 focus, the current stage, and the guardrail verdict. The preview says when a
-frame is stale rather than presenting it as current.
+frame is stale rather than presenting it as current. The activity feed
+attributes every call to the client that made it.
 
 <img src="docs/screenshots/live-session.jpg" alt="Live session" width="100%" />
+
+> This one shot is older than the other three: re-taking it needs the scope
+> awake on the LAN, since the preview reads its SMB share. The layout and the
+> data are current; only the activity feed's origin tags have changed since,
+> from an inferred `ambiguous` to a named `this console` / `agent`.
 
 ### Review & QA
 Morning-after triage over `qa_tier2`: per-sub eccentricity and star count
@@ -57,6 +63,10 @@ still be mostly rejects.
 ---
 
 ## Run it
+
+You need **Node 20+**, **Python 3.11 or 3.12** (the sidecar pins
+`>=3.11,<3.13`), and [**uv**](https://docs.astral.sh/uv/). A telescope is
+optional — see the replay note below.
 
 The sidecar serves both the API and the built frontend on one port — there is
 no separate dev server to run in production.
@@ -210,7 +220,10 @@ checks *nothing* here: the root `tsconfig.json` is a solution file with
 - `docs/screenshots/` — the images above. `_hero.html` regenerates the hero;
   open it and screenshot it rather than editing the PNG.
 
-## Licences
+## Licence
+
+**MIT** — see [`LICENSE`](LICENSE), which also records the two sets of files it
+does *not* cover.
 
 IBM Plex Sans and IBM Plex Mono are self-hosted under
 `web/public/fonts/` (SIL Open Font License 1.1 — see the `LICENSE.txt` next to

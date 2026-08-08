@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LiveScreen } from './LiveScreen'
-import { SiteProfileSchema, type Health } from '../../api/schemas'
+import { SiteProfileSchema, ViewStateSchema, type Health } from '../../api/schemas'
 import { stubMatchMedia } from '../../test/matchMedia'
 import {
   lastStackAbsent,
@@ -417,7 +417,19 @@ describe('LiveScreen', () => {
       }))
       render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
       await waitFor(() => expect(screen.getByTestId('last-stack-caption')).toBeInTheDocument())
-      expect(calls.some((url) => url.startsWith('/api/last_stack') && url.includes('M27'))).toBe(true)
+      // Read the expected id off the recording rather than hardcoding it. This
+      // assertion said 'M27' — the SYNTHETIC preview fixture's target — and
+      // that passed only while the client sourced the target from the preview
+      // alone. It now comes from get_view_state's own View.target_name, which
+      // the real recording gives as NGC7380, and the two fixtures legitimately
+      // disagree: the share lags the scope, which is precisely the condition
+      // that made the old precedence wrong.
+      const resolved = ViewStateSchema.parse(recordedViewState()).view_state?.result?.View
+        ?.target_name
+      expect(resolved).toBeTruthy()
+      expect(calls.some((url) => url.startsWith('/api/last_stack') && url.includes(resolved!))).toBe(
+        true,
+      )
     })
   })
 
@@ -631,5 +643,36 @@ describe('run state is only trusted when active', () => {
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
 
     expect(decodeURIComponent(await waitForFetch('check_night_guardrails'))).toContain(REAL)
+  })
+})
+
+describe('the target name does not depend on the file share', () => {
+  it('still names the target on mobile when live_preview reports share_unreachable', async () => {
+    // Observed live on 2026-08-08, mid-session: the SMB share dropped and the
+    // phone showed "Target unknown" while get_view_state was still answering
+    // and still reporting 1075 stacked frames on M13.
+    //
+    // Mobile only. LiveScreen's DESKTOP branch already fell back to
+    // `liveView?.target_name` (line ~195); the mobile branch did not, and
+    // useLiveSession sourced currentTarget from live_preview's `target`
+    // alone — so losing the share lost the name on the one surface you would
+    // actually be holding in a field.
+    //
+    // Observability is stubbed to fail so the chain reduces to currentTarget,
+    // which is the link this fixes; otherwise its own resolved common name
+    // would satisfy the assertion for the wrong reason.
+    const expected = ViewStateSchema.parse(recordedViewState()).view_state?.result?.View
+      ?.target_name
+    expect(expected).toBeTruthy()
+    stubMatchMedia(true)
+    stubApi({
+      '/api/live_preview': { ok: true, source: null, reason: 'share_unreachable' },
+      '/api/get_target_observability': undefined,
+    })
+
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    expect(await screen.findByText(expected!)).toBeInTheDocument()
+    expect(screen.queryByText('Target unknown')).not.toBeInTheDocument()
   })
 })

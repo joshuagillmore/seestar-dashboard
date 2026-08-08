@@ -112,11 +112,26 @@ export type LiveSessionState =
        * already reported, not a derived state machine. */
       stageHistory: string[]
       /** The catalogue id (e.g. "M27") this client is currently treating as
-       * "the target being imaged" — sourced from live_preview's own `target`
-       * field (see client.ts's `fetchTargetObservability` doc comment for
-       * why: get_view_state carries no target name at all), and held sticky
-       * across a poll where the preview temporarily has none. `null` before
-       * any preview has ever named one. */
+       * "the target being imaged".
+       *
+       * Sourced from `get_view_state`'s own `View.target_name` first, and
+       * only then from live_preview's `target`. That order matters and was
+       * wrong until 2026-08-08: this used to read the preview ALONE, on the
+       * stated premise that "get_view_state carries no target name at all".
+       * That premise was false — `ViewSchema.target_name` has been in this
+       * file's own schema the whole time, and the sidecar already reads it
+       * (`live_preview.extract_target_name`) to scope the share scan.
+       *
+       * The consequence was live: when the SMB share dropped mid-session the
+       * screen showed "Target unknown" while `get_view_state` — still
+       * answering, still reporting 1075 stacked frames — knew perfectly well
+       * it was on M13. The target name must not depend on a file share.
+       *
+       * view_state wins over the preview because it is the scope's own report
+       * of what it is pointed at now, whereas the preview's target comes from
+       * the newest file on the share, which lags and can name a previous
+       * session's object. Still held sticky across a poll where both are
+       * momentarily absent. `null` before either has ever named one. */
       currentTarget: string | null
     }
 
@@ -335,12 +350,13 @@ export function useLiveSession(): LiveSessionState {
         sessionActivityPromise,
       ])
 
-      // Observability needs a target id, which only live_preview's own
-      // `target` field confirms (see client.ts) — fetched only once that's
-      // known, and held sticky across a poll where the preview briefly has
-      // none (e.g. a momentary share hiccup), rather than blanking the
-      // sweet-band card every time preview.target is absent.
-      if (preview?.target) currentTargetRef.current = preview.target
+      // The scope's own answer first, the share's second. See currentTarget's
+      // doc comment: reading the preview alone meant an unreachable share
+      // erased the target name from a session that was visibly still running.
+      // Held sticky across a poll where both are momentarily absent, rather
+      // than blanking the sweet-band card.
+      const namedTarget = viewState?.view_state?.result?.View?.target_name ?? preview?.target
+      if (namedTarget) currentTargetRef.current = namedTarget
       const observability = currentTargetRef.current
         ? await fetchTargetObservability(currentTargetRef.current).catch(() => null)
         : null
