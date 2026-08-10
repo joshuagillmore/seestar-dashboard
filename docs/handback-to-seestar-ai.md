@@ -18,10 +18,10 @@ Each one forces the dashboard to choose between an absent state and parsing Engl
 convention — *if a tool names a quantity in prose, return it as a field too* — would be worth more
 than three separate fixes.
 
-Line references were taken against `OrangeAgente/SeeStar-AI` @ `main` as of 2026-07-30.
+Line references were taken against `joshuagillmore/SeeStar-AI` @ `main` as of 2026-07-30.
 
 > **The repository has since moved (2026-07-31).** The public repo is now
-> **`github.com/OrangeAgente/seestar-mcp`**; the old `OrangeAgente/SeeStar-AI` is **private** and
+> **`github.com/joshuagillmore/seestar-mcp`**; the old `joshuagillmore/SeeStar-AI` is **private** and
 > will 404. History was rewritten to remove personal data — site coordinates, a LAN address, local
 > paths — and although all 106 commits are preserved, **every SHA changed**. Any pinned commit will
 > not resolve; re-clone rather than fetch. Line numbers cited below may have drifted; treat them as

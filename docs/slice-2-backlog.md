@@ -153,7 +153,7 @@ renders an explicit absent state for each.
 > **Out of date as of 2026-08-03 — read that file, not this paragraph.** The list is 26 items
 > now, not nine, and five have landed (1, 7, 10, 20, 26), including the one this paragraph
 > calls blocking. Nothing on it blocks a screen any more. The repo also moved: it is
-> `OrangeAgente/seestar-mcp`, history rewritten, so every SHA and line number cited from the
+> `joshuagillmore/seestar-mcp`, history rewritten, so every SHA and line number cited from the
 > old `SeeStar-AI` remote has changed. Deliberately not restating the count here — it has gone
 > stale twice already, which is the reason the hand-back file itself refuses to keep one.
 

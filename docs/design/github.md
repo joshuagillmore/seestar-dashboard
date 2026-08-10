@@ -7,7 +7,7 @@ date: 2026-07-27T16:03:31Z
 
 > **The `repo:` line above no longer resolves (noted 2026-08-03).** It is left as
 > the accurate record of what was synced on that date, but the public repository
-> is now **`github.com/OrangeAgente/seestar-mcp`** — `OrangeAgente/SeeStar-AI`
+> is now **`github.com/joshuagillmore/seestar-mcp`** — `joshuagillmore/SeeStar-AI`
 > was made private on 2026-07-31 and will 404. History was rewritten to strip
 > personal data, so although all 106 commits survive, **every SHA changed** and
 > the file:line references below may have drifted. Re-clone rather than fetch,

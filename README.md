@@ -6,7 +6,7 @@
 
 A read-only web dashboard for a **ZWO Seestar S50**. It plans the night, watches
 the stack while it runs, and triages the morning after — reading the
-[`seestar-mcp`](https://github.com/OrangeAgente/seestar-mcp) tool surface and
+[`seestar-mcp`](https://github.com/joshuagillmore/seestar-mcp) tool surface and
 presenting it. **It does not control the telescope.**
 
 Two rules shape almost every decision in here:
@@ -161,7 +161,7 @@ Other decisions worth knowing before reading the code:
   so nobody mistakes them for recordings. See
   [`fixtures/README.md`](fixtures/README.md).
 - **Contract-pinned.** The client records which
-  [`seestar-mcp` contract version](https://github.com/OrangeAgente/seestar-mcp/blob/main/docs/CONTRACT.md)
+  [`seestar-mcp` contract version](https://github.com/joshuagillmore/seestar-mcp/blob/main/docs/CONTRACT.md)
   it was written against (`SEESTAR_MCP_CONTRACT_VERSION` in
   `web/src/api/schemas.ts`), so drift is diffed rather than discovered.
 

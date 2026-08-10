@@ -9,7 +9,7 @@ import { z } from 'zod'
 /**
  * The seestar-mcp consumer contract version this file was written against.
  *
- * `docs/CONTRACT.md` in `OrangeAgente/seestar-mcp`, enforced by their
+ * `docs/CONTRACT.md` in `joshuagillmore/seestar-mcp`, enforced by their
  * `tests/test_console_contract.py` — it fails *their* build rather than our
  * runtime, which is the whole point of it existing. They version it so we can
  * pin; this is us pinning.
