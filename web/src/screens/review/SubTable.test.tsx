@@ -64,6 +64,21 @@ describe('SubTable — an unanalysable sub', () => {
   })
 })
 
+describe('SubTable — when there are no rows', () => {
+  it('says the filters hid them, when the report itself has subs', () => {
+    render(<SubTable subs={[]} totalUnfiltered={25} />)
+
+    expect(screen.getByText(/no subs match these filters/)).toBeInTheDocument()
+    expect(screen.queryByText(/no subs in this report/)).not.toBeInTheDocument()
+  })
+
+  it('says the report is empty only when it is', () => {
+    render(<SubTable subs={[]} totalUnfiltered={0} />)
+
+    expect(screen.getByText('no subs in this report')).toBeInTheDocument()
+  })
+})
+
 describe('SubTable — a sub with no reasons', () => {
   // The server always sends at least one line (PASS subs get "PASS: all
   // metrics within session norms"), but an empty list must not be read as

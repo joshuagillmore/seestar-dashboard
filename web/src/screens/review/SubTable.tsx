@@ -75,7 +75,14 @@ export function SubTable({
       </div>
 
       {rows.length === 0 ? (
-        <div className={styles.empty}>no subs in this report</div>
+        // Two different empties. With every verdict chip switched off the
+        // report still has subs, and "no subs in this report" would claim
+        // an empty session.
+        <div className={styles.empty}>
+          {totalUnfiltered != null && totalUnfiltered > 0
+            ? `no subs match these filters — ${totalUnfiltered} in the session`
+            : 'no subs in this report'}
+        </div>
       ) : (
         rows.map((sub) => {
           const tone = toneFor(sub.verdict)
