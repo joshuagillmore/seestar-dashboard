@@ -39,7 +39,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Awaitable, Callable
 
 from seestar_sidecar import env as _env  # noqa: F401 — loads .env before the os.environ.get() below; see env.py
@@ -144,14 +144,59 @@ class QaJobRegistry:
         return list(self._jobs.values())
 
 
+def _contained(cache_dir: Path, file_name: str) -> Path:
+    """`cache_dir / file_name`, or ValueError unless that is a plain file
+    directly inside `cache_dir`.
+
+    `file_name` is built from a target id, which arrives in a query string.
+    Joined unchecked, `../x` read outside the cache, and `//host/share/x`
+    REPLACED the whole path with a UNC one, so the next `is_file()` made
+    Windows open an SMB session to that host and hand it the user's NTLM
+    hash. routes.py refuses such ids before they get here; this is the second
+    layer, so a caller that forgets still cannot build the path.
+
+    Deliberately lexical. The obvious containment test,
+    `path.resolve().is_relative_to(cache_dir.resolve())`, resolves the path
+    first, and resolving a UNC path on Windows opens it — the very
+    connection this exists to prevent. Refusing anything that is not a
+    single, ordinary path component needs no filesystem access at all:
+
+    - a separator in either style, or a drive/stream colon, means the id
+      would add a path component or switch drive or file stream;
+    - `.` / `..` / empty are not file names;
+    - a Windows device name (NUL, CON, COM1, ...) is not a file either, and
+      opening one reads a device instead.
+    """
+    if (
+        not file_name
+        or file_name in (".", "..")
+        or any(ch in file_name for ch in ("/", "\\", ":", "\0"))
+        or PureWindowsPath(file_name).is_reserved()
+    ):
+        raise ValueError(f"refusing a cache path outside {cache_dir}: {file_name!r}")
+    path = cache_dir / file_name
+    if path.parent != cache_dir:  # belt and braces for anything the rules above missed
+        raise ValueError(f"refusing a cache path outside {cache_dir}: {file_name!r}")
+    return path
+
+
+def _checked_target_id(target_id: str) -> str:
+    # The suffix is appended AFTER the id, so an id of "" or "NUL" still
+    # yields a harmless-looking ".json" / "NUL.json" — check the id itself
+    # too, not just the file name it becomes.
+    if not target_id or PureWindowsPath(target_id).is_reserved():
+        raise ValueError(f"refusing a cache path for target id {target_id!r}")
+    return target_id
+
+
 def _cache_path(cache_dir: Path, target_id: str) -> Path:
-    return cache_dir / f"{target_id}.json"
+    return _contained(cache_dir, f"{_checked_target_id(target_id)}.json")
 
 
 def _inflight_path(cache_dir: Path, target_id: str) -> Path:
     """Marker written while a job runs, removed when it reaches any terminal
     state. Its presence with no live job means the process died mid-run."""
-    return cache_dir / f"{target_id}.inflight.json"
+    return _contained(cache_dir, f"{_checked_target_id(target_id)}.inflight.json")
 
 
 #: How many Tier-2 analyses may run at once, process-wide.
@@ -187,7 +232,7 @@ def mark_inflight(cache_dir: Path, target_id: str, signature: str) -> None:
             json.dumps({"target_id": target_id, "signature": signature, "started_at": _iso(_now())}),
             encoding="utf-8",
         )
-    except OSError:
+    except (OSError, ValueError):
         logger.warning("could not mark %s in flight", target_id, exc_info=True)
 
 
@@ -196,7 +241,7 @@ def clear_inflight(cache_dir: Path, target_id: str) -> None:
     and the ok:false path alike — so only a killed process leaves one."""
     try:
         _inflight_path(cache_dir, target_id).unlink(missing_ok=True)
-    except OSError:
+    except (OSError, ValueError):
         pass
 
 
@@ -219,8 +264,14 @@ def load_cached_report(cache_dir: Path, target_id: str) -> dict | None:
     caller's job (see resolve_status()) — so a caller that wants the
     possibly-stale report anyway can still get it rather than this treating
     a mismatch as if nothing exists.
+
+    A target id that cannot name a file inside the cache (see `_contained`)
+    reads as "never analysed" rather than raising into a route.
     """
-    path = _cache_path(cache_dir, target_id)
+    try:
+        path = _cache_path(cache_dir, target_id)
+    except ValueError:
+        return None
     if not path.is_file():
         return None
     try:
@@ -235,6 +286,9 @@ def load_cached_report(cache_dir: Path, target_id: str) -> dict | None:
 
 
 def write_cached_report(cache_dir: Path, target_id: str, signature: str, result: dict) -> None:
+    # Resolved before anything touches the disk: a refused id (ValueError, see
+    # _contained) must not even create the cache directory.
+    path = _cache_path(cache_dir, target_id)
     cache_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "target_id": target_id,
@@ -246,7 +300,6 @@ def write_cached_report(cache_dir: Path, target_id: str, signature: str, result:
     # to truncate the cache file in place, destroying the PREVIOUS good report
     # as well as failing to store the new one. os.replace is atomic on both
     # POSIX and Windows, so a reader sees either the old file or the new one.
-    path = _cache_path(cache_dir, target_id)
     tmp = path.with_suffix(".json.tmp")
     with tmp.open("w", encoding="utf-8") as fh:
         json.dump(payload, fh)
@@ -434,7 +487,7 @@ def start_analysis(
         # again. Persist first, then publish.
         try:
             write_cached_report(cache_dir, target_id, signature, result)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             # A result that cannot be stored is not a success. Reporting
             # complete here would show a report this process happens to hold
             # in memory and that no restart can ever recover.

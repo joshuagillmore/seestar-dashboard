@@ -518,3 +518,79 @@ def test_verdict_counts_are_withheld_once_the_sub_set_changes(
 
     assert stale["status"] == "stale"
     assert "verdicts" not in stale, "a stale report must not carry an unqualified count"
+
+
+# --- target-id validation: the cache path is built from `target` -----------
+#
+# qa_analysis builds `cache_dir / f"{target}.json"` from the query string.
+# Unchecked, `../x` read a file outside the cache, and `//host/share/x` made
+# Windows open an SMB connection to an attacker's host — leaking the user's
+# NTLM hash — from nothing more than an <img> tag on any page they had open.
+
+#: Every shape that must never reach a filesystem path: parent traversal in
+#: both separator styles, an absolute path, a drive path, a UNC path in both
+#: separator styles, and an NTFS alternate-data-stream suffix.
+HOSTILE_TARGETS = [
+    "../outside",
+    "..\\outside",
+    "sub/../../outside",
+    "/etc/outside",
+    "C:/outside",
+    "C:outside",
+    "//attacker.example/share/x",
+    "\\\\attacker.example\\share\\x",
+    "M31:stream",
+]
+
+
+@pytest.mark.parametrize("target", HOSTILE_TARGETS)
+def test_qa_analysis_status_refuses_a_path_shaped_target(app_factory, monkeypatch, target):
+    touched = []
+
+    def spy(cache_dir, target_id):
+        touched.append(target_id)
+        return None
+
+    # The refusal must happen before anything builds a path from `target`,
+    # not after a read that happened to find nothing.
+    monkeypatch.setattr(routes.qa_analysis, "load_cached_report", spy)
+    monkeypatch.setattr(routes.qa_analysis, "load_inflight", spy)
+    with TestClient(app_factory()) as client:
+        response = client.get("/api/qa_analysis_status", params={"target": target})
+
+    assert response.status_code == 404
+    assert response.json()["ok"] is False
+    assert touched == []
+
+
+def test_a_traversal_target_cannot_read_a_report_outside_the_cache(app_factory, tmp_path):
+    """The concrete exploit, end to end: a file shaped like a cache entry
+    sitting one directory above the cache used to come back as a report."""
+    import json
+
+    (tmp_path / "planted.json").write_text(
+        json.dumps({"target_id": "x", "signature": "s", "analysed_at": "t", "result": {"leak": 1}}),
+        encoding="utf-8",
+    )
+    with TestClient(app_factory()) as client:
+        response = client.get("/api/qa_analysis_status", params={"target": "../planted"})
+
+    assert response.status_code == 404
+    assert "leak" not in response.text
+
+
+@pytest.mark.parametrize("target", HOSTILE_TARGETS)
+def test_qa_analysis_start_refuses_a_path_shaped_target(app_factory, monkeypatch, target):
+    def boom(app, tool, arguments):
+        raise AssertionError("must not reach the tool for a path-shaped target")
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", boom)
+    with TestClient(app_factory()) as client:
+        response = client.post(
+            "/api/qa_analysis_start",
+            params={"target": target},
+            headers={routes.CLIENT_HEADER: "test"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["ok"] is False

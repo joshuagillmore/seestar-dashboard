@@ -885,6 +885,25 @@ def _qa_cache_dir(request: Request) -> Path:
     return Path(cache_dir)
 
 
+def _refuse_implausible_target(target: str) -> JSONResponse | None:
+    """`None` when `target` is shaped like a target id, else the 404 to return.
+
+    Both QA routes below hand `target` to qa_analysis, which builds its cache
+    file path from it. Unchecked, `?target=../x` read a file outside the
+    cache, and `?target=//host/share/x` made Windows open an SMB session to
+    an attacker's host (leaking the user's NTLM hash) — reachable from a bare
+    `<img>` on any page the user had open, since qa_analysis_status is a GET.
+    qa_analysis refuses such paths itself as well (see its `_contained`);
+    this is the first layer, and the same check sub_image and target_image
+    already apply.
+    """
+    if is_plausible_target_id(target):
+        return None
+    return JSONResponse(
+        {"ok": False, "error": f"not a recognised target id: {target!r}"}, status_code=404
+    )
+
+
 def _qa_job_registry(request: Request) -> QaJobRegistry:
     """create_app() always sets app.state.qa_job_registry (see main.py) —
     the fallback here only guards a bare, non-create_app() app, the same
@@ -1029,6 +1048,9 @@ async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
     refusal = _reject_untrusted_caller(request)
     if refusal is not None:
         return refusal
+    refusal = _refuse_implausible_target(target)
+    if refusal is not None:
+        return refusal
 
     archive_dir, local_tz = _archive_dir_and_tz(request)
     scan = scan_archive(archive_dir, local_tz=local_tz)
@@ -1079,7 +1101,14 @@ async def qa_analysis_status(request: Request, target: str) -> JSONResponse:
     ordinarily "not_analysed") rather than a 404: unlike qa_analysis_start,
     polling status is not an action that needs subs to exist on disk right
     now to make sense of.
+
+    A `target` that is not even shaped like a target id is a 404 before
+    anything else runs — see _refuse_implausible_target.
     """
+    refusal = _refuse_implausible_target(target)
+    if refusal is not None:
+        return refusal
+
     archive_dir, local_tz = _archive_dir_and_tz(request)
     scan = scan_archive(archive_dir, local_tz=local_tz)
     archive_target = scan.targets.get(target)
