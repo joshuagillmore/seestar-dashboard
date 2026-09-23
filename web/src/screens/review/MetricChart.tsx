@@ -1,5 +1,5 @@
 import type { QaSubVerdict } from '../../api/schemas'
-import { bucketSubs } from './qa'
+import { bucketSubs, METRIC_LABELS, type ChartBucket } from './qa'
 import styles from './MetricChart.module.css'
 
 /** One cutoff line. `value` comes from `summary.thresholds` — never a
@@ -29,12 +29,20 @@ export interface MetricChartProps {
  * Per-sub metric across the session, as flex-div bars with the server's own
  * cutoff lines over them. No charting library — the CSS-bars decision.
  *
- * **Bar colour is the server's per-sub verdict, and the lines are the
- * server's effective thresholds.** Neither is computed here: the chart never
- * compares a value to a cutoff to decide anything, it just draws both and
- * lets them be seen together. A bar crossing a line is the server's verdict
- * and the server's threshold agreeing on screen, not this component deriving
- * one from the other.
+ * **Bar colour is the server's verdict on THIS metric, read off its own
+ * reasons, and the lines are the server's effective thresholds.** Neither is
+ * computed here: the chart never compares a value to a cutoff to decide
+ * anything, it just draws both and lets them be seen together. A bar crossing
+ * a line is the server's verdict and the server's threshold agreeing on
+ * screen, not this component deriving one from the other.
+ *
+ * A bucket's height is its WORST value and its colour the worst verdict any
+ * reason gave this metric in it — see bucketSubs. On a real session every
+ * bar is a bucket, so a mean height or the sub's overall verdict would draw
+ * an outlier below the line it crossed, and red bars on the passing side.
+ *
+ * Colour is never the only carrier: each bar's tooltip and accessible name
+ * say the verdict and quote the server's reason.
  *
  * The lines were impossible until seestar-mcp shipped `summary.thresholds`
  * (d555c4b) — before that the cutoffs existed only inside `reasons[]` prose.
@@ -65,6 +73,7 @@ export function MetricChart({
   thresholds = [],
 }: MetricChartProps) {
   const data = bucketSubs(subs, metric, buckets)
+  const metricLabel = METRIC_LABELS[metric] ?? metric
   const barValues = data.map((b) => b.value).filter((v): v is number => v != null)
   const lineValues = thresholds.map((t) => t.value)
   const peak = Math.max(0, ...barValues, ...lineValues)
@@ -106,7 +115,9 @@ export function MetricChart({
                 <div
                   key={bucket.startIndex}
                   className={styles.gap}
-                  title={`subs ${bucket.startIndex}–${bucket.startIndex + bucket.count - 1}: not analysed`}
+                  title={`${rangeLabel(bucket)}: ${
+                    bucket.unanalysed > 0 ? 'not analysed' : `no ${metricLabel} measured`
+                  }`}
                 />
               )
             }
@@ -114,15 +125,15 @@ export function MetricChart({
             // still a bar rather than nothing — but only for values that
             // exist. Absent stays absent, above.
             const pct = Math.max(4, (bucket.value / domain) * 100)
+            const label = barLabel(bucket, metricLabel)
             return (
               <div
                 key={bucket.startIndex}
+                role="img"
+                aria-label={label}
                 className={`${styles.bar} ${styles[bucket.tone]}`}
                 style={{ height: `${pct}%` }}
-                title={
-                  `subs ${bucket.startIndex}–${bucket.startIndex + bucket.count - 1}` +
-                  ` · ${bucket.value.toFixed(4)}`
-                }
+                title={label}
               />
             )
           })
@@ -134,4 +145,32 @@ export function MetricChart({
       </div>
     </div>
   )
+}
+
+const rangeLabel = (bucket: ChartBucket): string =>
+  bucket.count === 1
+    ? `sub ${bucket.startIndex}`
+    : `subs ${bucket.startIndex}–${bucket.startIndex + bucket.count - 1}`
+
+/**
+ * What a bar says in words — its tooltip and its accessible name — so the
+ * verdict is never carried by colour alone.
+ *
+ * When a reason blamed this metric, that sentence is quoted verbatim: it
+ * already names the verdict, the metric, the measured value and the cutoff.
+ * Otherwise the bar says that no reason named this metric, and what the
+ * server's verdicts on those subs were.
+ */
+function barLabel(bucket: ChartBucket, metricLabel: string): string {
+  const value = bucket.value == null ? '' : bucket.value.toFixed(4)
+  const head = `${rangeLabel(bucket)} · ${bucket.count > 1 ? 'worst ' : ''}${value}`
+  const verdicts = bucket.verdicts.join(', ')
+  const skipped = bucket.unanalysed > 0 ? ` · ${bucket.unanalysed} not analysed` : ''
+  if (bucket.reason) return `${head} · ${bucket.reason}${skipped}`
+  if (bucket.tone === 'pass') {
+    return `${head} · no reason names ${metricLabel} · verdict ${verdicts}${skipped}`
+  }
+  // Nothing in the reasons could be attributed to any metric, so the colour
+  // is the sub's own verdict — and the label says that is what it is.
+  return `${head} · verdict ${verdicts}; its reasons name no metric${skipped}`
 }

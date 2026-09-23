@@ -301,7 +301,8 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
                           <Swatch tone="marginal" label="marginal" />
                           <Swatch tone="reject" label="reject" />
                           <span className={styles.legendNote}>
-                            bars toned by the server&rsquo;s verdict; dashed lines are the
+                            each bar is the worst sub in its slice, toned by the verdict the
+                            server&rsquo;s reasons give that metric; dashed lines are the
                             cutoffs this session was scored against — session-relative, so
                             another night&rsquo;s are different numbers
                           </span>

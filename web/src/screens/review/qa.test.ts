@@ -214,17 +214,69 @@ describe('bucketSubs — aggregate without making sparse look dense', () => {
     expect(buckets.reduce((n, b) => n + b.count, 0)).toBe(real().subs.length)
   })
 
+  const passing = (name: string, eccentricity: number, star_count = 30) =>
+    makeSub(name, 'PASS', [serverReason.pass], { eccentricity, star_count })
+
   it('a bucket takes the WORST verdict it contains, never an average', () => {
     // One reject inside forty passes has to stay visible — averaging tones
     // would hide the exact event the chart exists to show.
     const subs = [
-      { ...real().subs[0]!, verdict: 'PASS' },
-      { ...real().subs[0]!, verdict: 'PASS' },
-      { ...real().subs[0]!, verdict: 'REJECT' },
-      { ...real().subs[0]!, verdict: 'PASS' },
+      passing('a', 0.4),
+      passing('b', 0.41),
+      makeSub('c', 'REJECT', [serverReason.eccReject(0.93, 0.9)], { eccentricity: 0.93 }),
+      passing('d', 0.39),
     ]
 
     expect(bucketSubs(subs, 'eccentricity', 1)[0]!.tone).toBe('reject')
+  })
+
+  it('a bucket is as tall as its WORST value in the bad direction, never the mean', () => {
+    // The mean of forty good subs and one outlier sits below the cutoff line
+    // — the outlier drawn as if it had cleared it.
+    const subs = [
+      passing('a', 0.4, 30),
+      makeSub('b', 'REJECT', [serverReason.eccReject(0.93, 0.9)], {
+        eccentricity: 0.93,
+        star_count: 31,
+      }),
+      makeSub('c', 'REJECT', [serverReason.starReject(9, 16, 32)], {
+        eccentricity: 0.41,
+        star_count: 9,
+      }),
+    ]
+
+    // Eccentricity is a ceiling: worst is the largest.
+    expect(bucketSubs(subs, 'eccentricity', 1)[0]!.value).toBe(0.93)
+    // Star count is a floor: worst is the smallest.
+    expect(bucketSubs(subs, 'star_count', 1)[0]!.value).toBe(9)
+  })
+
+  it('tones a bucket by the reasons that blame THIS metric, not the sub’s verdict', () => {
+    // Rejected for FWHM, clean on eccentricity: its eccentricity bar must not
+    // be painted as a rejection.
+    const fwhmOnly = makeSub('f', 'REJECT', [serverReason.fwhmReject(2.8, 2.74, 2.61)], {
+      eccentricity: 0.4,
+      fwhm: 2.8,
+    })
+    expect(bucketSubs([fwhmOnly], 'eccentricity', 60)[0]!.tone).toBe('pass')
+    expect(bucketSubs([fwhmOnly], 'fwhm', 60)[0]!.tone).toBe('reject')
+
+    // Real sub 17: REJECT overall, MARGINAL on eccentricity.
+    const sub17 = real().subs.find(
+      (s) => s.verdict === 'REJECT' && s.reasons.some((r) => r.startsWith('MARGINAL:')),
+    )!
+    const [bucket] = bucketSubs([sub17], 'eccentricity', 60)
+    expect(bucket!.tone).toBe('marginal')
+    // And carries the server's sentence, so the bar can say why.
+    expect(bucket!.reason).toMatch(/^MARGINAL: eccentricity /)
+  })
+
+  it('falls back to the sub’s own verdict when no reason can be attributed', () => {
+    // A reason format we do not recognise must not quietly turn a reject
+    // into a clean-looking bar.
+    const odd = makeSub('odd', 'REJECT', ['REJECT: plate solve failed'], { eccentricity: 0.4 })
+
+    expect(bucketSubs([odd], 'eccentricity', 60)[0]!.tone).toBe('reject')
   })
 
   it('a bucket with no measurable values has a null value, not a zero', () => {
@@ -235,6 +287,18 @@ describe('bucketSubs — aggregate without making sparse look dense', () => {
     // Zero would plot as a bar at the floor — a measured-looking value for a
     // sub that was never measured.
     expect(bucket!.value).toBeNull()
+  })
+
+  it('leaves an unanalysed sub out of its bucket — no zero star count, no reject tone', () => {
+    // The server sends star_count 0 on the error path. Kept, it drew a red
+    // zero bar on the star-count chart and dragged the bucket down.
+    const [alone] = bucketSubs([noStarsSub('dark')], 'star_count', 60)
+    expect(alone!.value).toBeNull()
+
+    const [mixed] = bucketSubs([passing('a', 0.4, 30), noStarsSub('dark')], 'star_count', 1)
+    expect(mixed!.value).toBe(30)
+    expect(mixed!.tone).toBe('pass')
+    expect(mixed!.unanalysed).toBe(1)
   })
 
   it('handles an empty session without throwing', () => {
