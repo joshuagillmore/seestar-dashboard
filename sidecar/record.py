@@ -84,6 +84,87 @@ def _assert_arguments_complete(arguments: dict, allowed: frozenset) -> None:
 _assert_arguments_complete(ARGUMENTS, ALLOWED_TOOLS)
 
 
+#: The site every committed fixture carries: Greenwich Royal Observatory under
+#: a name that says it is a placeholder. This repository is public, and the
+#: real profile located a house to about ten metres — see fixtures/README.md.
+#: tests/test_record.py pins both this and the committed fixture to it.
+SYNTHETIC_SITE = {
+    "name": "Example Observatory",
+    "lat_deg": 51.4778,
+    "lon_deg": -0.0015,
+    "elevation_m": 46.0,
+}
+
+#: Tools whose payloads are COMPUTED from the site: peak altitudes and
+#: transits (latitude and longitude, from a catalogue position), dark
+#: windows, dawn times. Scrubbing the site block cannot fix these — the
+#: numbers themselves point home — so they must be regenerated at the
+#: synthetic site, as fixtures/README.md describes, before committing.
+SITE_DERIVED_TOOLS = (
+    "assess_conditions",
+    "check_night_guardrails",
+    "get_target_observability",
+    "plan_targets",
+)
+
+SITE_DERIVED_WARNING = f"""
+!!! PRIVACY — DO NOT COMMIT THESE FIXTURES AS RECORDED !!!
+
+The site block in get_site_profile.json and the site name everywhere have
+been replaced with the synthetic Greenwich site. That is NOT enough:
+{", ".join(SITE_DERIVED_TOOLS)} contain geometry COMPUTED at the real site
+(peak altitudes, transits, dark windows, dawn times), and those numbers
+locate it to a city. Regenerate them at the synthetic site with
+seestar-mcp's own planner, as fixtures/README.md describes, and re-check
+every fixture for the real site before committing. Do not commit the
+recorded versions.
+"""
+
+
+def _replace_in_strings(value, old: str, new: str):
+    if isinstance(value, str):
+        return value.replace(old, new)
+    if isinstance(value, dict):
+        return {k: _replace_in_strings(v, old, new) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_replace_in_strings(v, old, new) for v in value]
+    return value
+
+
+def scrub_site(payloads: dict[str, dict]) -> dict[str, dict]:
+    """`payloads` (tool -> recorded payload) with the real site replaced.
+
+    - get_site_profile's `profile` gets SYNTHETIC_SITE's name, coordinates and
+      elevation. Bortle, horizon mask and altitude limits are kept: the
+      README records that they stay real, and alone they locate nothing.
+    - The real site's NAME is replaced wherever it appears in any payload —
+      `location.site_name`, and warning text that quotes it.
+
+    Site-derived geometry is deliberately not touched here; see
+    SITE_DERIVED_WARNING for why it cannot be scrubbed, only regenerated.
+    """
+    scrubbed = dict(payloads)
+    profile_payload = payloads.get("get_site_profile") or {}
+    real_profile = profile_payload.get("profile")
+    real_name = real_profile.get("name") if isinstance(real_profile, dict) else None
+
+    if isinstance(real_profile, dict):
+        scrubbed["get_site_profile"] = {
+            **profile_payload,
+            "profile": {**real_profile, **SYNTHETIC_SITE},
+        }
+    if isinstance(real_name, str) and real_name.strip() and real_name != SYNTHETIC_SITE["name"]:
+        scrubbed = {
+            tool: _replace_in_strings(payload, real_name, SYNTHETIC_SITE["name"])
+            for tool, payload in scrubbed.items()
+        }
+    for tool, payload in scrubbed.items():
+        location = payload.get("location") if isinstance(payload, dict) else None
+        if isinstance(location, dict) and "site_name" in location:
+            scrubbed[tool] = {**payload, "location": {**location, "site_name": SYNTHETIC_SITE["name"]}}
+    return scrubbed
+
+
 async def main() -> None:
     if not SEESTAR_AI_DIR:
         print(
@@ -99,14 +180,20 @@ async def main() -> None:
     )
     await connection.start()
     try:
-        FIXTURES.mkdir(parents=True, exist_ok=True)
-        for tool in sorted(ALLOWED_TOOLS):
-            payload = await connection.call(tool, ARGUMENTS[tool])
-            path = FIXTURES / f"{tool}.json"
-            path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-            print(f"wrote {path.relative_to(FIXTURES.parent)}")
+        # Everything is recorded before anything is written: the real site's
+        # name, from get_site_profile, has to be known to scrub the others.
+        recorded = {
+            tool: await connection.call(tool, ARGUMENTS[tool]) for tool in sorted(ALLOWED_TOOLS)
+        }
     finally:
         await connection.aclose()
+
+    FIXTURES.mkdir(parents=True, exist_ok=True)
+    for tool, payload in scrub_site(recorded).items():
+        path = FIXTURES / f"{tool}.json"
+        path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        print(f"wrote {path.relative_to(FIXTURES.parent)}")
+    print(SITE_DERIVED_WARNING, file=sys.stderr)
 
 
 if __name__ == "__main__":
