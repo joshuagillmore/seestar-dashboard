@@ -182,6 +182,13 @@ class ArchiveNight:
     night: str  # ISO date (YYYY-MM-DD), from observing_night()
     subs: int
     minutes: float
+    #: The night's earliest and latest frame, as aware UTC instants. Used by
+    #: projects_union to match a store session to its night when the session
+    #: was logged the next day (see projects_union._late_logged_nights).
+    #: Never serialised: projects_combined builds its `nights` payload field
+    #: by field. `None` only for a night constructed without them (tests).
+    first_frame_utc: datetime | None = None
+    last_frame_utc: datetime | None = None
 
 
 @dataclass
@@ -307,20 +314,25 @@ def scan_archive(root: Path | None, local_tz: timezone | None = None) -> Archive
         target_id = normalize_target_id(raw_name)
 
         nights: dict[str, int] = {}
+        spans: dict[str, tuple[datetime, datetime]] = {}
         sub_paths: list[Path] = []
         for fit in sorted(entry.glob("Light_*.fit")):
             sub_paths.append(fit)
-            night, warning = _parse_light_filename(fit.name, local_tz)
+            night, warning, instant = _parse_light_filename(fit.name, local_tz)
             if warning is not None:
                 warnings.append(f"{entry.name}/{fit.name}: {warning}")
             if night is not None:
                 nights[night] = nights.get(night, 0) + 1
+                first, last = spans.get(night, (instant, instant))
+                spans[night] = (min(first, instant), max(last, instant))
 
         night_records = [
             ArchiveNight(
                 night=night,
                 subs=count,
                 minutes=round(count * EXPOSURE_SECONDS / 60, 4),
+                first_frame_utc=spans[night][0],
+                last_frame_utc=spans[night][1],
             )
             for night, count in sorted(nights.items())
         ]
@@ -412,9 +424,10 @@ def scan_stacked_images(
 
 def _parse_light_filename(
     name: str, local_tz: timezone | None = None
-) -> tuple[str | None, str | None]:
-    """Return `(night, warning)`, where `night` is the *observing* night
-    (see `observing_night()`) — not the raw calendar date in the filename.
+) -> tuple[str | None, str | None, datetime | None]:
+    """Return `(night, warning, instant)`, where `night` is the *observing*
+    night (see `observing_night()`) — not the raw calendar date in the
+    filename — and `instant` the frame's own capture time in UTC.
 
     `night` is `None` only when the filename doesn't match the expected
     shape at all, so its subs can't be counted toward any night. `warning`
@@ -425,10 +438,10 @@ def _parse_light_filename(
     """
     match = _LIGHT_FILENAME.match(name)
     if not match:
-        return None, "did not match Light_<target>_<exposure>s_<filter>_<date>-<time>.fit"
+        return None, "did not match Light_<target>_<exposure>s_<filter>_<date>-<time>.fit", None
     instant = _local_capture_instant_utc(match["date"], match["time"], local_tz)
     night = observing_night(instant).isoformat()
     exposure = float(match["exposure"])
     if abs(exposure - EXPOSURE_SECONDS) > 1e-9:
-        return night, f"exposure {exposure}s disagrees with the assumed {EXPOSURE_SECONDS}s"
-    return night, None
+        return night, f"exposure {exposure}s disagrees with the assumed {EXPOSURE_SECONDS}s", instant
+    return night, None, instant
