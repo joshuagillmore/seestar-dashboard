@@ -1,9 +1,10 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { LivePreviewSchema } from '../../api/schemas'
 import { PreviewCard } from './PreviewCard'
-import { livePreviewNone, livePreviewStacked, livePreviewSub } from '../../test/fixtures'
+import { MONTH_ABBR } from './timestamps'
+import { livePreviewNone, livePreviewStacked, livePreviewStale, livePreviewSub } from '../../test/fixtures'
 
 /**
  * PreviewCard, and specifically the absent state it was failing to reach.
@@ -58,6 +59,32 @@ describe('PreviewCard absent state', () => {
     render(<PreviewCard preview={null} annotate={null} />)
 
     expect(screen.getByTestId('preview-empty')).toBeInTheDocument()
+  })
+})
+
+describe('PreviewCard dates a stale frame', () => {
+  afterEach(() => vi.useRealTimers())
+
+  const stale = (captured_at: string) =>
+    LivePreviewSchema.parse({ ...(livePreviewStale() as object), captured_at })
+
+  it('says which day a stale frame is from when it is not today', () => {
+    // "stale — from 21:14" on a frame from last week reads as tonight.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-23T12:00:00Z'))
+    const iso = '2026-07-30T02:00:00Z'
+    const d = new Date(Date.parse(iso))
+
+    render(<PreviewCard preview={stale(iso)} annotate={null} />)
+
+    expect(screen.getByTestId('preview-stale')).toHaveTextContent(`${d.getDate()} ${MONTH_ABBR[d.getMonth()]}`)
+  })
+
+  it('never renders "Invalid Date" for a timestamp it cannot parse', () => {
+    render(<PreviewCard preview={stale('not a time')} annotate={null} />)
+
+    expect(screen.getByTestId('preview-stale')).not.toHaveTextContent(/Invalid Date/)
+    expect(screen.getByTestId('preview-stale')).toHaveTextContent(/unknown time/)
   })
 })
 

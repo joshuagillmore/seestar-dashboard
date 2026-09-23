@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SessionActivityCard } from './SessionActivityCard'
+import { MONTH_ABBR } from './timestamps'
 import { SessionActivitySchema } from '../../api/schemas'
 import { sessionActivity } from '../../test/fixtures'
 
@@ -134,6 +135,22 @@ describe('SessionActivityCard', () => {
       render(<SessionActivityCard activity={null} sessionRunning={false} />)
       expect(screen.getByTestId('session-activity-not-running')).toBeInTheDocument()
       expect(screen.getByTestId('session-activity-unavailable')).toBeInTheDocument()
+    })
+  })
+
+  describe('record times', () => {
+    afterEach(() => vi.useRealTimers())
+
+    it('dates a record that is not from today, so a days-old entry cannot read as tonight', () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-09-23T12:00:00Z'))
+      const first = activity.records[0].ts!
+      const d = new Date(Date.parse(first))
+
+      render(<SessionActivityCard activity={activity} sessionRunning={false} />)
+
+      const records = screen.getAllByTestId('session-activity-record')
+      expect(records[0]).toHaveTextContent(`${d.getDate()} ${MONTH_ABBR[d.getMonth()]}`)
     })
   })
 

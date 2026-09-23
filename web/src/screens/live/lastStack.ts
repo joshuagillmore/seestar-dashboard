@@ -1,5 +1,6 @@
 import type { LastStack } from '../../api/schemas'
 import { parse } from '../tonight/timeline'
+import { MONTH_ABBR } from './timestamps'
 
 /**
  * Whether `/api/last_stack` should be (re-)fetched this poll. Target changes
@@ -35,14 +36,9 @@ export function lastStackIsSettled(lastStack: LastStack | null): boolean {
   return lastStack.target !== null || lastStack.reason === 'no_stack'
 }
 
-/** Jan/Feb/… — spelled out rather than reached for via `Intl` so the render
- * path and its test don't depend on the runner's default locale deciding
- * "day month" vs "month day" ordering (see timeline.test.ts's own
- * `formatUtcOffset`/`zoneLabel` tests for the same trap, avoided the same
- * way there). */
-export const MONTH_ABBR = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-]
+// Shared with timestamps.ts's formatWhen; re-exported so existing imports
+// keep working.
+export { MONTH_ABBR }
 
 /**
  * `captured_at` as `"12 Jul"` — day-of-month then short month, in the

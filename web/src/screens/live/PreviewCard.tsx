@@ -3,7 +3,7 @@ import type { Annotate, LivePreview } from '../../api/schemas'
 import { Dot } from '../../ui/Dot'
 import { computeFraming, FRAME_HEIGHT_PX, FRAME_WIDTH_PX } from './framing'
 import { livePreviewImageSrc } from './livePreviewImage'
-import { localHhMm, parse } from '../tonight/timeline'
+import { formatWhen } from './timestamps'
 import styles from './PreviewCard.module.css'
 
 export interface PreviewCardProps {
@@ -149,12 +149,10 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
   )
 }
 
-/** `captured_at` is an ISO timestamp; render it the same local-clock way
- * every other clock on this app does (see tonight/timeline.ts's own
- * zone-honesty note — this inherits the same "browser's zone, not
- * necessarily the site's" caveat, which matters less here since it's a
- * relative "how long ago" figure a viewer reads at a glance). */
+/** `captured_at` is an ISO timestamp, rendered with its date whenever it is
+ * not from today (see `formatWhen`): a stale frame is exactly the one that
+ * may be days old. Unparseable reads as "an unknown time", never "Invalid
+ * Date". */
 function formatCapturedAt(capturedAt: string | null): string {
-  if (!capturedAt) return 'an unknown time'
-  return localHhMm(parse(capturedAt))
+  return formatWhen(capturedAt) ?? 'an unknown time'
 }

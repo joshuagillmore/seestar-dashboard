@@ -1,5 +1,5 @@
 import type { SessionActivity, SessionActivityRecord } from '../../api/schemas'
-import { localHhMm, parse } from '../tonight/timeline'
+import { formatWhen } from './timestamps'
 import styles from './SessionActivityCard.module.css'
 
 export interface SessionActivityCardProps {
@@ -125,10 +125,13 @@ export function SessionActivityCard({ activity, sessionRunning, wide = false }: 
   )
 }
 
+/** Dated whenever the record is not from today (see `formatWhen`): this feed
+ * is shown while idle precisely so older activity can be read, and a bare
+ * HH:MM on a three-nights-old entry reads as tonight. An unparseable `ts` is
+ * shown raw rather than dropped. */
 function formatTs(ts: string | null): string {
   if (!ts) return '—'
-  const ms = parse(ts)
-  return Number.isNaN(ms) ? ts : localHhMm(ms)
+  return formatWhen(ts) ?? ts
 }
 
 function formatArgs(args: Record<string, unknown>): string {
