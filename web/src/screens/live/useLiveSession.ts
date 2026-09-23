@@ -197,9 +197,11 @@ export type LiveSessionState =
       /** `null` for a reading taken on this poll. Otherwise this poll could
        * not read the scope (a failed or unreadable `get_view_state`, or the
        * bridge down), and every field below is the last good reading, held
-       * rather than thrown away: one bad poll does not end a session. The
-       * string says what went wrong, for the screen to show. */
-      stale: string | null
+       * rather than thrown away: one bad poll does not end a session.
+       * `reason` says what went wrong this poll; `failedPolls` is how many
+       * polls in a row have failed, always below FAILED_POLLS_LIMIT (past
+       * that the failure is shown instead). */
+      stale: { reason: string; failedPolls: number } | null
       /** When the reading below was taken, by this client's clock (ISO). */
       readAt: string
       viewState: ViewState
@@ -543,9 +545,8 @@ export function useLiveSession(): LiveSessionState {
      */
     function settleFailure(fallback: LiveSessionState, reason: string, sessionActivity: SessionActivity | null) {
       const hold = holdingSession()
-      setState((prev) =>
-        hold && prev.phase === 'active' ? { ...prev, stale: reason, sessionActivity } : fallback,
-      )
+      const stale = { reason, failedPolls: failStreakRef.current }
+      setState((prev) => (hold && prev.phase === 'active' ? { ...prev, stale, sessionActivity } : fallback))
     }
 
     /**

@@ -18,7 +18,14 @@ import { TargetHeader } from './TargetHeader'
 import { TelemetryGrid } from './TelemetryGrid'
 import { TelemetryLogCard } from './TelemetryLogCard'
 import { formatWhen } from './timestamps'
-import { describeViewFailure, useLiveSession, type LiveSessionState } from './useLiveSession'
+import {
+  describeViewFailure,
+  FAILED_POLLS_LIMIT,
+  IDLE_DEVICE_CHECK_EVERY,
+  POLL_INTERVAL_MS,
+  useLiveSession,
+  type LiveSessionState,
+} from './useLiveSession'
 import styles from './LiveScreen.module.css'
 
 export interface LiveScreenProps {
@@ -54,20 +61,27 @@ function sidebarStatus(state: LiveSessionState): { tone: DotTone | null; meta: s
 
 /**
  * Shown over an active session whose reading is held from an earlier poll
- * because this one could not read the scope (see `stale` on useLiveSession's
- * active state). Says what failed and how old the reading is, so a held
- * stack count cannot pass for a current one. Not an alert: one failed poll
- * is expected now and then, and the next poll asks again.
+ * because the latest could not read the scope (see `stale` on
+ * useLiveSession's active state). Says what failed, how many polls in a row
+ * have, and how old the reading is, so a held stack count cannot pass for a
+ * current one. Not an alert: a failed poll is expected now and then.
+ *
+ * Every claim here holds in every state it appears in. It appears only for
+ * fewer than FAILED_POLLS_LIMIT failed polls in a row, and while it does the
+ * device is asked on every poll (useLiveSession's holdingSession), so "the
+ * next poll asks again" is true; past the limit the failure card replaces it.
  */
-function StaleNotice({ reason, readAt }: { reason: string; readAt: string }) {
+function StaleNotice({ reason, failedPolls, readAt }: { reason: string; failedPolls: number; readAt: string }) {
   const when = formatWhen(readAt)
+  const which = failedPolls === 1 ? 'This poll' : `The last ${failedPolls} polls`
   return (
     <div className={styles.staleNotice} role="status" data-testid="live-stale">
       <Dot tone="marginal" />
       <p className={styles.staleText}>
-        <span className={styles.staleTitle}>Not current.</span> This poll could not read the scope:{' '}
-        {reason}. Showing the last reading{when ? `, from ${when}` : ''}. One failed poll does not end
-        the session, and the next poll asks again.
+        <span className={styles.staleTitle}>Not current.</span> {which} could not read the scope
+        {failedPolls === 1 ? '' : '; the latest'}: {reason}. Showing the last reading
+        {when ? `, from ${when}` : ''}. The session is held here for up to {FAILED_POLLS_LIMIT - 1} failed
+        polls in a row, and the next poll asks again.
       </p>
     </div>
   )
@@ -224,11 +238,13 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
           <div className={styles.stateCard} data-testid="live-idle">
             <Dot tone="marginal" />
             <div>
-              <div className={styles.stateTitle}>No reading from the scope this poll</div>
+              <div className={styles.stateTitle}>No reading from the scope</div>
               <p className={styles.stateBody}>
-                get_status answered, so the bridge is up, but {describeViewFailure(state.viewError)}. That
-                is this request failing, not the scope reporting, so this poll cannot say whether anything
-                is being observed. The next poll asks again.
+                When last asked, get_status answered, so the bridge is up, but{' '}
+                {describeViewFailure(state.viewError)}. That is the request failing, not the scope
+                reporting, so this screen cannot say whether anything is being observed. The idle
+                back-off can skip the scope on the polls in between, but it is asked again within the
+                next {IDLE_DEVICE_CHECK_EVERY} polls ({POLL_INTERVAL_MS / 1000} s apart).
               </p>
             </div>
           </div>
@@ -286,7 +302,9 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
         // own live telemetry rather than a directory-name parse.
         const liveView = state.viewState.view_state?.result?.View ?? null
         const staleNotice =
-          state.stale === null ? null : <StaleNotice reason={state.stale} readAt={state.readAt} />
+          state.stale === null ? null : (
+            <StaleNotice reason={state.stale.reason} failedPolls={state.stale.failedPolls} readAt={state.readAt} />
+          )
 
         if (isMobile) {
           return (
