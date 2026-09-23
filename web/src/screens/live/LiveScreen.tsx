@@ -245,6 +245,7 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
                 preview={state.preview}
                 annotate={liveView?.Stack?.Annotate ?? null}
                 exposureMs={liveView?.Stack?.Exposure?.exp_ms ?? null}
+                targetName={liveView?.target_name ?? null}
               />
               <LastStackCard lastStack={state.lastStack} />
             </div>
