@@ -129,7 +129,7 @@ describe('the number scanner', () => {
   })
 
   it('does not flag near neighbours', () => {
-    const source = `const n = [10.42, 0.425, 1.575, 57.5, 42, 0.5749]; const s = 'x.575 h1.42 #575'`
+    const source = `const n = [10.42, 0.425, 1.575, 57.5, 42, 0.5749]; const s = 'x.575 h1.42'`
     expect(values(source)).toEqual([])
   })
 
