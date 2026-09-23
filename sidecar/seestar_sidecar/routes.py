@@ -3,6 +3,7 @@ views (see allowlist.SIDECAR_ROUTES) that compose tool calls with local
 read-only computation. Routes are literal — an unlisted tool 404s because no
 handler exists for it, not because a guard rejected it.
 """
+import asyncio
 import os
 from dataclasses import asdict
 from datetime import timezone
@@ -46,6 +47,7 @@ from seestar_sidecar.live_preview import (
     REASON_NO_FRAME,
     REASON_NOT_CONFIGURED,
     REASON_SHARE_UNREACHABLE,
+    SHARE_SCAN_TIMEOUT_SECONDS,
     LiveFrame,
     ShareUnreachableError,
     discover_frame_within_timeout,
@@ -750,11 +752,39 @@ async def live_preview_image(request: Request) -> Response:
     as target_image's absent states.
     """
     cache: LiveFrame | None = getattr(request.app.state, "live_preview_cache", None)
-    if cache is None or not cache.path.is_file():
+    if cache is None:
         return JSONResponse(
             {"ok": False, "error": "no live preview frame available yet"}, status_code=404
         )
-    return _image_response(cache.path)
+    return await _share_image_response(
+        cache.path, missing="no live preview frame available yet"
+    )
+
+
+#: The image routes' answer when the share did not answer in time. 503 rather
+#: than 404: "could not tell" is not "there is nothing", the same distinction
+#: live_preview.ShareUnreachableError draws for the metadata routes.
+_SHARE_UNREACHABLE_BODY = {"ok": False, "error": "live share unreachable"}
+
+
+async def _share_image_response(path: Path, *, missing: str) -> Response:
+    """Serve a file from the scope's SMB share, or say why not.
+
+    The existence check used to be a bare `path.is_file()` on the event loop,
+    and a stat on an SMB share that has gone quiet can hang for as long as
+    Windows' SMB client cares to wait — with every other route and poll
+    frozen behind it. Bounded exactly as discover_frame_within_timeout bounds
+    the metadata routes' scans: off the loop, under the same ceiling.
+    """
+    try:
+        exists = await asyncio.wait_for(
+            asyncio.to_thread(path.is_file), timeout=SHARE_SCAN_TIMEOUT_SECONDS
+        )
+    except (asyncio.TimeoutError, OSError):
+        return JSONResponse(_SHARE_UNREACHABLE_BODY, status_code=503)
+    if not exists:
+        return JSONResponse({"ok": False, "error": missing}, status_code=404)
+    return _image_response(path)
 
 
 # --- last completed stack (slice 3 follow-up) ------------------------------
@@ -861,11 +891,11 @@ async def last_stack_image(request: Request) -> Response:
     404, same shape as live_preview_image's and target_image's absent states.
     """
     cache: LastStack | None = getattr(request.app.state, "last_stack_cache", None)
-    if cache is None or not cache.path.is_file():
+    if cache is None:
         return JSONResponse(
             {"ok": False, "error": "no last stack available yet"}, status_code=404
         )
-    return _image_response(cache.path)
+    return await _share_image_response(cache.path, missing="no last stack available yet")
 
 
 # --- session activity (operator panel) --------------------------------------
