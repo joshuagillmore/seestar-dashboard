@@ -43,6 +43,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Awaitable, Callable
 
 from seestar_sidecar import env as _env  # noqa: F401 — loads .env before the os.environ.get() below; see env.py
+from seestar_sidecar.json_safety import replace_non_finite
 
 logger = logging.getLogger(__name__)
 
@@ -275,7 +276,11 @@ def load_cached_report(cache_dir: Path, target_id: str) -> dict | None:
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        # replace_non_finite: a cache file written before tool payloads were
+        # cleaned on the way in (see routes._clean_payload) can hold a bare
+        # NaN, which json reads happily and JSONResponse then refuses to
+        # render — a 500 on every poll for that target, for good.
+        return replace_non_finite(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError):
         logger.warning(
             "qa analysis cache for %s is unreadable, treating as not-yet-analysed",

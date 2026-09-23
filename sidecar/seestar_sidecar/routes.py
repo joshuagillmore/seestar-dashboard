@@ -54,6 +54,7 @@ from seestar_sidecar.live_preview import (
     is_frame_stale,
 )
 from seestar_sidecar.mcp_proxy import LONG_RUNNING_TOOLS, ProxyTransportError, effective_client_id
+from seestar_sidecar.json_safety import replace_non_finite
 from seestar_sidecar.redaction import redact_payload, redact_secrets
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar import qa_analysis
@@ -198,7 +199,34 @@ async def _call_tool_on_app(app, tool: str, arguments: dict) -> dict:
         # an internal bug either way.
         reason = getattr(app.state, "connection_unavailable_reason", None)
         raise ProxyTransportError(reason or "MCP connection not started")
-    return await connection.call(tool, arguments)
+    try:
+        payload = await connection.call(tool, arguments)
+    except ProxyTransportError as exc:
+        raise ProxyTransportError(redact_secrets(str(exc))) from None
+    except Exception as exc:  # noqa: BLE001 — e.g. an unparseable payload: a 502, not a bare 500
+        raise ProxyTransportError(
+            redact_secrets(f"call to {tool!r} failed: {type(exc).__name__}: {exc}")
+        ) from None
+    return _clean_payload(payload)
+
+
+def _clean_payload(payload: dict) -> dict:
+    """The one place every tool payload passes on its way to a route — see
+    _call_tool_on_app and _fetch's replay branch, the only two sources.
+
+    - `error` is redacted. An upstream exception string is untrusted input:
+      httpx embeds the full request URL in HTTPStatusError, and a meteoblue
+      API key reached the DOM that way (see redaction.py). This used to be
+      each route's job, and plan_targets, projects_combined and the QA job
+      errors each forgot; done here, a new route cannot.
+    - Non-finite numbers become null, so no route can 500 rendering one
+      (see json_safety.py).
+
+    Transport failures are redacted alongside, in _call_tool_on_app, and
+    re-raised `from None`: chaining the original would carry the unredacted
+    message into any traceback that logs it.
+    """
+    return redact_payload(replace_non_finite(payload))
 
 
 async def call_tool(request: Request, tool: str, arguments: dict) -> dict:
@@ -230,7 +258,7 @@ async def _fetch(request: Request, tool: str, arguments: dict) -> dict:
     duplicating the replay/live branch.
     """
     if replay_enabled():
-        return load_fixture(tool)
+        return _clean_payload(load_fixture(tool))
     return await call_tool(request, tool, arguments)
 
 
