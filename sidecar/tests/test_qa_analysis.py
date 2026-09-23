@@ -654,6 +654,7 @@ def test_cache_paths_refuse_anything_that_is_not_a_plain_name_inside_the_cache(
     from seestar_sidecar import qa_analysis
 
     cache_dir = tmp_path / "cache"
+    assert not qa_analysis.can_cache(target_id)
     with pytest.raises(ValueError):
         qa_analysis._cache_path(cache_dir, target_id)
     with pytest.raises(ValueError):
@@ -677,3 +678,63 @@ def test_ordinary_target_ids_still_map_into_the_cache(tmp_path):
             qa_analysis._inflight_path(cache_dir, target_id)
             == cache_dir / f"{target_id}.inflight.json"
         )
+
+
+#: Ids archive.normalize_target_id can produce from directory names that are
+#: legal on Windows: anything but whitespace and `<>:"/\|?*`. The routes now
+#: accept an id the archive scan itself produced, so each must name a real
+#: cache file — written and read back here on whichever OS runs the suite.
+REAL_ARCHIVE_IDS = [
+    "Thor'sHelmet",
+    "M42(Orion)",
+    "Pac-Man&Co",
+    "Mélotte15",
+    "Cr399[Coathanger]",
+    "IC1396#2",
+    "NGC7000,NorthAmerica",
+    "Sh2-129;Squid",
+    "Abell~39",
+    "Stock2!",
+    "M8=Lagoon",
+    "{Cave}",
+    "50%Moon",
+    "Heart@Soul",
+    "Sh2-155$",
+    "M1^",
+    "`Tick`",
+]
+
+
+@pytest.mark.parametrize("target_id", REAL_ARCHIVE_IDS)
+def test_a_real_archive_id_round_trips_through_the_cache(tmp_path, target_id):
+    from seestar_sidecar import qa_analysis
+
+    cache_dir = tmp_path / "cache"
+    assert qa_analysis.can_cache(target_id)
+    qa_analysis.mark_inflight(cache_dir, target_id, "sig")
+    assert qa_analysis.load_inflight(cache_dir, target_id)["target_id"] == target_id
+    qa_analysis.write_cached_report(cache_dir, target_id, "sig", {"ok": True})
+
+    assert qa_analysis.load_cached_report(cache_dir, target_id)["result"] == {"ok": True}
+    assert (cache_dir / f"{target_id}.json").is_file()
+
+
+@pytest.mark.parametrize(
+    "target_id",
+    ["A|B", "Why?", "Star*", "<M31>", 'Say"Hi"', "bell\x07", pytest.param("x" * 250, id="250-chars")],
+)
+def test_an_id_no_windows_file_can_be_named_is_refused_on_every_os(tmp_path, target_id):
+    """A Linux-hosted archive can hold a directory name Windows cannot, or
+    one too long for any file system once `.inflight.json` is added. The
+    cache refuses it lexically everywhere, so the same archive behaves the
+    same whichever OS reads it, and readers degrade to "nothing there"."""
+    from seestar_sidecar import qa_analysis
+
+    cache_dir = tmp_path / "cache"
+    assert not qa_analysis.can_cache(target_id)
+    with pytest.raises(ValueError):
+        qa_analysis._cache_path(cache_dir, target_id)
+    with pytest.raises(ValueError):
+        qa_analysis._inflight_path(cache_dir, target_id)
+    assert qa_analysis.load_cached_report(cache_dir, target_id) is None
+    assert qa_analysis.load_inflight(cache_dir, target_id) is None

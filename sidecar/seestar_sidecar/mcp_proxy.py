@@ -12,6 +12,7 @@ from contextlib import AsyncExitStack
 from datetime import timedelta
 from typing import Any
 
+import anyio
 import httpx
 from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
@@ -137,6 +138,9 @@ class McpConnection:
         self._owner: asyncio.Task | None = None
         self._stop: asyncio.Event | None = None
         self._lock = asyncio.Lock()
+        #: The call currently waiting on the server, if any — at most one,
+        #: since calls hold `_lock`. See `_call_tool` and aclose().
+        self._in_flight: anyio.CancelScope | None = None
 
     @property
     def is_started(self) -> bool:
@@ -241,9 +245,7 @@ class McpConnection:
             session = self._session
             assert session is not None
             try:
-                result = await session.call_tool(
-                    tool, arguments or {}, read_timeout_seconds=self._call_timeout
-                )
+                result = await self._call_tool(session, tool, arguments or {})
             except Exception as exc:
                 if _is_timeout(exc):
                     seconds = self._call_timeout.total_seconds()
@@ -260,6 +262,27 @@ class McpConnection:
                 await self._reset()
                 raise ProxyTransportError(f"call to {tool!r} failed: {_describe(exc)}") from exc
         return _extract_payload(result)
+
+    async def _call_tool(self, session: ClientSession, tool: str, arguments: dict[str, Any]) -> Any:
+        """`session.call_tool`, inside a scope aclose() can cancel.
+
+        Tearing the session down does not fail a call waiting on it. The SDK
+        tells pending requests the connection closed from its receive loop's
+        `finally`, but ClientSession.__aexit__ CANCELS that loop, and the
+        `finally` then runs under the cancellation and delivers nothing: the
+        call waits out its whole read timeout, which is an hour for qa_tier2.
+        So aclose() cancels this scope itself. Only this scope's own
+        cancellation is caught here; a cancelled caller still propagates.
+        """
+        with anyio.CancelScope() as scope:
+            self._in_flight = scope
+            try:
+                return await session.call_tool(
+                    tool, arguments, read_timeout_seconds=self._call_timeout
+                )
+            finally:
+                self._in_flight = None
+        raise ProxyTransportError("the MCP connection was closed while the call was in flight")
 
     async def _responds_to_ping(self, session: ClientSession) -> bool:
         try:
@@ -278,13 +301,16 @@ class McpConnection:
         Waits briefly for an in-flight call to finish, but not indefinitely:
         with a qa_tier2 analysis running that could be an hour, and this is
         what FastAPI's lifespan shutdown awaits. Past the grace period the
-        in-flight call is torn out from under — it fails with a transport
-        error, which is the honest outcome of shutting down mid-call.
+        in-flight call is cancelled (see `_call_tool`) and fails with a
+        transport error, which is the honest outcome of shutting down
+        mid-call, and the session is torn down.
         """
         try:
             await asyncio.wait_for(self._lock.acquire(), CLOSE_GRACE_SECONDS)
         except asyncio.TimeoutError:
             logger.warning("closing the MCP session with a call still in flight")
+            if self._in_flight is not None:
+                self._in_flight.cancel()
             await self._reset()
             return
         try:

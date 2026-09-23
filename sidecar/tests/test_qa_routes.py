@@ -681,3 +681,128 @@ def test_qa_analysis_start_refuses_a_path_shaped_target(app_factory, monkeypatch
 
     assert response.status_code == 404
     assert response.json()["ok"] is False
+
+
+# --- real archive ids the plausible-id pattern does not cover ---------------
+#
+# The id check above is a whitelist of characters, and a real archive
+# directory can hold others: "Thor's Helmet_sub" normalises to "Thor'sHelmet".
+# qa_targets listed it, and both QA routes 404'd it, so it could never be
+# analysed. An id the archive scan itself produced is accepted as well; the
+# cache path is still checked lexically in qa_analysis (see _contained).
+
+APOSTROPHE_ID = "Thor'sHelmet"
+
+
+@pytest.fixture
+def apostrophe_archive(tmp_path):
+    root = tmp_path / "archive-apostrophe"
+    subs = root / "Thor's Helmet_sub"
+    subs.mkdir(parents=True)
+    for i in range(3):
+        _write_light_fit(subs, "Thor's Helmet", "20240102", f"17232{i}")
+        (subs / f"Light_Thor's Helmet_10.0s_IRCUT_20240102-17232{i}_thn.jpg").write_bytes(b"jpeg")
+    return root
+
+
+def _poll(client, target):
+    deadline = time.monotonic() + WAIT_FOR_JOB_TIMEOUT_S
+    while time.monotonic() < deadline:
+        response = client.get("/api/qa_analysis_status", params={"target": target})
+        assert response.status_code == 200, response.text
+        if response.json()["status"] != "running":
+            return response.json()
+        time.sleep(0.01)
+    raise AssertionError("job never left 'running' within the timeout")
+
+
+def test_an_archive_id_outside_the_plausible_pattern_is_listed_startable_and_pollable(
+    app_factory, apostrophe_archive, monkeypatch, tmp_path
+):
+    calls = []
+
+    async def record(app, tool, arguments):
+        calls.append(arguments["paths"])
+        return REAL_REPORT
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", record)
+    with TestClient(app_factory(archive_dir=apostrophe_archive)) as client:
+        listed = client.get("/api/qa_targets").json()["targets"]
+        assert [t["target_id"] for t in listed] == [APOSTROPHE_ID]
+
+        started = client.post(
+            "/api/qa_analysis_start",
+            params={"target": APOSTROPHE_ID},
+            headers={routes.CLIENT_HEADER: "test"},
+        )
+        assert started.status_code == 200, started.text
+        assert started.json()["target_id"] == APOSTROPHE_ID
+        body = _poll(client, APOSTROPHE_ID)
+
+        # The Review table's thumbnails for the same target.
+        sub = "Light_Thor's Helmet_10.0s_IRCUT_20240102-172320"
+        thumbnail = client.get(f"/api/sub_image/{APOSTROPHE_ID}/{sub}")
+
+    assert body["status"] == "complete"
+    assert body["report"] == REAL_REPORT
+    assert len(calls) == 1 and len(calls[0]) == 3
+    assert (tmp_path / "qa_cache" / f"{APOSTROPHE_ID}.json").is_file()
+    assert thumbnail.status_code == 200
+    assert thumbnail.content == b"jpeg"
+
+
+@pytest.mark.parametrize("target", ["Nobody'sTarget", "x" * 65])
+def test_an_implausible_id_the_archive_does_not_hold_is_still_refused(
+    app_factory, apostrophe_archive, monkeypatch, target
+):
+    def boom(app, tool, arguments):
+        raise AssertionError("must not reach the tool for an unknown target")
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", boom)
+    with TestClient(app_factory(archive_dir=apostrophe_archive)) as client:
+        status = client.get("/api/qa_analysis_status", params={"target": target})
+        start = client.post(
+            "/api/qa_analysis_start",
+            params={"target": target},
+            headers={routes.CLIENT_HEADER: "test"},
+        )
+
+    assert status.status_code == 404
+    assert start.status_code == 404
+
+
+def test_an_archive_id_that_cannot_name_a_cache_file_is_refused_before_analysis(
+    app_factory, monkeypatch, tmp_path
+):
+    """A Linux-hosted archive can hold a directory name Windows could not —
+    "A|B_sub" — and its id cannot name a cache file on Windows. Starting it
+    would run minutes of analysis only to fail saving the report, so the
+    start is refused up front instead."""
+    from seestar_sidecar.archive import ArchiveScan, ArchiveStatus, ArchiveTarget
+
+    fit = tmp_path / "a.fit"
+    fit.write_text("fit", encoding="utf-8")
+    scan = ArchiveScan(
+        targets={"A|B": ArchiveTarget("A|B", "A|B", 0.1, sub_paths=[fit])},
+        warnings=[],
+        status=ArchiveStatus(configured=True, path="archive", exists=True, target_count=1),
+    )
+    monkeypatch.setattr(routes, "scan_archive", lambda *a, **k: scan)
+
+    def boom(app, tool, arguments):
+        raise AssertionError("must not analyse a target whose report cannot be saved")
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", boom)
+    with TestClient(app_factory()) as client:
+        start = client.post(
+            "/api/qa_analysis_start",
+            params={"target": "A|B"},
+            headers={routes.CLIENT_HEADER: "test"},
+        )
+        status = client.get("/api/qa_analysis_status", params={"target": "A|B"})
+
+    assert start.status_code == 404
+    assert start.json()["ok"] is False
+    # Polling such a target still answers honestly rather than failing.
+    assert status.status_code == 200
+    assert status.json()["status"] == "not_analysed"

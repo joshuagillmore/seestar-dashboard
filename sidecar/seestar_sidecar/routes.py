@@ -16,6 +16,7 @@ from seestar_sidecar.allowlist import ALLOWED_TOOLS
 from seestar_sidecar.archive import (
     DEFAULT_ARCHIVE_DIR,
     SUB_THUMBNAIL_SUFFIX,
+    ArchiveScan,
     scan_archive,
     scan_stacked_images,
 )
@@ -60,6 +61,7 @@ from seestar_sidecar.mcp_proxy import LONG_RUNNING_TOOLS, ProxyTransportError, e
 from seestar_sidecar.host_check import LOOPBACK_HOSTS, normalise_host
 from seestar_sidecar.json_safety import replace_non_finite
 from seestar_sidecar.redaction import redact_payload, redact_secrets
+from seestar_sidecar.share_io import run_share_io
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar import qa_analysis
 from seestar_sidecar.qa_analysis import DEFAULT_QA_CACHE_DIR, QaJobRegistry
@@ -778,11 +780,13 @@ async def _share_image_response(path: Path, *, missing: str) -> Response:
     and a stat on an SMB share that has gone quiet can hang for as long as
     Windows' SMB client cares to wait — with every other route and poll
     frozen behind it. Bounded exactly as discover_frame_within_timeout bounds
-    the metadata routes' scans: off the loop, under the same ceiling.
+    the metadata routes' scans: off the loop on the share's own bounded
+    threads (share_io.py — a full pool raises an OSError, answered 503 here
+    at once), under the same ceiling.
     """
     try:
         exists = await asyncio.wait_for(
-            asyncio.to_thread(path.is_file), timeout=SHARE_SCAN_TIMEOUT_SECONDS
+            run_share_io(path.is_file), timeout=SHARE_SCAN_TIMEOUT_SECONDS
         )
     except (asyncio.TimeoutError, OSError):
         return JSONResponse(_SHARE_UNREACHABLE_BODY, status_code=503)
@@ -975,8 +979,9 @@ def _qa_cache_dir(request: Request) -> Path:
     return Path(cache_dir)
 
 
-def _refuse_implausible_target(target: str) -> JSONResponse | None:
-    """`None` when `target` is shaped like a target id, else the 404 to return.
+def _refuse_unknown_target(target: str, scan: ArchiveScan) -> JSONResponse | None:
+    """`None` when `target` is an id the archive scan produced or is shaped
+    like a target id, else the 404 to return.
 
     Both QA routes below hand `target` to qa_analysis, which builds its cache
     file path from it. Unchecked, `?target=../x` read a file outside the
@@ -984,10 +989,16 @@ def _refuse_implausible_target(target: str) -> JSONResponse | None:
     an attacker's host (leaking the user's NTLM hash) — reachable from a bare
     `<img>` on any page the user had open, since qa_analysis_status is a GET.
     qa_analysis refuses such paths itself as well (see its `_contained`);
-    this is the first layer, and the same check sub_image and target_image
-    already apply.
+    this is the first layer.
+
+    The shape check alone is a character whitelist, and real archive
+    directories use others: "Thor's Helmet_sub" normalises to
+    "Thor'sHelmet", which qa_targets listed and neither route would take. A
+    key of `scan.targets` came from a directory name on the user's own disk,
+    never from the request, so it is accepted as it is; its cache file name
+    is still checked lexically by `_contained`.
     """
-    if is_plausible_target_id(target):
+    if target in scan.targets or is_plausible_target_id(target):
         return None
     return JSONResponse(
         {"ok": False, "error": f"not a recognised target id: {target!r}"}, status_code=404
@@ -1081,20 +1092,19 @@ async def sub_image(request: Request, target_id: str, sub_name: str) -> Response
     itself rather than trusting a filename from the URL.
 
     **Neither path component is ever used to build a filesystem path.**
-    `target_id` goes through `is_plausible_target_id()` exactly as
-    `target_image` does, and the sub is then resolved by matching `sub_name`
-    against the STEMS of files the archive scan itself discovered. A `..` or
-    an absolute path matches no stem and 404s, because nothing here
-    concatenates user input onto a directory.
+    `target_id` goes through `_refuse_unknown_target()` as the QA routes'
+    does — so the Review & QA table can show subs of a target like
+    "Thor'sHelmet" that it can analyse — and is then only a key into the
+    archive scan. The sub is resolved by matching `sub_name` against the
+    STEMS of files the archive scan itself discovered. A `..` or an absolute
+    path matches no stem and 404s, because nothing here concatenates user
+    input onto a directory.
     """
-    if not is_plausible_target_id(target_id):
-        return JSONResponse(
-            {"ok": False, "error": f"not a recognised target id: {target_id!r}"},
-            status_code=404,
-        )
-
     archive_dir, local_tz = _archive_dir_and_tz(request)
     scan = scan_archive(archive_dir, local_tz=local_tz)
+    refusal = _refuse_unknown_target(target_id, scan)
+    if refusal is not None:
+        return refusal
     target = scan.targets.get(target_id)
     if target is None:
         return JSONResponse(
@@ -1143,16 +1153,24 @@ async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
     refusal = _reject_untrusted_caller(request)
     if refusal is not None:
         return refusal
-    refusal = _refuse_implausible_target(target)
-    if refusal is not None:
-        return refusal
 
     archive_dir, local_tz = _archive_dir_and_tz(request)
     scan = scan_archive(archive_dir, local_tz=local_tz)
+    refusal = _refuse_unknown_target(target, scan)
+    if refusal is not None:
+        return refusal
     archive_target = scan.targets.get(target)
     if archive_target is None or not archive_target.sub_paths:
         return JSONResponse(
             {"ok": False, "error": f"no subs found on disk for {target!r}"}, status_code=404
+        )
+    if not qa_analysis.can_cache(target):
+        # Only an archive on a file system Windows cannot mirror gets here
+        # (see qa_analysis._contained). Refused before minutes of analysis
+        # whose report could never be saved.
+        return JSONResponse(
+            {"ok": False, "error": f"{target!r} cannot be analysed: its name cannot be a file name"},
+            status_code=404,
         )
 
     cache_dir = _qa_cache_dir(request)
@@ -1206,15 +1224,16 @@ async def qa_analysis_status(request: Request, target: str) -> JSONResponse:
     polling status is not an action that needs subs to exist on disk right
     now to make sense of.
 
-    A `target` that is not even shaped like a target id is a 404 before
-    anything else runs — see _refuse_implausible_target.
+    A `target` the archive does not hold and that is not even shaped like a
+    target id is a 404 before anything reads the cache — see
+    _refuse_unknown_target.
     """
-    refusal = _refuse_implausible_target(target)
+    archive_dir, local_tz = _archive_dir_and_tz(request)
+    scan = scan_archive(archive_dir, local_tz=local_tz)
+    refusal = _refuse_unknown_target(target, scan)
     if refusal is not None:
         return refusal
 
-    archive_dir, local_tz = _archive_dir_and_tz(request)
-    scan = scan_archive(archive_dir, local_tz=local_tz)
     archive_target = scan.targets.get(target)
     sub_paths = archive_target.sub_paths if archive_target is not None else []
 

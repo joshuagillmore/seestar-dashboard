@@ -70,6 +70,7 @@ from pathlib import Path
 
 from seestar_sidecar import env as _env  # noqa: F401 — loads .env before the os.environ.get() below; see env.py
 from seestar_sidecar.archive import _SUB_DIR_SUFFIX, normalize_target_id
+from seestar_sidecar.share_io import run_share_io
 
 logger = logging.getLogger(__name__)
 
@@ -384,8 +385,10 @@ async def discover_frame_within_timeout(
     is a blocking Path.iterdir()/glob()/stat() walk, and over a live SMB share
     that must neither block the whole server while it runs nor be allowed to
     hang past SHARE_SCAN_TIMEOUT_SECONDS if the share has gone quiet mid-scan
-    (a dropped session, the scope rebooting). `asyncio.to_thread` keeps the
-    blocking walk off the event loop; `asyncio.wait_for` is the hard ceiling.
+    (a dropped session, the scope rebooting). `share_io.run_share_io` keeps the
+    blocking walk off the event loop, on the share's own bounded threads (see
+    share_io.py: a saturated pool raises an OSError, read as unreachable
+    below); `asyncio.wait_for` is the hard ceiling.
 
     Deliberately a single attempt, not a retry loop: "never retry
     aggressively" (see the spec's D2) means a failed/slow scan degrades
@@ -400,7 +403,7 @@ async def discover_frame_within_timeout(
     needs "could not tell", not which of the two happened.
     """
     try:
-        return await asyncio.wait_for(asyncio.to_thread(discover_frame, root, target), timeout=timeout_s)
+        return await asyncio.wait_for(run_share_io(discover_frame, root, target), timeout=timeout_s)
     except asyncio.TimeoutError as exc:
         raise ShareUnreachableError(f"scan of {root} exceeded {timeout_s}s") from exc
     except OSError as exc:

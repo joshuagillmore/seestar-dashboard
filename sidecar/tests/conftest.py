@@ -23,3 +23,13 @@ def _isolate_the_bind_host():
     os.environ.pop("SEESTAR_BIND_HOST", None)
     if before is not None:
         os.environ["SEESTAR_BIND_HOST"] = before
+
+
+@pytest.fixture(autouse=True)
+def _fresh_share_io_pool(monkeypatch):
+    """share_io's pool is process-wide and counts a thread until its call
+    returns, so a test that strands one on a simulated hung share would lend
+    that thread's slot to whichever tests run next. Each test gets its own."""
+    from seestar_sidecar import share_io
+
+    monkeypatch.setattr(share_io, "pool", share_io.ShareIoPool())

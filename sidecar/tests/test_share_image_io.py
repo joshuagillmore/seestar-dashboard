@@ -8,6 +8,7 @@ it, since it ran on the event loop. The metadata routes already bound their
 scans with to_thread + wait_for (discover_frame_within_timeout); these now do
 the same, and a timeout reads as "share unreachable".
 """
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,7 +16,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from seestar_sidecar import routes
+from seestar_sidecar import routes, share_io
 from seestar_sidecar.last_stack import LastStack
 from seestar_sidecar.live_preview import LiveFrame
 from seestar_sidecar.main import create_app
@@ -83,6 +84,41 @@ def test_last_stack_image_gives_up_on_a_hanging_share(app, tmp_path):
     assert elapsed < HANG_SECONDS - 1, f"blocked for {elapsed:.1f}s on the share"
     assert response.status_code == 503
     assert response.json() == {"ok": False, "error": "live share unreachable"}
+
+
+def test_polling_a_hung_share_stops_stranding_threads_once_the_share_pool_is_full(
+    app, tmp_path, monkeypatch
+):
+    """Each timed-out stat leaves its thread blocked in the share. Those
+    threads used to come from the loop's default executor, one more per
+    poll, starving DNS and the survey cache write that share it. They now
+    come from the share's own bounded pool, and once that is full a poll
+    answers "unreachable" at once without touching the share again."""
+    monkeypatch.setattr(share_io, "pool", share_io.ShareIoPool(max_threads=1))
+    monkeypatch.setattr(routes, "SHARE_SCAN_TIMEOUT_SECONDS", 1.0)
+    stat_threads: list[str] = []
+
+    class CountingHangingPath(HangingPath):
+        def is_file(self):
+            stat_threads.append(threading.current_thread().name)
+            return super().is_file()
+
+    app.state.live_preview_cache = LiveFrame(
+        path=CountingHangingPath(tmp_path / "share" / "x_thn.jpg"),
+        source="sub",
+        target="M27",
+        captured_at=_now(),
+    )
+
+    with TestClient(app) as client:
+        first, _ = _timed_get(client, "/api/live_preview/image")
+        second, elapsed = _timed_get(client, "/api/live_preview/image")
+
+    assert first.status_code == second.status_code == 503
+    assert second.json() == {"ok": False, "error": "live share unreachable"}
+    assert len(stat_threads) == 1, "the second poll queued another stat on the hung share"
+    assert stat_threads[0].startswith(share_io.THREAD_NAME_PREFIX)
+    assert elapsed < 0.5, f"a saturated pool still waited {elapsed:.1f}s"
 
 
 def test_a_reachable_file_is_still_served(app, tmp_path):

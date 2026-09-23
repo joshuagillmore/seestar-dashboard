@@ -145,6 +145,16 @@ class QaJobRegistry:
         return list(self._jobs.values())
 
 
+#: Path separators in both styles, the drive/stream colon, and the rest of
+#: what Windows forbids in a file name. See `_contained`.
+_NEVER_IN_A_CACHE_FILE_NAME = frozenset('/\\:<>"|?*')
+
+#: The longest cache file name built from an id is `<id>.inflight.json`, and
+#: 255 is the file-name limit on NTFS (UTF-16 units) and ext4 (bytes). UTF-8
+#: bytes are never fewer than UTF-16 units, so bounding those covers both.
+_MAX_TARGET_ID_BYTES = 255 - len(".inflight.json")
+
+
 def _contained(cache_dir: Path, file_name: str) -> Path:
     """`cache_dir / file_name`, or ValueError unless that is a plain file
     directly inside `cache_dir`.
@@ -166,12 +176,19 @@ def _contained(cache_dir: Path, file_name: str) -> Path:
       would add a path component or switch drive or file stream;
     - `.` / `..` / empty are not file names;
     - a Windows device name (NUL, CON, COM1, ...) is not a file either, and
-      opening one reads a device instead.
+      opening one reads a device instead;
+    - `<>"|?*` and control characters cannot be in a Windows file name. The
+      routes accept any id the archive scan produced (not only ids matching
+      imagery.is_plausible_target_id), and a Linux-hosted archive can hold a
+      directory named with them. Refused on every OS, so one archive behaves
+      the same whichever machine reads it. Everything else a directory name
+      can hold — an apostrophe, brackets, `&`, `%`, non-ASCII — is a legal
+      file name on both.
     """
     if (
         not file_name
         or file_name in (".", "..")
-        or any(ch in file_name for ch in ("/", "\\", ":", "\0"))
+        or any(ch in _NEVER_IN_A_CACHE_FILE_NAME or ch < " " for ch in file_name)
         or PureWindowsPath(file_name).is_reserved()
     ):
         raise ValueError(f"refusing a cache path outside {cache_dir}: {file_name!r}")
@@ -185,9 +202,26 @@ def _checked_target_id(target_id: str) -> str:
     # The suffix is appended AFTER the id, so an id of "" or "NUL" still
     # yields a harmless-looking ".json" / "NUL.json" — check the id itself
     # too, not just the file name it becomes.
-    if not target_id or PureWindowsPath(target_id).is_reserved():
+    if (
+        not target_id
+        or PureWindowsPath(target_id).is_reserved()
+        or len(target_id.encode("utf-8")) > _MAX_TARGET_ID_BYTES
+    ):
         raise ValueError(f"refusing a cache path for target id {target_id!r}")
     return target_id
+
+
+def can_cache(target_id: str) -> bool:
+    """Whether `target_id` can name this module's cache files — decided
+    lexically, touching nothing. qa_analysis_start checks it first: an
+    analysis whose report could never be saved would run for minutes and
+    then fail."""
+    try:
+        _cache_path(Path("cache"), target_id)
+        _inflight_path(Path("cache"), target_id)
+    except ValueError:
+        return False
+    return True
 
 
 def _cache_path(cache_dir: Path, target_id: str) -> Path:
