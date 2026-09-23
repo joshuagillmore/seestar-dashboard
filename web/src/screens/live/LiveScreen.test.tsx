@@ -23,6 +23,7 @@ import {
   runStateIdle,
   sessionActivity,
 } from '../../test/fixtures'
+import { REQUEST_TIMEOUT_MS } from '../../api/client'
 import { formatStackDate, lastStackReasonLabel } from './lastStack'
 import { POLL_INTERVAL_MS } from './useLiveSession'
 
@@ -769,6 +770,70 @@ describe('never idle while get_run_state says a run is active', () => {
     expect(screen.getAllByTestId('dot')[1]).not.toHaveAttribute('data-dot', 'idle')
     await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
     expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+})
+
+describe('the idle card says what actually failed', () => {
+  // It used to wrap every get_view_state error in "The bridge answered, but
+  // get_view_state did not (…)". On this client's own 45 s timeout that
+  // error carries "make sure the sidecar is running", inside a sentence
+  // saying the bridge answered.
+  const SIDECAR_ADVICE = /make sure the sidecar is running/
+
+  /** get_status answers; get_view_state is whatever `viewState` does. */
+  function stubViewFailure(viewState: () => Promise<unknown>) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const path = url.split('?')[0]
+        if (path === '/api/get_view_state') return viewState()
+        if (path === '/api/get_status') return { ok: true, status: 200, json: async () => recordedStatus() }
+        if (path === '/api/session_activity') return { ok: true, status: 200, json: async () => sessionActivity() }
+        return { ok: false, status: 404, json: async () => ({ ok: false, error: `no stub for ${url}` }) }
+      }),
+    )
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('says the bridge answered when the tool itself reported the failure', async () => {
+    stubIdle()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    expect(screen.getByTestId('live-idle')).toHaveTextContent(
+      'The bridge answered, but get_view_state reported a failure (get_view_state timed out — scope not observing)',
+    )
+  })
+
+  it('does not claim the bridge answered get_view_state when this client timed out waiting', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
+    stubViewFailure(() => new Promise(() => {}))
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+    })
+
+    const card = screen.getByTestId('live-idle')
+    expect(card).toHaveTextContent(`get_view_state got no answer (no answer within ${REQUEST_TIMEOUT_MS / 1000} s)`)
+    expect(card).toHaveTextContent(/get_status answered/)
+    expect(card).not.toHaveTextContent(SIDECAR_ADVICE)
+    expect(card).not.toHaveTextContent(/The bridge answered, but get_view_state/)
+    // A request that got no answer is not the scope saying it is idle.
+    expect(card).not.toHaveTextContent(/Scope idle/)
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+
+  it('says the same, truthfully, when the get_view_state request never reached the sidecar', async () => {
+    stubViewFailure(() => Promise.reject(new TypeError('Failed to fetch')))
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+
+    const card = screen.getByTestId('live-idle')
+    expect(card).toHaveTextContent(/did not reach the sidecar/)
+    expect(card).not.toHaveTextContent(SIDECAR_ADVICE)
+    expect(card).not.toHaveTextContent(/Scope idle/)
   })
 })
 

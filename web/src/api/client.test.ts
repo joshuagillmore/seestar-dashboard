@@ -11,6 +11,7 @@ import {
   fetchTargetObservability,
   fetchTier1,
   fetchViewState,
+  NoAnswerError,
   REQUEST_TIMEOUT_MS,
   SchemaError,
 } from './client'
@@ -152,6 +153,47 @@ describe('api client', () => {
     await expect(fetchConditions()).rejects.toThrow(/sidecar/i)
     await expect(fetchConditions()).rejects.toThrow(/uv run seestar-dashboard/)
     await expect(fetchConditions()).rejects.not.toThrow(/^HTTP 502$/)
+  })
+
+  describe('a request that got no answer is told apart from a failure the sidecar relayed', () => {
+    // The Live screen's idle card said "The bridge answered, but
+    // get_view_state did not (…)" around whatever the error was — including
+    // this client's own timeout, whose message tells you to start the
+    // sidecar. NoAnswerError lets a caller word the two causes differently,
+    // and `brief` states the fact without the advice.
+    afterEach(() => vi.useRealTimers())
+
+    it('classes the client timeout as no answer, with a brief that gives no sidecar advice', async () => {
+      vi.useFakeTimers()
+      vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+      const pending = fetchViewState()
+      const settled = expect(pending).rejects.toBeInstanceOf(NoAnswerError)
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+      await settled
+      const error = (await pending.catch((e: unknown) => e)) as NoAnswerError
+      expect(error.message).toMatch(/uv run seestar-dashboard/)
+      expect(error.brief).toBe(`no answer within ${REQUEST_TIMEOUT_MS / 1000} s`)
+    })
+
+    it('classes an unreachable sidecar and a bare HTTP error as no answer', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')))
+      await expect(fetchViewState()).rejects.toBeInstanceOf(NoAnswerError)
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: () => Promise.reject(new SyntaxError('Unexpected token < in JSON')),
+      }))
+      await expect(fetchViewState()).rejects.toBeInstanceOf(NoAnswerError)
+    })
+
+    it('does not class a failure the sidecar or the tool reported as no answer', async () => {
+      mockFetch({ ok: false, error: 'get_view_state timed out' }, 502)
+      await expect(fetchViewState()).rejects.not.toBeInstanceOf(NoAnswerError)
+      mockFetch({ ok: false, error: 'get_view_state timed out' })
+      await expect(fetchViewState()).rejects.not.toBeInstanceOf(NoAnswerError)
+      mockFetch({ ok: true, go: 'yes' })
+      await expect(fetchConditions()).rejects.not.toBeInstanceOf(NoAnswerError)
+    })
   })
 
   it('surfaces a tool-level failure message, not a schema complaint', async () => {

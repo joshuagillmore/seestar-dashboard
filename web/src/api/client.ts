@@ -55,6 +55,28 @@ export class ApiError extends Error {}
  */
 export class SchemaError extends ApiError {}
 
+/**
+ * The request got no answer from the sidecar's own code: this client's
+ * timeout fired, the fetch never connected, or an HTTP error came back with
+ * no JSON error body (Vite's dev proxy answering for a dead sidecar). Still
+ * an `ApiError`, but distinct from a failure the sidecar or the tool itself
+ * reported, because a caller reads the two differently: a relayed failure
+ * proves the bridge answered; this proves nothing about the scope at all.
+ *
+ * `message` keeps the "make sure the sidecar is running" advice, for the
+ * screens that show it verbatim. `brief` is the same fact without it, for a
+ * caller that has just seen the sidecar answer another request, where that
+ * advice would contradict the sentence around it.
+ */
+export class NoAnswerError extends ApiError {
+  readonly brief: string
+
+  constructor(message: string, brief: string, options?: ErrorOptions) {
+    super(message, options)
+    this.brief = brief
+  }
+}
+
 /** How to get the sidecar running, repeated in every message that means
  * "the sidecar didn't answer" — this is the one line of the app most
  * likely to be read by someone who has never seen the codebase. */
@@ -109,11 +131,12 @@ async function request<T>(
   const aborted = new Promise<never>((_, reject) => {
     const fail = () =>
       reject(
-        new ApiError(
-          timedOut
-            ? `sidecar did not answer ${path} within ${REQUEST_TIMEOUT_MS / 1000} s — ${SIDECAR_HINT}`
-            : `request to ${path} was cancelled`,
-        ),
+        timedOut
+          ? new NoAnswerError(
+              `sidecar did not answer ${path} within ${REQUEST_TIMEOUT_MS / 1000} s — ${SIDECAR_HINT}`,
+              `no answer within ${REQUEST_TIMEOUT_MS / 1000} s`,
+            )
+          : new ApiError(`request to ${path} was cancelled`),
       )
     if (controller.signal.aborted) fail()
     else controller.signal.addEventListener('abort', fail, { once: true })
@@ -126,7 +149,11 @@ async function request<T>(
       response = await Promise.race([fetch(path, { ...init, signal: controller.signal }), aborted])
     } catch (cause) {
       if (controller.signal.aborted) return await aborted
-      throw new ApiError(`sidecar unreachable at ${path} — ${SIDECAR_HINT}`, { cause })
+      throw new NoAnswerError(
+        `sidecar unreachable at ${path} — ${SIDECAR_HINT}`,
+        'the request did not reach the sidecar',
+        { cause },
+      )
     }
     const body = await Promise.race([response.json().catch(() => null), aborted])
     return parseBody(path, schema, response, body)
@@ -145,11 +172,13 @@ function parseBody<T>(path: string, schema: ZodType<T>, response: Response, body
     // hypothetical: Vite's dev proxy resolves a dead sidecar as a *resolved*
     // fetch carrying an HTML 502 page, not a rejected fetch, so `HTTP 502`
     // used to be the only thing a stopped sidecar ever produced.
-    const detail =
-      body && typeof body === 'object' && 'error' in body
-        ? String((body as { error: unknown }).error)
-        : `sidecar returned HTTP ${response.status} for ${path} — ${SIDECAR_HINT}`
-    throw new ApiError(detail)
+    if (body && typeof body === 'object' && 'error' in body) {
+      throw new ApiError(String((body as { error: unknown }).error))
+    }
+    throw new NoAnswerError(
+      `sidecar returned HTTP ${response.status} for ${path} — ${SIDECAR_HINT}`,
+      `HTTP ${response.status} with no error body`,
+    )
   }
   // A tool-level failure arrives as {ok: false, error} at HTTP 200 — the MCP
   // tools never raise, so that is a valid response saying the tool itself

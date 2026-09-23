@@ -18,7 +18,7 @@ import { TargetHeader } from './TargetHeader'
 import { TelemetryGrid } from './TelemetryGrid'
 import { TelemetryLogCard } from './TelemetryLogCard'
 import { formatWhen } from './timestamps'
-import { useLiveSession, type LiveSessionState } from './useLiveSession'
+import { describeViewFailure, useLiveSession, type LiveSessionState } from './useLiveSession'
 import styles from './LiveScreen.module.css'
 
 export interface LiveScreenProps {
@@ -41,6 +41,9 @@ function sidebarStatus(state: LiveSessionState): { tone: DotTone | null; meta: s
   if (phase === 'active' && state.stale !== null) return { tone: 'marginal', meta: 'stale' }
   if (phase === 'active') return { tone: 'pass', meta: 'live' }
   if (phase === 'bridge-down') return { tone: 'reject', meta: 'bridge down' }
+  // A get_view_state request that got no answer is not the scope saying
+  // it is idle.
+  if (phase === 'idle' && state.viewError?.kind === 'no-answer') return { tone: 'marginal', meta: 'no reading' }
   if (phase === 'idle') return { tone: 'idle', meta: 'idle' }
   // Neither is idle, and neither is a fault of the bridge: the scope is
   // answering, but not in a way this screen can show as a session.
@@ -194,7 +197,7 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
         </div>
       )}
 
-      {state.phase === 'idle' && (
+      {state.phase === 'idle' && state.viewError?.kind !== 'no-answer' && (
         <div className={styles.idleColumns}>
           <div className={styles.stateCard} data-testid="live-idle">
             <Dot tone="idle" />
@@ -203,12 +206,33 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
               <p className={styles.stateBody}>
                 {state.viewError === null
                   ? 'The scope answered and reports no view session, so nothing is being observed right now.'
-                  : `The bridge answered, but get_view_state did not (${state.viewError}), which on this scope means no active session rather than a fault.`}{' '}
+                  : `The bridge answered, but ${describeViewFailure(state.viewError)}, which on this scope means no active session rather than a fault.`}{' '}
                 This is the normal state for most of the day, and most of the night.
               </p>
             </div>
           </div>
           <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
+        </div>
+      )}
+
+      {/* The request for get_view_state got no answer at all. get_status
+          answered, so the bridge is up, but the scope has said nothing
+          either way: not "idle", and not the sidecar advice the client's
+          own message carries, which get_status answering disproves. */}
+      {state.phase === 'idle' && state.viewError?.kind === 'no-answer' && (
+        <div className={styles.idleColumns}>
+          <div className={styles.stateCard} data-testid="live-idle">
+            <Dot tone="marginal" />
+            <div>
+              <div className={styles.stateTitle}>No reading from the scope this poll</div>
+              <p className={styles.stateBody}>
+                get_status answered, so the bridge is up, but {describeViewFailure(state.viewError)}. That
+                is this request failing, not the scope reporting, so this poll cannot say whether anything
+                is being observed. The next poll asks again.
+              </p>
+            </div>
+          </div>
+          <SessionActivityCard activity={state.sessionActivity} sessionRunning={null} wide />
         </div>
       )}
 
@@ -222,7 +246,7 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
                 get_run_state reports an active run{state.runTarget ? ` on ${state.runTarget}` : ''}, but{' '}
                 {state.viewError === null
                   ? 'the scope reports no view session'
-                  : `get_view_state did not answer (${state.viewError})`}{' '}
+                  : describeViewFailure(state.viewError)}{' '}
                 this poll. That is not shown as idle: the run may be between targets, or its view may
                 have stopped.
               </p>

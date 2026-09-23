@@ -10,6 +10,7 @@ import {
   fetchTargetObservability,
   fetchTier1,
   fetchViewState,
+  NoAnswerError,
   SchemaError,
 } from '../../api/client'
 import type {
@@ -94,6 +95,36 @@ export const IDLE_ANSWERS_TO_END = 2
  */
 export const SESSION_GAP_MS = 6 * 60 * 60 * 1000
 
+/**
+ * How a `get_view_state` request failed, while `get_status` answered.
+ *
+ * - `relayed`: the sidecar answered with the tool's own failure (on this
+ *   scope, usually its device timeout: the documented idle signature). The
+ *   bridge answered; `detail` is the tool's message, verbatim.
+ * - `no-answer`: the request got no answer from the sidecar at all (this
+ *   client's timeout, or it never connected). That is not the scope
+ *   reporting anything. `detail` is the client's `brief`, without the
+ *   "make sure the sidecar is running" advice, which get_status answering
+ *   has just disproved.
+ */
+export interface ViewFailure {
+  kind: 'relayed' | 'no-answer'
+  detail: string
+}
+
+export function viewFailure(cause: unknown): ViewFailure {
+  if (cause instanceof NoAnswerError) return { kind: 'no-answer', detail: cause.brief }
+  return { kind: 'relayed', detail: errorMessage(cause) }
+}
+
+/** The failure as a clause, worded true to its cause: "get_view_state
+ * reported a failure (…)" or "get_view_state got no answer (…)". */
+export function describeViewFailure(failure: ViewFailure): string {
+  return failure.kind === 'relayed'
+    ? `get_view_state reported a failure (${failure.detail})`
+    : `get_view_state got no answer (${failure.detail})`
+}
+
 export type LiveSessionState =
   | { phase: 'loading' }
   | {
@@ -111,9 +142,10 @@ export type LiveSessionState =
       phase: 'idle'
       /** How the scope said so. `null`: `get_view_state` answered and
        * reported no view session (`result: {}`, the commonest real idle).
-       * A string: `get_view_state` failed with this message while
-       * `get_status` still answered — the documented idle-scope timeout. */
-      viewError: string | null
+       * Otherwise `get_view_state` failed while `get_status` still answered;
+       * see ViewFailure for the two ways, which the screen must word
+       * differently. */
+      viewError: ViewFailure | null
       sessionActivity: SessionActivity | null
     }
   | {
@@ -136,7 +168,7 @@ export type LiveSessionState =
       /** `run.target` from run_state — the string passed to goto_target. */
       runTarget: string | null
       /** As on `idle`: `null` for "answered, no View", else the failure. */
-      viewError: string | null
+      viewError: ViewFailure | null
       sessionActivity: SessionActivity | null
     }
   | {
@@ -445,7 +477,7 @@ export function useLiveSession(): LiveSessionState {
      */
     function withoutView(
       runState: RunState | null,
-      viewError: string | null,
+      viewError: ViewFailure | null,
       sessionActivity: SessionActivity | null,
     ): LiveSessionState {
       if (runState?.state === 'active') {
@@ -555,11 +587,8 @@ export function useLiveSession(): LiveSessionState {
         }
         const sessionActivity = await sessionActivityPromise
         if (cancelled) return
-        settleFailure(
-          withoutView(runState, errorMessage(viewCause), sessionActivity),
-          `get_view_state failed (${errorMessage(viewCause)})`,
-          sessionActivity,
-        )
+        const failure = viewFailure(viewCause)
+        settleFailure(withoutView(runState, failure, sessionActivity), describeViewFailure(failure), sessionActivity)
         return
       }
 
