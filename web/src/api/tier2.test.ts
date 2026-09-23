@@ -282,7 +282,9 @@ describe('QaAnalysisStatusSchema discriminates on status', () => {
  * (marginal <= reject). seestar-mcp enforces that in its own build, in
  * `test_eccentricity_cutoff_lines_never_cross`. The schema deliberately does
  * not re-check the ORDER: that would be the UI adjudicating the server's
- * policy, and MetricChart relies on the guarantee instead of checking it.
+ * policy. MetricChart draws the server's lines as sent and visibly flags an
+ * inverted pair (a report cached before 1.1.1 can still carry one) rather
+ * than reordering or rejecting it.
  */
 describe('Tier2Schema on crafted threshold values', () => {
   const withThresholds = (overrides: Record<string, unknown>) => {

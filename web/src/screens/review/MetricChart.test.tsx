@@ -175,6 +175,17 @@ describe('MetricChart with cutoffs that arrived out of order', () => {
     expect(screen.getByRole('note')).toHaveTextContent(/out of order/i)
   })
 
+  it('makes no promise about what a fresh analysis would send', () => {
+    // It used to add "a fresh analysis will not". Whether the server's
+    // guarantee holds is the server's to keep; the UI cannot know it.
+    render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={inverted} />,
+    )
+
+    expect(screen.getByRole('note')).not.toHaveTextContent(/fresh analysis/i)
+    expect(screen.getByRole('note')).toHaveTextContent(/drawn as the report sent them/)
+  })
+
   it('still draws both lines exactly where the payload put them', () => {
     const { container } = render(
       <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={inverted} />,

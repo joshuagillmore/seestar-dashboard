@@ -36,8 +36,9 @@ import { z } from 'zod'
  * 1.1.1 guarantees that field is finite and never above
  * `eccentricity_reject`. No shape change, and re-recording confirmed
  * byte-identical thresholds and verdicts on our own payload — but the
- * GUARANTEE is new, and MetricChart draws both lines, so their ordering is
- * now something we may rely on rather than something that happened to hold.
+ * GUARANTEE is new. MetricChart still draws both lines as sent and visibly
+ * flags an inverted pair (qa.ts's cutoffsInverted), since a report cached
+ * before 1.1.1 can carry one.
  */
 export const SEESTAR_MCP_CONTRACT_VERSION = '1.1.1'
 
