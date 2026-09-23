@@ -86,21 +86,53 @@ export function goalLabel(goal: IntegrationGoal | null, doubled: boolean): GoalL
   }
 }
 
+/** The suggested goal in minutes, or null when there is no positive number to
+ * measure against. */
+function suggestedMinutes(goal: IntegrationGoal | null, doubled: boolean): number | null {
+  const display = describeGoal(goal)
+  if (display.kind !== 'goal') return null
+  const minutes = display.hours * 60 * (doubled ? 2 : 1)
+  return minutes > 0 ? minutes : null
+}
+
 /**
- * 0-100, or `null` when there is no numeric suggested_hours to measure
- * against (not-catalogued, no-goal, beyond-reach) — the caller renders an
- * empty rail rather than a bar with a fabricated denominator.
+ * Whether the captured time has reached the suggested goal — comparing the
+ * RAW minutes. `null` when there is no numeric goal (not-catalogued,
+ * no-goal, beyond-reach).
+ *
+ * This is the one completion test. It used to be `goalProgressPct(...) >=
+ * 100`, and that percentage is rounded for display: 597 of 600 minutes is
+ * 99.5%, which rounds to 100, so a project three minutes short of a 10 h goal
+ * was tagged complete.
+ */
+export function goalMet(
+  totalMinutes: number,
+  goal: IntegrationGoal | null,
+  doubled: boolean,
+): boolean | null {
+  const target = suggestedMinutes(goal, doubled)
+  return target == null ? null : totalMinutes >= target
+}
+
+/**
+ * 0-100 for DISPLAY (a bar width), or `null` when there is no numeric
+ * suggested_hours to measure against (not-catalogued, no-goal,
+ * beyond-reach) — the caller renders an empty rail rather than a bar with a
+ * fabricated denominator.
+ *
+ * Rounded for display only, and never to 100 unless the goal is actually met
+ * (goalMet): a bar drawn full three minutes short would claim the same thing
+ * the tag used to get wrong. Anything that DECIDES completion uses goalMet.
  */
 export function goalProgressPct(
   totalMinutes: number,
   goal: IntegrationGoal | null,
   doubled: boolean,
 ): number | null {
-  const display = describeGoal(goal)
-  if (display.kind !== 'goal') return null
-  const suggestedMinutes = display.hours * 60 * (doubled ? 2 : 1)
-  if (suggestedMinutes <= 0) return null
-  return Math.min(100, Math.round((totalMinutes / suggestedMinutes) * 100))
+  const target = suggestedMinutes(goal, doubled)
+  if (target == null) return null
+  const ceiling = totalMinutes >= target ? 100 : 99
+  return Math.min(ceiling, Math.round((totalMinutes / target) * 100))
 }
 
 /** Whether a numeric goal exists at all — gates whether the doubling toggle
