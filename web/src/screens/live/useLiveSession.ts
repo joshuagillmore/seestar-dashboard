@@ -274,6 +274,25 @@ export function useLiveSession(): LiveSessionState {
   useEffect(() => {
     let cancelled = false
 
+    /**
+     * Forget everything this hook remembers about "the session". Called on
+     * every poll that establishes there is no session (idle) or no way to
+     * tell (bridge-down). These refs are sticky within a session on purpose,
+     * and nothing else ever cleared them: a tab left open into the next
+     * night measured check_night_guardrails' elapsed time from yesterday's
+     * start (a false `park_and_stop — Session duration 24.3h`), and carried
+     * yesterday's target, stage breadcrumb, telemetry log and last-stack
+     * panel into tonight's session.
+     */
+    function endSession() {
+      sessionStartedAtRef.current = null
+      currentTargetRef.current = null
+      stageHistoryRef.current = []
+      logRef.current = []
+      lastStackRef.current = null
+      lastStackTargetRef.current = null
+    }
+
     async function poll() {
       // Kicked off immediately, independent of everything below — see this
       // hook's own doc comment.
@@ -316,17 +335,15 @@ export function useLiveSession(): LiveSessionState {
           await fetchStatus()
         } catch (cause) {
           const sessionActivity = await sessionActivityPromise
-          if (!cancelled) {
-            setState({
-              phase: 'bridge-down',
-              error: errorMessage(cause),
-              sessionActivity,
-            })
-          }
+          if (cancelled) return
+          endSession()
+          setState({ phase: 'bridge-down', error: errorMessage(cause), sessionActivity })
           return
         }
         const sessionActivity = await sessionActivityPromise
-        if (!cancelled) setState({ phase: 'idle', viewError: errorMessage(viewCause), sessionActivity })
+        if (cancelled) return
+        endSession()
+        setState({ phase: 'idle', viewError: errorMessage(viewCause), sessionActivity })
         return
       }
 
@@ -340,7 +357,9 @@ export function useLiveSession(): LiveSessionState {
       const view = viewState.view_state?.result?.View
       if (view == null) {
         const sessionActivity = await sessionActivityPromise
-        if (!cancelled) setState({ phase: 'idle', viewError: null, sessionActivity })
+        if (cancelled) return
+        endSession()
+        setState({ phase: 'idle', viewError: null, sessionActivity })
         return
       }
 
