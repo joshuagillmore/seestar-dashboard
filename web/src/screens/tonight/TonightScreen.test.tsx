@@ -372,4 +372,59 @@ describe('Detail hands a target to Review & QA', () => {
     await waitFor(() => expect(cardFor(a.id)).toBeInTheDocument())
     expect(detailFor(a.id)).toBeDisabled()
   })
+
+  it('says the lookup failed — not "no subs on disk" — when projects_combined fails', async () => {
+    // Disabled is right; the old reason was false. Nothing was learned about
+    // the disk: the question could not be asked.
+    const [a] = plan.targets
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === '/api/projects_combined') return { ok: false, status: 502, json: async () => ({ ok: false, error: 'down' }) }
+      const bodies: Record<string, unknown> = {
+        '/api/assess_conditions': recordedConditions(),
+        '/api/plan_targets?limit=12': recordedPlan(),
+      }
+      return { ok: true, status: 200, json: async () => bodies[url] }
+    }))
+    stubMatchMedia(false)
+
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(detailFor(a.id).title).toMatch(/could not check/i))
+    expect(detailFor(a.id).title).not.toMatch(/No subs on disk/)
+  })
+
+  it('does not claim "no subs on disk" while the lookup is still in flight', async () => {
+    const [a] = plan.targets
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === '/api/projects_combined') return new Promise(() => {})
+      const bodies: Record<string, unknown> = {
+        '/api/assess_conditions': recordedConditions(),
+        '/api/plan_targets?limit=12': recordedPlan(),
+      }
+      return { ok: true, status: 200, json: async () => bodies[url] }
+    }))
+    stubMatchMedia(false)
+
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(cardFor(a.id)).toBeInTheDocument())
+
+    expect(detailFor(a.id)).toBeDisabled()
+    expect(detailFor(a.id).title).toMatch(/checking/i)
+  })
+
+  it('qualifies an unmatched id instead of asserting the target has no subs', async () => {
+    // plan_targets says "C14"; projects_combined says "C14_DoubleCluster".
+    // The join misses, and that is a server-side id mismatch (hand-back),
+    // not evidence about the disk. The card must say what it actually knows:
+    // nothing is on record UNDER THIS ID.
+    stubApi({ '/api/projects_combined': recordedProjectsCombined() })
+    stubMatchMedia(false)
+    expect(plan.targets.some((t) => t.id === 'C14')).toBe(true)
+
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(detailFor('C14').title).toMatch(/under the id C14/))
+    expect(detailFor('C14')).toBeDisabled()
+    expect(detailFor('C14').title).not.toMatch(/No subs on disk for C14/)
+  })
 })
