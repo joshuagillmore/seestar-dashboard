@@ -40,8 +40,7 @@ def _m27_store_project():
                     "subs_kept": 211,
                     "median_fwhm": None,
                     "notes": (
-                        "Fresh 3PPA this run. Run 2026-07-15/16 "
-                        "."
+                        "Fresh 3PPA this run. Run 2026-07-15/16."
                     ),
                 }
             ],
