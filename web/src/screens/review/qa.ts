@@ -392,6 +392,26 @@ export function thresholdLinesFor(
   })
 }
 
+/**
+ * True when a chart's MARGINAL line lies beyond its REJECT line in the
+ * metric's bad direction — above it for a ceiling, below it for a floor.
+ *
+ * seestar-mcp contract 1.1.1 guarantees the marginal line is never past the
+ * reject line, but a report cached before it can carry the pair inverted, and
+ * drawing them as sent without comment would show a marginal band that
+ * begins after the rejections do. This compares the server's two cutoffs to
+ * EACH OTHER to spot an inconsistent payload; it never compares a sub's
+ * value to either, and decides no verdict. Equal is not inverted — 1.1.1
+ * clamps the marginal line to at most the reject line, so they can coincide.
+ */
+export function cutoffsInverted(metric: string, lines: readonly ThresholdLine[]): boolean {
+  const direction = metricDirection(metric)
+  const marginal = lines.find((l) => l.tone === 'marginal')
+  const reject = lines.find((l) => l.tone === 'reject')
+  if (direction == null || marginal == null || reject == null) return false
+  return direction === 'ceiling' ? marginal.value > reject.value : marginal.value < reject.value
+}
+
 /** Format a metric for display. The server already rounds to 4dp at the wire
  * boundary (seestar-mcp f51a1e2); this is about column width, not precision. */
 export function formatMetric(value: number | null | undefined, dp = 2): string {

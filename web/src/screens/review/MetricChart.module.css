@@ -81,6 +81,21 @@
   color: var(--text-faint);
 }
 
+/* Cutoff lines that arrived inverted — see cutoffsInverted in qa.ts. A
+   caution about the payload, not a verdict, so it borrows the marginal
+   callout surface rather than a verdict colour for its text. */
+.warning {
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--marginal-callout-border);
+  border-radius: var(--radius-control);
+  background: var(--marginal-callout-bg);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
 .axis {
   display: flex;
   justify-content: space-between;

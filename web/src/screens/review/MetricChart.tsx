@@ -1,5 +1,5 @@
 import type { QaSubVerdict } from '../../api/schemas'
-import { bucketSubs, METRIC_LABELS, type ChartBucket } from './qa'
+import { bucketSubs, cutoffsInverted, METRIC_LABELS, type ChartBucket } from './qa'
 import styles from './MetricChart.module.css'
 
 /** One cutoff line. `value` comes from `summary.thresholds` — never a
@@ -74,6 +74,7 @@ export function MetricChart({
 }: MetricChartProps) {
   const data = bucketSubs(subs, metric, buckets)
   const metricLabel = METRIC_LABELS[metric] ?? metric
+  const inverted = cutoffsInverted(metric, thresholds)
   const barValues = data.map((b) => b.value).filter((v): v is number => v != null)
   const lineValues = thresholds.map((t) => t.value)
   const peak = Math.max(0, ...barValues, ...lineValues)
@@ -143,6 +144,16 @@ export function MetricChart({
         <span>sub 0</span>
         <span>{totalSubs}</span>
       </div>
+      {/* Drawn as sent, never reordered or corrected — the values are the
+          server's, and swapping them would invent a pairing it never made.
+          Saying so is the honest alternative to drawing them silently. */}
+      {inverted && (
+        <p className={styles.warning} role="note">
+          These cutoffs arrived out of order: the marginal line is not below the reject line.
+          They are drawn as the report sent them. Reports cached before seestar-mcp contract
+          1.1.1 can carry this; a fresh analysis will not.
+        </p>
+      )}
     </div>
   )
 }

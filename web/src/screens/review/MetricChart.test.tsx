@@ -155,6 +155,62 @@ describe('MetricChart geometry', () => {
 })
 
 /**
+ * A report cached before seestar-mcp contract 1.1.1 can carry a marginal
+ * line above the reject line. The chart must say so rather than draw the
+ * pair silently inverted — and must not "fix" it by reordering or inventing.
+ */
+describe('MetricChart with cutoffs that arrived out of order', () => {
+  const subs = report.summary.subs
+  // Synthetic values, inverted on purpose.
+  const inverted = thresholdLinesFor('eccentricity', {
+    eccentricity_marginal: 0.95,
+    eccentricity_reject: 0.9,
+  })
+
+  it('says visibly that the marginal line is not below the reject line', () => {
+    render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={inverted} />,
+    )
+
+    expect(screen.getByRole('note')).toHaveTextContent(/out of order/i)
+  })
+
+  it('still draws both lines exactly where the payload put them', () => {
+    const { container } = render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={inverted} />,
+    )
+
+    const [marginal, reject] = lines(container).map((l) => pct(l, 'bottom'))
+    // Not reordered: the marginal line really is drawn above.
+    expect(marginal!).toBeGreaterThan(reject!)
+    expect(screen.getByText('marginal 0.95')).toBeInTheDocument()
+    expect(screen.getByText('reject 0.9')).toBeInTheDocument()
+  })
+
+  it('says nothing for a correctly ordered pair, or an equal one', () => {
+    // Equal is allowed: 1.1.1 clamps the marginal line to at most the
+    // reject line, so the two can coincide on a legitimate report.
+    const ordered = thresholdLinesFor('eccentricity', {
+      eccentricity_marginal: 0.7,
+      eccentricity_reject: 0.9,
+    })
+    const equal = thresholdLinesFor('eccentricity', {
+      eccentricity_marginal: 0.9,
+      eccentricity_reject: 0.9,
+    })
+    const a = render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={ordered} />,
+    )
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+    a.unmount()
+    render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={equal} />,
+    )
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+})
+
+/**
  * A real session is hundreds of subs, so bucketing (above 60 on desktop, 40
  * on mobile) is the ORDINARY path, not an edge case. These run there.
  */
