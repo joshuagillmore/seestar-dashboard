@@ -1,6 +1,6 @@
 import { subImageSrc } from '../../api/client'
 import type { QaSubVerdict } from '../../api/schemas'
-import { formatMetric, isUnanalysed, METRIC_LABELS, toneFor } from './qa'
+import { formatMetric, isUnanalysed, measuredValue, METRIC_LABELS, toneFor } from './qa'
 import styles from './SubImageCard.module.css'
 
 export interface SubImageCardProps {
@@ -67,8 +67,10 @@ export function SubImageCard({ targetId, sub, onClose }: SubImageCardProps) {
               <div key={key} className={styles.metric}>
                 <dt>{METRIC_LABELS[key] ?? key}</dt>
                 <dd>
+                  {/* A dash, not the 0 the server sends as star_count for
+                      a sub it could not analyse — see measuredValue. */}
                   {formatMetric(
-                    typeof sub.metrics[key] === 'number' ? (sub.metrics[key] as number) : null,
+                    measuredValue(sub, key),
                     key === 'star_count' ? 0 : key === 'scattered_light' ? 4 : 2,
                   )}
                 </dd>

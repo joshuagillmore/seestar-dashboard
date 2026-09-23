@@ -18,7 +18,17 @@
     "    other metrics null; star_count is 0 rather than null on that path.",
     "  - floats are rounded to 4 dp by _compact_metrics (_METRIC_DP).",
     "  - keep_list holds the names of subs whose verdict != REJECT.",
-    "Reason strings keep the MEASURED values (this file's own numbers) but do not quote policy cutoffs. Those live in seestar-mcp config.py; baking one into a fixture I authored would create a second copy that drifts silently, which is the same failure web/src/test/no-thresholds.test.ts guards against in source."
+    "Reason strings are the server's own f-strings from qa_tier2.py _score_sub",
+    "(\"REJECT: star_count …\", \"MARGINAL: eccentricity …\", and the error path's",
+    "\"could not analyze: …\", which carries no REJECT: prefix), filled with this",
+    "file's own measured values. They used to be invented prose (\"REJECT - star",
+    "count 173 under …\"), and a parser tested against text the server never",
+    "sends missed every star_count reject the server does send. The one fixed",
+    "policy cutoff a real sentence quotes — the eccentricity REJECT line — is a",
+    "SYNTHETIC stand-in here (0.6), not the config.py number: baking that into",
+    "a fixture I authored would create a second copy that drifts silently,",
+    "which is what web/src/test/no-thresholds.test.ts guards against in source.",
+    "PASS subs carry the server's one PASS line; reasons is never [] on the wire."
   ],
   "ok": true,
   "summary": {
@@ -42,7 +52,9 @@
       {
         "name": "Light_M76_10.0s_LP_20260801-004233",
         "verdict": "PASS",
-        "reasons": [],
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
         "metrics": {
           "star_count": 431,
           "fwhm": 2.9714,
@@ -57,7 +69,9 @@
       {
         "name": "Light_M76_10.0s_LP_20260801-004244",
         "verdict": "PASS",
-        "reasons": [],
+        "reasons": [
+          "PASS: all metrics within session norms"
+        ],
         "metrics": {
           "star_count": 419,
           "fwhm": 3.0402,
@@ -73,7 +87,7 @@
         "name": "Light_M76_10.0s_LP_20260801-004255",
         "verdict": "MARGINAL",
         "reasons": [
-          "MARGINAL - eccentricity 0.4821 in the marginal band (mild tracking error)"
+          "MARGINAL: eccentricity 0.48 >= 0.45 (median 0.39 + 1sigma)"
         ],
         "metrics": {
           "star_count": 402,
@@ -90,7 +104,7 @@
         "name": "Light_M76_10.0s_LP_20260801-004306",
         "verdict": "REJECT",
         "reasons": [
-          "REJECT - eccentricity 0.6142 over the session cutoff (tracking error)"
+          "REJECT: eccentricity 0.61 >= 0.6 cutoff"
         ],
         "metrics": {
           "star_count": 388,
@@ -107,8 +121,8 @@
         "name": "Light_M76_10.0s_LP_20260801-004317",
         "verdict": "REJECT",
         "reasons": [
-          "REJECT - star count 173 under the session-median floor of 412 (cloud)",
-          "REJECT - SNR 6.4011 under the session-median floor of 14.7712"
+          "REJECT: SNR 6.40 < 7.39 floor (0.5 x median 14.77)",
+          "REJECT: star_count 173 < 206 floor (0.5 x median 412)"
         ],
         "metrics": {
           "star_count": 173,
@@ -125,7 +139,7 @@
         "name": "Light_M76_10.0s_LP_20260801-004328",
         "verdict": "REJECT",
         "reasons": [
-          "REJECT - could not analyse"
+          "could not analyze: could not load: no 2-D image HDU found"
         ],
         "metrics": {
           "star_count": 0,
@@ -135,7 +149,7 @@
           "snr": null,
           "background": null,
           "scattered_light": null,
-          "error": "no 2-D image HDU in file"
+          "error": "could not load: no 2-D image HDU found"
         }
       }
     ]

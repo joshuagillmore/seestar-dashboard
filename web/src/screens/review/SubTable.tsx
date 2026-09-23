@@ -1,5 +1,5 @@
 import type { QaSubVerdict } from '../../api/schemas'
-import { blamedMetrics, formatMetric, isUnanalysed, toneFor } from './qa'
+import { blamedMetrics, formatMetric, isUnanalysed, measuredValue, toneFor } from './qa'
 import styles from './SubTable.module.css'
 
 export interface SubTableProps {
@@ -35,12 +35,14 @@ const METRIC_COLUMNS = [
  *    reason always travel together.
  *
  * 2. **A highlighted metric cell means the server blamed that metric**, via
- *    `blamedMetrics`, which reads the reason text. It never means we compared
- *    a value to a cutoff — we do not have the cutoffs, and inventing them is
- *    forbidden twice over.
+ *    `blamedMetrics`, which reads the reason text — and its colour is that
+ *    reason's own REJECT/MARGINAL, not the sub's overall verdict. It never
+ *    means we compared a value to a cutoff: the cutoffs are the server's,
+ *    and deriving a verdict from them here is forbidden.
  *
- * An unanalysable sub gets its own row treatment: no metrics, the error
- * shown, and no verdict tone. It is not a rejection — the server made no
+ * An unanalysable sub gets its own row treatment: a dash in every metric
+ * cell (the server still sends `star_count: 0` for it, which is not a
+ * measurement), the error shown, and no verdict tone. It is not a rejection — the server made no
  * quality judgement about it — and colouring it as one would attribute a
  * decision nobody took.
  */
@@ -102,13 +104,15 @@ export function SubTable({
               </span>
 
               {METRIC_COLUMNS.map((c) => {
-                const value = sub.metrics[c.key]
-                const cls = [styles.numeric, blamed.has(c.key) ? styles[tone] : '']
+                // Toned by the reason that blamed THIS metric, not by the
+                // sub's overall verdict — see qa.ts reasonBlames.
+                const blamedTone = blamed.get(c.key)
+                const cls = [styles.numeric, blamedTone ? styles[blamedTone] : '']
                   .filter(Boolean)
                   .join(' ')
                 return (
                   <span key={c.key} className={cls}>
-                    {formatMetric(typeof value === 'number' ? value : null, c.dp)}
+                    {formatMetric(measuredValue(sub, c.key), c.dp)}
                   </span>
                 )
               })}

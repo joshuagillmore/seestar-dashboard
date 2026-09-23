@@ -42,33 +42,85 @@ export function isUnanalysed(sub: QaSubVerdict): boolean {
   return sub.metrics.error != null
 }
 
+/** A metric value the server actually measured, or null.
+ *
+ * Null for an unanalysable sub regardless of what its fields hold: on the
+ * error path the server still sends `star_count: 0` (an int in its
+ * dataclass), and rendering or plotting that 0 would present a sub nobody
+ * scored as one that measured zero stars. */
+export function measuredValue(
+  sub: QaSubVerdict,
+  metric: keyof QaSubVerdict['metrics'],
+): number | null {
+  if (isUnanalysed(sub)) return null
+  const value = sub.metrics[metric]
+  return typeof value === 'number' ? value : null
+}
+
 /**
- * Which metrics a sub's own `reasons[]` actually blame.
+ * Metric tokens exactly as the server's reason sentences spell them —
+ * `qa_tier2.py` `_score_sub`: `eccentricity`, `FWHM`, `SNR`, `star_count`
+ * (with the underscore) and `scattered light`. Matched case-insensitively,
+ * and only in the position the server puts them: straight after the
+ * sentence's own verdict prefix.
  *
- * The design highlights the offending metric cell in a row. That means
- * knowing WHICH metric failed — and the only honest source is the server's
- * own reason text, which names it. We match metric NAMES against the reason
- * strings; we never compare a value to a threshold to decide.
- *
- * The match is on the vocabulary the server uses in its own messages
- * ("scattered light 0.016 > 0.014 (median + 2σ)"), so a reason that names no
- * metric simply highlights nothing rather than guessing at one.
+ * `hfr` and `background` are listed so a reason naming them is attributed
+ * if the server ever writes one; it does not today.
  */
-const METRIC_PHRASES: ReadonlyArray<readonly [keyof QaSubVerdict['metrics'], readonly string[]]> = [
-  ['fwhm', ['fwhm']],
-  ['eccentricity', ['eccentricity', 'ecc ']],
-  ['snr', ['snr']],
-  ['star_count', ['star count', 'stars']],
-  ['scattered_light', ['scattered light', 'scatter']],
-  ['hfr', ['hfr']],
-  ['background', ['background']],
+const REASON_METRIC_TOKENS: ReadonlyArray<readonly [string, keyof QaSubVerdict['metrics']]> = [
+  ['eccentricity', 'eccentricity'],
+  ['fwhm', 'fwhm'],
+  ['snr', 'snr'],
+  ['star_count', 'star_count'],
+  ['scattered light', 'scattered_light'],
+  ['hfr', 'hfr'],
+  ['background', 'background'],
 ]
 
-export function blamedMetrics(sub: QaSubVerdict): Set<string> {
-  const blamed = new Set<string>()
-  const haystack = sub.reasons.join(' ').toLowerCase()
-  for (const [metric, phrases] of METRIC_PHRASES) {
-    if (phrases.some((phrase) => haystack.includes(phrase))) blamed.add(metric)
+/** `REJECT: …` / `MARGINAL: …` — the prefix every non-PASS reason carries.
+ * The error path (`could not analyze: …`) and `PASS: …` deliberately do not
+ * match: neither blames a metric. */
+const REASON_PREFIX = /^(REJECT|MARGINAL):\s*/
+
+/** One metric one reason blames, toned by that reason's own prefix. */
+export interface ReasonBlame {
+  metric: string
+  tone: 'reject' | 'marginal'
+  /** The server's sentence, verbatim. */
+  reason: string
+}
+
+/**
+ * Which metric each of a sub's `reasons[]` blames, one entry per reason.
+ *
+ * The design highlights the offending metric cell in a row. That means
+ * knowing WHICH metric failed, and HOW BADLY — and the only honest source is
+ * the server's own reason text. Each sentence names one metric and carries
+ * its own verdict prefix; a sub can be REJECT for FWHM and only MARGINAL on
+ * eccentricity, and colouring both with the sub's REJECT would call a
+ * marginal measurement a rejection. We never compare a value to a threshold.
+ *
+ * An unanalysable sub blames nothing: it was never scored, and its error
+ * text ("no stars detected") is not a star-count verdict.
+ */
+export function reasonBlames(sub: QaSubVerdict): ReasonBlame[] {
+  if (isUnanalysed(sub)) return []
+  return sub.reasons.flatMap((reason) => {
+    const prefix = REASON_PREFIX.exec(reason)
+    if (!prefix) return []
+    const rest = reason.slice(prefix[0].length).toLowerCase()
+    const hit = REASON_METRIC_TOKENS.find(([token]) => new RegExp(`^${token}\\b`).test(rest))
+    if (!hit) return []
+    const tone: 'reject' | 'marginal' = prefix[1] === 'REJECT' ? 'reject' : 'marginal'
+    return [{ metric: hit[1], tone, reason }]
+  })
+}
+
+/** Every metric a sub's reasons blame, with the worst tone any reason gave it. */
+export function blamedMetrics(sub: QaSubVerdict): Map<string, 'reject' | 'marginal'> {
+  const blamed = new Map<string, 'reject' | 'marginal'>()
+  for (const { metric, tone } of reasonBlames(sub)) {
+    if (blamed.get(metric) !== 'reject') blamed.set(metric, tone)
   }
   return blamed
 }
@@ -76,25 +128,45 @@ export function blamedMetrics(sub: QaSubVerdict): Set<string> {
 /**
  * Reject counts per cause, for the "rejections by cause" panel.
  *
- * Counts a sub under every metric its reasons name — a sub rejected for both
- * star count and SNR appears under both, because both are true of it. The
- * totals therefore do not sum to the reject count, which is correct and is
- * why the panel is labelled by cause rather than presented as a partition.
+ * Counts a rejected sub under every metric a `REJECT:` reason names — a sub
+ * rejected for both star count and SNR appears under both, because both are
+ * true of it. A `MARGINAL:` reason on a rejected sub is not a cause of its
+ * rejection and is not counted. The totals therefore do not sum to the
+ * reject count, which is correct and is why the panel is labelled by cause
+ * rather than presented as a partition.
+ *
+ * Two causes that are not metrics, so no reject is ever silently dropped:
+ *   - `error`: a sub the server could not analyse. It is REJECTed on the
+ *     wire, and `error` is the server's own cause name for it
+ *     (`qa_tier2.py` CAUSE_ERROR), so `dominant_reject_cause` can say it too.
+ *   - `unattributed`: a reject whose reasons name no metric we recognise. A
+ *     vocabulary change must not turn a rejected night into "nothing
+ *     rejected".
  */
 export function rejectionsByCause(summary: QaSummary): Array<{ cause: string; count: number }> {
   const counts = new Map<string, number>()
+  const bump = (cause: string) => counts.set(cause, (counts.get(cause) ?? 0) + 1)
   for (const sub of summary.subs) {
     if (toneFor(sub.verdict) !== 'reject') continue
-    for (const metric of blamedMetrics(sub)) {
-      counts.set(metric, (counts.get(metric) ?? 0) + 1)
+    if (isUnanalysed(sub)) {
+      bump('error')
+      continue
     }
+    const causes = new Set(
+      reasonBlames(sub)
+        .filter((b) => b.tone === 'reject')
+        .map((b) => b.metric),
+    )
+    if (causes.size === 0) bump('unattributed')
+    for (const cause of causes) bump(cause)
   }
   return [...counts.entries()]
     .map(([cause, count]) => ({ cause, count }))
     .sort((a, b) => b.count - a.count || a.cause.localeCompare(b.cause))
 }
 
-/** Human label for a metric key. Presentation only. */
+/** Human label for a metric key — or a reject cause, which is the same
+ * vocabulary plus the two non-metric causes. Presentation only. */
 export const METRIC_LABELS: Record<string, string> = {
   fwhm: 'FWHM',
   hfr: 'HFR',
@@ -103,6 +175,8 @@ export const METRIC_LABELS: Record<string, string> = {
   star_count: 'star count',
   scattered_light: 'scattered light',
   background: 'background',
+  error: 'not analysed',
+  unattributed: 'no metric named',
 }
 
 /**
