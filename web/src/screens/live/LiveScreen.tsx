@@ -38,6 +38,10 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
   if (phase === 'active') return { tone: 'pass', meta: 'live' }
   if (phase === 'bridge-down') return { tone: 'reject', meta: 'bridge down' }
   if (phase === 'idle') return { tone: 'idle', meta: 'idle' }
+  // Neither is idle, and neither is a fault of the bridge: the scope is
+  // answering, but not in a way this screen can show as a session.
+  if (phase === 'run-without-view') return { tone: 'marginal', meta: 'run, no view' }
+  if (phase === 'unrecognised') return { tone: 'marginal', meta: 'unrecognised' }
   return { tone: null, meta: null }
 }
 
@@ -165,6 +169,45 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
             </div>
           </div>
           <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
+        </div>
+      )}
+
+      {state.phase === 'run-without-view' && (
+        <div className={styles.idleColumns}>
+          <div className={styles.stateCard} data-testid="live-run-without-view">
+            <Dot tone="marginal" />
+            <div>
+              <div className={styles.stateTitle}>Run in progress — no live view</div>
+              <p className={styles.stateBody}>
+                get_run_state reports an active run{state.runTarget ? ` on ${state.runTarget}` : ''}, but{' '}
+                {state.viewError === null
+                  ? 'the scope reports no view session'
+                  : `get_view_state did not answer (${state.viewError})`}{' '}
+                this poll. That is not shown as idle: the run may be between targets, or its view may
+                have stopped.
+              </p>
+            </div>
+          </div>
+          <SessionActivityCard activity={state.sessionActivity} sessionRunning={true} wide />
+        </div>
+      )}
+
+      {state.phase === 'unrecognised' && (
+        <div className={styles.idleColumns}>
+          <div className={styles.stateCard} data-testid="live-unrecognised">
+            <Dot tone="marginal" />
+            <div>
+              <div className={styles.stateTitle}>Telescope state unreadable</div>
+              <p className={styles.stateBody}>
+                The telescope answered in a shape this dashboard doesn&apos;t understand, so it cannot
+                tell whether a session is running — and will not guess idle.
+              </p>
+              <p className={styles.stateDetail} data-testid="live-unrecognised-detail">
+                {state.detail}
+              </p>
+            </div>
+          </div>
+          <SessionActivityCard activity={state.sessionActivity} sessionRunning={null} wide />
         </div>
       )}
 

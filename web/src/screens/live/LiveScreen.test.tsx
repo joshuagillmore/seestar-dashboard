@@ -233,19 +233,31 @@ describe('LiveScreen', () => {
     await waitFor(() => expect(screen.getByText('Dumbbell Nebula')).toBeInTheDocument())
   })
 
-  it('falls back to idle (not a crash, and not fabricated telemetry) when get_view_state answers ok but is missing the view_state wrapper', async () => {
-    // The exact bug an earlier version of ViewStateSchema had: reading
-    // ok.result.View directly, one level shallower than the real
-    // ok.view_state.result.View. That malformed-but-200-OK payload fails
-    // schema validation inside fetchViewState, which useLiveSession reads as
-    // "idle" — proving the wrapper is actually load-bearing, not just
-    // documented.
+  it('reports a get_view_state it cannot parse as exactly that — never as idle, and never as fabricated telemetry', async () => {
+    // The shape an earlier ViewStateSchema expected: ok.result.View, one
+    // level shallower than the real ok.view_state.result.View. It fails
+    // validation, which proves the wrapper is load-bearing.
+    //
+    // This test used to assert that the failure rendered IDLE. That was the
+    // defect, pinned: a schema mismatch is the telescope answering in a shape
+    // we do not understand, and the same misreport happened on hardware
+    // (AnnotateSchema's doc comment) — "idle" while it stacked 94 frames.
     stubApi({
       '/api/get_view_state': { ok: true, result: { View: { stage: 'Stack' } } },
     })
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
-    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('live-unrecognised')).toBeInTheDocument())
+    expect(screen.getByText(/shape this dashboard doesn.t understand/i)).toBeInTheDocument()
+    // The parse detail is shown, so the mismatch can be diagnosed from the screen.
+    expect(screen.getByTestId('live-unrecognised-detail')).toHaveTextContent(/unexpected payload from \/api\/get_view_state/)
+    expect(screen.queryByTestId('live-idle')).not.toBeInTheDocument()
     expect(screen.queryByTestId('telemetry-grid')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('dot')[1]).not.toHaveAttribute('data-dot', 'idle')
+    // Nor does the activity feed claim "no session is running": unknown.
+    await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+    // The sidecar answered, so the bridge is up: no get_status spend.
+    expect(fetchedUrls().some((u) => u.includes('get_status'))).toBe(false)
   })
 
   it('marks a "sub" source preview as a single frame, visibly, not just via a data attribute', async () => {
@@ -706,6 +718,29 @@ describe('a connected scope with no view session', () => {
     expect(urls.some((u) => u.includes('check_night_guardrails'))).toBe(false)
     expect(urls.some((u) => u.includes('live_preview'))).toBe(false)
     expect(urls.some((u) => u.includes('last_stack'))).toBe(false)
+  })
+})
+
+describe('never idle while get_run_state says a run is active', () => {
+  it.each([
+    ['get_view_state times out', { ok: false, error: 'get_view_state timed out' }],
+    ['get_view_state reports no View', connectedButIdleViewState()],
+  ])('shows the run, not "Scope idle", when %s', async (_label, viewReply) => {
+    // An active run between targets (slewing, re-aligning) or one whose view
+    // stopped unexpectedly: the scope's own view check says nothing is
+    // stacking, but a skill-driven run is on. "Scope idle — not observing"
+    // there is the confident wrong answer run_state exists to prevent.
+    stubApi({ '/api/get_run_state': runStateActiveFixture(), '/api/get_view_state': viewReply })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('live-run-without-view')).toBeInTheDocument())
+    expect(screen.queryByTestId('live-idle')).not.toBeInTheDocument()
+    // Names the run's own target, from run_state.
+    const runTarget = (runStateActiveFixture() as { run: { target: string } }).run.target
+    expect(screen.getByTestId('live-run-without-view')).toHaveTextContent(runTarget)
+    expect(screen.getAllByTestId('dot')[1]).not.toHaveAttribute('data-dot', 'idle')
+    await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
   })
 })
 

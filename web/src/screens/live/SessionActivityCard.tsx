@@ -15,8 +15,10 @@ export interface SessionActivityCardProps {
    * every poll regardless of phase, so a busy-looking list of timestamped
    * entries from three nights ago could otherwise read as "something is
    * happening now" — the one thing this card must never imply when nothing
-   * is. `false` adds a visible note; it never hides or reorders the feed. */
-  sessionRunning: boolean
+   * is. `false` adds a visible note; it never hides or reorders the feed.
+   * `null` is "cannot tell" (the scope answered unreadably): no note, since
+   * "no session is running" would be a claim this client cannot make. */
+  sessionRunning: boolean | null
   /** Widens the card to `flex: 1` instead of its default fixed `336px` —
    * used in the idle/bridge-down layout, where this feed is the main
    * content rather than a sidebar beside the preview/telemetry (see
@@ -72,7 +74,7 @@ export function SessionActivityCard({ activity, sessionRunning, wide = false }: 
         <span className={styles.source}>session_activity</span>
       </div>
 
-      {!sessionRunning && (
+      {sessionRunning === false && (
         <div className={styles.notRunning} data-testid="session-activity-not-running">
           No session is running right now — this is recent history, not live activity.
         </div>

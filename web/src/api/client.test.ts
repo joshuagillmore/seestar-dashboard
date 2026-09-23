@@ -11,6 +11,7 @@ import {
   fetchTargetObservability,
   fetchTier1,
   fetchViewState,
+  SchemaError,
 } from './client'
 import {
   livePreviewStacked,
@@ -48,6 +49,24 @@ describe('api client', () => {
   it('raises ApiError when the payload fails schema validation', async () => {
     mockFetch({ ok: true, go: 'yes' })
     await expect(fetchConditions()).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it('raises the distinct SchemaError for a payload it cannot parse, so a caller can tell "answered oddly" from "did not answer"', async () => {
+    // The Live screen read every get_view_state failure as "scope idle",
+    // including a schema mismatch — and that misreport happened on hardware
+    // (see AnnotateSchema's doc comment): idle, while stacking 94 frames.
+    mockFetch({ ok: true, go: 'yes' })
+    await expect(fetchConditions()).rejects.toBeInstanceOf(SchemaError)
+    await expect(fetchConditions()).rejects.toThrow(/unexpected payload/)
+  })
+
+  it('does not call a transport or tool failure a SchemaError', async () => {
+    mockFetch({ ok: false, error: 'get_view_state timed out' }, 502)
+    await expect(fetchViewState()).rejects.not.toBeInstanceOf(SchemaError)
+    mockFetch({ ok: false, error: 'no site profile has been set' })
+    await expect(fetchConditions()).rejects.not.toBeInstanceOf(SchemaError)
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')))
+    await expect(fetchConditions()).rejects.not.toBeInstanceOf(SchemaError)
   })
 
   it('puts the limit in the plan query string', async () => {

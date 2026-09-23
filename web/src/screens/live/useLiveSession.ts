@@ -10,12 +10,14 @@ import {
   fetchTargetObservability,
   fetchTier1,
   fetchViewState,
+  SchemaError,
 } from '../../api/client'
 import type {
   FocuserPosition,
   Guardrails,
   LastStack,
   LivePreview,
+  RunState,
   SessionActivity,
   TargetObservability,
   Tier1,
@@ -77,6 +79,29 @@ export type LiveSessionState =
        * reported no view session (`result: {}`, the commonest real idle).
        * A string: `get_view_state` failed with this message while
        * `get_status` still answered — the documented idle-scope timeout. */
+      viewError: string | null
+      sessionActivity: SessionActivity | null
+    }
+  | {
+      /** `get_view_state` answered, but in a shape the schema rejects. The
+       * scope is talking; this client cannot read it, so it cannot say
+       * whether a session is running — and must not guess "idle", which is
+       * exactly the misreport this used to produce on hardware. */
+      phase: 'unrecognised'
+      /** The parse failure, verbatim, so the mismatch is diagnosable from
+       * the screen. */
+      detail: string
+      sessionActivity: SessionActivity | null
+    }
+  | {
+      /** `get_run_state` says a skill-driven run is active, but the scope
+       * reports no view session (or `get_view_state` failed). Between
+       * targets, or a view that stopped: either way not "idle", which is
+       * the confident wrong answer run_state exists to prevent. */
+      phase: 'run-without-view'
+      /** `run.target` from run_state — the string passed to goto_target. */
+      runTarget: string | null
+      /** As on `idle`: `null` for "answered, no View", else the failure. */
       viewError: string | null
       sessionActivity: SessionActivity | null
     }
@@ -176,8 +201,14 @@ export type LiveSessionState =
  *                                    never called.        1 request
  *   view_state OK, no View         → idle. Same proof;    1 request
  *                                    get_status skipped
+ *   view_state unparseable         → unrecognised. The    1 request
+ *                                    sidecar answered;
+ *                                    never read as idle
  *   view_state fails, status OK    → idle                 6 requests
  *   view_state fails, status fails → bridge-down          6 requests
+ *
+ * Both "idle" rows become `run-without-view` instead when get_run_state says
+ * a run is active: never "Scope idle" over a run that is on.
  *
  * "Answered" is not "observing": a connected scope with no view session
  * returns `result: {}`, which parses. Treating any successful fetch as
@@ -296,6 +327,31 @@ export function useLiveSession(): LiveSessionState {
       lastStackTargetRef.current = null
     }
 
+    /**
+     * The bridge is up and the scope is not showing a view session. That is
+     * idle — unless `get_run_state` says a skill-driven run is active, in
+     * which case "Scope idle — not observing" would be the confident wrong
+     * answer: the run may be between targets, or its view may have stopped.
+     * The run's session memory is kept then; it is still the same run.
+     */
+    function settleWithoutView(
+      runState: RunState | null,
+      viewError: string | null,
+      sessionActivity: SessionActivity | null,
+    ) {
+      if (runState?.state === 'active') {
+        setState({
+          phase: 'run-without-view',
+          runTarget: runState.run?.target ?? null,
+          viewError,
+          sessionActivity,
+        })
+        return
+      }
+      endSession()
+      setState({ phase: 'idle', viewError, sessionActivity })
+    }
+
     async function poll() {
       // Kicked off immediately, independent of everything below — see this
       // hook's own doc comment.
@@ -339,6 +395,16 @@ export function useLiveSession(): LiveSessionState {
       try {
         viewState = await fetchViewState()
       } catch (viewCause) {
+        if (cancelled) return
+        // Answered, unreadably. Not a session we can see, not an idle scope
+        // we can vouch for, and not a bridge problem — the sidecar just
+        // answered, so get_status would prove nothing. Say what happened.
+        if (viewCause instanceof SchemaError) {
+          const sessionActivity = await sessionActivityPromise
+          if (cancelled) return
+          setState({ phase: 'unrecognised', detail: viewCause.message, sessionActivity })
+          return
+        }
         // No session. Now — and only now — spend the 5 requests to tell
         // "idle" from "the bridge is gone", which is the one question
         // get_status is actually here to answer.
@@ -353,8 +419,7 @@ export function useLiveSession(): LiveSessionState {
         }
         const sessionActivity = await sessionActivityPromise
         if (cancelled) return
-        endSession()
-        setState({ phase: 'idle', viewError: errorMessage(viewCause), sessionActivity })
+        settleWithoutView(runState, errorMessage(viewCause), sessionActivity)
         return
       }
 
@@ -363,14 +428,14 @@ export function useLiveSession(): LiveSessionState {
       // a green live dot, "Stacking", a column of dashes and a guardrails
       // fetch for a session that did not exist, while the sidecar's
       // live_preview, given no View to scope by, scanned the whole share and
-      // named an old target. No View is idle. The bridge has just answered,
-      // so get_status would only re-prove it: skipped.
+      // named an old target. No View is idle (unless a run is active — see
+      // settleWithoutView). The bridge has just answered, so get_status would
+      // only re-prove it: skipped.
       const view = viewState.view_state?.result?.View
       if (view == null) {
         const sessionActivity = await sessionActivityPromise
         if (cancelled) return
-        endSession()
-        setState({ phase: 'idle', viewError: null, sessionActivity })
+        settleWithoutView(runState, null, sessionActivity)
         return
       }
       if (cancelled) return

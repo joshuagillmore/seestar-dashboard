@@ -42,6 +42,19 @@ import {
 
 export class ApiError extends Error {}
 
+/**
+ * The sidecar answered, successfully, with a payload this client's schema
+ * does not accept. Still an `ApiError` (every existing `catch` keeps
+ * working), but distinct, because it means something different from every
+ * other failure: the telescope is talking, in a shape we do not understand.
+ *
+ * The Live screen used to read every `get_view_state` failure as "scope
+ * idle", and a schema mismatch is how that misreport happened on hardware —
+ * "idle" while the scope stacked 94 frames (see AnnotateSchema's doc
+ * comment). A caller that can tell this apart can say so instead.
+ */
+export class SchemaError extends ApiError {}
+
 /** How to get the sidecar running, repeated in every message that means
  * "the sidecar didn't answer" — this is the one line of the app most
  * likely to be read by someone who has never seen the codebase. */
@@ -90,7 +103,7 @@ async function request<T>(path: string, schema: ZodType<T>, init?: RequestInit):
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
     // Loud, not silent: a shape change should be visible, not a blank card.
-    throw new ApiError(`unexpected payload from ${path}: ${parsed.error.message}`)
+    throw new SchemaError(`unexpected payload from ${path}: ${parsed.error.message}`)
   }
   return parsed.data
 }
