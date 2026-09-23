@@ -71,7 +71,15 @@ export const SESSION_ACTIVITY_LIMIT = 30
 export type LiveSessionState =
   | { phase: 'loading' }
   | { phase: 'bridge-down'; error: string; sessionActivity: SessionActivity | null }
-  | { phase: 'idle'; sessionActivity: SessionActivity | null }
+  | {
+      phase: 'idle'
+      /** How the scope said so. `null`: `get_view_state` answered and
+       * reported no view session (`result: {}`, the commonest real idle).
+       * A string: `get_view_state` failed with this message while
+       * `get_status` still answered — the documented idle-scope timeout. */
+      viewError: string | null
+      sessionActivity: SessionActivity | null
+    }
   | {
       phase: 'active'
       viewState: ViewState
@@ -164,10 +172,16 @@ export type LiveSessionState =
  *
  * Inverted:
  *
- *   view_state OK                  → active. Bridge proved up; get_status
+ *   view_state OK, View present    → active. Bridge proved up; get_status
  *                                    never called.        1 request
+ *   view_state OK, no View         → idle. Same proof;    1 request
+ *                                    get_status skipped
  *   view_state fails, status OK    → idle                 6 requests
  *   view_state fails, status fails → bridge-down          6 requests
+ *
+ * "Answered" is not "observing": a connected scope with no view session
+ * returns `result: {}`, which parses. Treating any successful fetch as
+ * active once put a green live dot over a parked scope.
  *
  * An active tick drops from 6 device requests to 1. The idle path is
  * unchanged in cost and already behind the back-off below, so it pays the
@@ -282,9 +296,7 @@ export function useLiveSession(): LiveSessionState {
         // nothing new about it. Claiming idle here would be inventing an
         // observation we skipped making.
         if (!cancelled && sessionActivity) {
-          setState((prev) =>
-            prev.phase === 'idle' ? { phase: 'idle', sessionActivity } : prev,
-          )
+          setState((prev) => (prev.phase === 'idle' ? { ...prev, sessionActivity } : prev))
         }
         return
       }
@@ -296,7 +308,7 @@ export function useLiveSession(): LiveSessionState {
       let viewState: ViewState
       try {
         viewState = await fetchViewState()
-      } catch {
+      } catch (viewCause) {
         // No session. Now — and only now — spend the 5 requests to tell
         // "idle" from "the bridge is gone", which is the one question
         // get_status is actually here to answer.
@@ -307,14 +319,28 @@ export function useLiveSession(): LiveSessionState {
           if (!cancelled) {
             setState({
               phase: 'bridge-down',
-              error: cause instanceof Error ? cause.message : String(cause),
+              error: errorMessage(cause),
               sessionActivity,
             })
           }
           return
         }
         const sessionActivity = await sessionActivityPromise
-        if (!cancelled) setState({ phase: 'idle', sessionActivity })
+        if (!cancelled) setState({ phase: 'idle', viewError: errorMessage(viewCause), sessionActivity })
+        return
+      }
+
+      // Answering is not observing. A connected scope with no view session
+      // returns `result: {}` — it parses, and it used to count as "active":
+      // a green live dot, "Stacking", a column of dashes and a guardrails
+      // fetch for a session that did not exist, while the sidecar's
+      // live_preview, given no View to scope by, scanned the whole share and
+      // named an old target. No View is idle. The bridge has just answered,
+      // so get_status would only re-prove it: skipped.
+      const view = viewState.view_state?.result?.View
+      if (view == null) {
+        const sessionActivity = await sessionActivityPromise
+        if (!cancelled) setState({ phase: 'idle', viewError: null, sessionActivity })
         return
       }
 
@@ -355,7 +381,7 @@ export function useLiveSession(): LiveSessionState {
       // erased the target name from a session that was visibly still running.
       // Held sticky across a poll where both are momentarily absent, rather
       // than blanking the sweet-band card.
-      const namedTarget = viewState?.view_state?.result?.View?.target_name ?? preview?.target
+      const namedTarget = view.target_name ?? preview?.target
       if (namedTarget) currentTargetRef.current = namedTarget
       const observability = currentTargetRef.current
         ? await fetchTargetObservability(currentTargetRef.current).catch(() => null)
@@ -373,7 +399,7 @@ export function useLiveSession(): LiveSessionState {
 
       if (cancelled) return
       if (tier1) logRef.current = appendTelemetryEntry(logRef.current, tier1)
-      const stage = viewState.view_state?.result?.View?.stage
+      const stage = view.stage
       if (stage && stageHistoryRef.current[stageHistoryRef.current.length - 1] !== stage) {
         stageHistoryRef.current = [...stageHistoryRef.current, stage]
       }
@@ -402,4 +428,8 @@ export function useLiveSession(): LiveSessionState {
   }, [])
 
   return state
+}
+
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause)
 }

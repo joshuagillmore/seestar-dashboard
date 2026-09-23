@@ -157,9 +157,10 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
             <div>
               <div className={styles.stateTitle}>Scope idle — not observing</div>
               <p className={styles.stateBody}>
-                The bridge answered, but `get_view_state` timed out, which means there is no
-                active session right now rather than a fault. This is the normal state for most of
-                the day, and most of the night.
+                {state.viewError === null
+                  ? 'The scope answered and reports no view session, so nothing is being observed right now.'
+                  : `The bridge answered, but get_view_state did not (${state.viewError}), which on this scope means no active session rather than a fault.`}{' '}
+                This is the normal state for most of the day, and most of the night.
               </p>
             </div>
           </div>

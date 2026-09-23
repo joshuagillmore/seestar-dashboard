@@ -646,6 +646,52 @@ describe('run state is only trusted when active', () => {
   })
 })
 
+/** Captured on hardware 2026-07-31 (see schemas.test.ts): scope connected and
+ * tracking, no view session. `result` is `{}` — the `View` key is absent. */
+const connectedButIdleViewState = () => ({
+  ok: true,
+  view_state: {
+    jsonrpc: '2.0',
+    Timestamp: '2439.848473865',
+    method: 'get_view_state',
+    result: {},
+    code: 0,
+    id: 10054,
+  },
+})
+
+const fetchedUrls = (): string[] =>
+  (globalThis.fetch as unknown as { mock: { calls: [string][] } }).mock.calls.map(([u]) => u)
+
+describe('a connected scope with no view session', () => {
+  it('renders idle — not a live session — when get_view_state answers with no View', async () => {
+    // The commonest real state of this screen. It parses (the schema accepts
+    // an absent View), and a successful fetch used to mean "active": a green
+    // live dot, "Stacking", a column of dashes and a guardrails fetch for a
+    // session that does not exist.
+    stubApi({ '/api/get_view_state': connectedButIdleViewState() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    expect(screen.queryByTestId('telemetry-grid')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('dot')[1]).toHaveAttribute('data-dot', 'idle')
+  })
+
+  it('asks nothing further of the scope or the share once it has answered with no View', async () => {
+    // get_status would only re-prove a bridge that just answered, and
+    // live_preview with no View scans the whole share and names an old target.
+    stubApi({ '/api/get_view_state': connectedButIdleViewState() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    const urls = fetchedUrls()
+    expect(urls.some((u) => u.includes('get_status'))).toBe(false)
+    expect(urls.some((u) => u.includes('check_night_guardrails'))).toBe(false)
+    expect(urls.some((u) => u.includes('live_preview'))).toBe(false)
+    expect(urls.some((u) => u.includes('last_stack'))).toBe(false)
+  })
+})
+
 describe('the target name does not depend on the file share', () => {
   it('still names the target on mobile when live_preview reports share_unreachable', async () => {
     // Observed live on 2026-08-08, mid-session: the SMB share dropped and the
