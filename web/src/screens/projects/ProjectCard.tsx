@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { goalLabel as describeGoalLabel, hasNumericGoal } from '../../api/integrationGoal'
 import type { QaVerdictCounts } from '../../api/schemas'
 import { TargetThumb } from '../../ui/TargetThumb'
@@ -67,7 +67,10 @@ export interface ProjectCardProps {
  * its own `<button>` (`.selectArea`), stretched over the whole card beneath
  * the content, so the whole card still selects on click. Controls that must
  * sit above it — the quality bar — are raised out of its way, siblings in
- * the DOM rather than children of it.
+ * the DOM rather than children of it. So is every element with a tooltip
+ * (the status tag, the goal label, the FWHM note on the meta line): beneath
+ * the button, hovering them hovered the button and the title never showed.
+ * Their text is also the button's accessible description.
  *
  * The doubling toggle (view-only, localStorage-persisted — see doubling.ts)
  * sits the same way: a separate button absolutely positioned inside the
@@ -94,6 +97,17 @@ export function ProjectCard({
   const summary = summarizeSessions(project)
   const goal = describeGoalLabel(project.goal, doubled)
   const canDouble = hasNumericGoal(project.goal)
+  const metaTitle = summary?.fwhmAbsent ? FWHM_ABSENT_TITLE : undefined
+  // Every tooltip on the card, also given to the select button as its
+  // accessible description: a keyboard or screen-reader user reaches the
+  // card through that button and never hovers anything.
+  const tips = [status.title, goal.title, metaTitle].filter((t): t is string => !!t)
+  const tipsId = useId()
+  // A titled element is raised above .selectArea (see `.tip` in the CSS) so
+  // hovering it shows its title. Raised, it takes the click the button
+  // beneath it would have had; forwarding it keeps "click anywhere selects".
+  const tipClass = (title: string | undefined) => (title ? ` ${styles.tip}` : '')
+  const tipProps = (title: string | undefined) => (title ? { title, onClick: onSelect } : {})
 
   return (
     <div className={styles.cardWrap}>
@@ -106,14 +120,23 @@ export function ProjectCard({
           className={styles.selectArea}
           aria-pressed={selected}
           aria-label={`${project.targetId} — ${project.targetName}`}
+          aria-describedby={tips.length > 0 ? tipsId : undefined}
           onClick={onSelect}
           data-testid="project-card"
         />
+        {tips.length > 0 && (
+          <span id={tipsId} className={styles.srOnly}>
+            {tips.join(' ')}
+          </span>
+        )}
         <TargetThumb image={project.image} alt={project.targetName} className={styles.cover} />
         <div className={styles.body}>
           <div className={`${styles.titleRow} ${canDouble ? styles.titleRowReserved : ''}`}>
             <span className={styles.id}>{project.targetId}</span>
-            <span className={`${styles.tag} ${TAG_CLASS[status.tag]}`} title={status.title}>
+            <span
+              className={`${styles.tag} ${TAG_CLASS[status.tag]}${tipClass(status.title)}`}
+              {...tipProps(status.title)}
+            >
               {status.label}
             </span>
           </div>
@@ -121,7 +144,7 @@ export function ProjectCard({
           <div className={styles.spacer} />
           <div className={styles.hoursRow}>
             <span className={styles.hours}>{formatHours(project.totalMinutes)}</span>
-            <span className={styles.goal} title={goal.title}>
+            <span className={`${styles.goal}${tipClass(goal.title)}`} {...tipProps(goal.title)}>
               {goal.text}
             </span>
           </div>
@@ -155,10 +178,7 @@ export function ProjectCard({
             </div>
           )}
           <div className={styles.provenance}>{provenanceLabel(project)}</div>
-          <div
-            className={styles.meta}
-            title={summary?.fwhmAbsent ? FWHM_ABSENT_TITLE : undefined}
-          >
+          <div className={`${styles.meta}${tipClass(metaTitle)}`} {...tipProps(metaTitle)}>
             {summary ? summary.text : 'archive only — no per-session detail (aggregate minutes only)'}
           </div>
         </div>

@@ -57,6 +57,27 @@
    QA report"), lifted above .selectArea so it takes its own clicks. */
 .raised { position: relative; z-index: 2; }
 
+/* An element with a tooltip (the status tag, the goal label, the meta line),
+   lifted the same way so the pointer can reach it and show its title —
+   under .selectArea, the hover landed on the button and the title never
+   appeared. Its click is forwarded to onSelect (ProjectCard.tsx), so the
+   card still selects from here. */
+.tip { position: relative; z-index: 2; cursor: help; }
+
+/* The same tooltip text, for the select button's aria-describedby: present
+   to assistive technology, invisible on screen. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .selected { border-color: var(--accent-border); background: var(--accent-bg); }
 
 .cover { width: 96px; flex: 0 0 auto; }
