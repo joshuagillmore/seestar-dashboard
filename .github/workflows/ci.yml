@@ -48,7 +48,8 @@ jobs:
         working-directory: sidecar
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv publishes no floating major tag past v7; pin the release.
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           # pyproject allows >=3.11,<3.13; 3.12 is what development runs on.
           python-version: '3.12'
