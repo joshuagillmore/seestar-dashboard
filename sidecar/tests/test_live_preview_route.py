@@ -357,3 +357,89 @@ def test_stack_count_updates_on_every_call_even_when_the_frame_is_stale(tmp_path
     second = client.get("/api/live_preview").json()
     assert second["stale"] is True
     assert second["stack_count"] == 150
+
+
+# --- the cache fallback is scoped to the target -----------------------------
+#
+# The fallback to the last known frame never checked which target that frame
+# was of. After a slew, a share hiccup served the PREVIOUS object's frame,
+# marked only "stale" — the wrong-target mistake target scoping exists to
+# prevent (see live_preview.extract_target_name).
+
+
+def _view_on(target_name):
+    return {
+        "ok": True,
+        "view_state": {
+            "result": {"View": {"stage": "Stack", "target_name": target_name, "Stack": {"stacked_frame": 5}}}
+        },
+    }
+
+
+def _prime_cache_with_m27(tmp_path, monkeypatch):
+    share = tmp_path / "share"
+    _touch(share / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg", mtime=_ago(60))
+    client = _client(tmp_path, share_dir=share, view_state=_view_on("M27"), monkeypatch=monkeypatch)
+    first = client.get("/api/live_preview").json()
+    assert first["target"] == "M27" and first["source"] == "sub"
+    return client
+
+
+@pytest.mark.parametrize("failure", ["unreachable", "no_frame"])
+def test_after_a_slew_the_previous_targets_frame_is_not_served(tmp_path, monkeypatch, failure):
+    client = _prime_cache_with_m27(tmp_path, monkeypatch)
+
+    async def discover(root, timeout_s=None, target=None):
+        if failure == "unreachable":
+            raise ShareUnreachableError("down")
+        return None
+
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", discover)
+
+    async def now_on_ngc7380(request, tool, arguments):
+        return _view_on("NGC 7380")
+
+    monkeypatch.setattr(routes, "call_tool", now_on_ngc7380)
+
+    body = client.get("/api/live_preview").json()
+
+    assert body["source"] is None, f"served {body['target']}'s frame while on NGC7380"
+    assert body["target"] is None
+    assert body["reason"] == ("share_unreachable" if failure == "unreachable" else "no_frame")
+    # Nor may the image route keep serving the old target's bytes.
+    assert client.get("/api/live_preview/image").status_code == 404
+
+
+def test_the_same_targets_cached_frame_still_degrades_to_stale(tmp_path, monkeypatch):
+    client = _prime_cache_with_m27(tmp_path, monkeypatch)
+
+    async def raises(root, timeout_s=None, target=None):
+        raise ShareUnreachableError("down")
+
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", raises)
+
+    body = client.get("/api/live_preview").json()
+
+    assert body["target"] == "M27"
+    assert body["stale"] is True
+
+
+def test_with_no_active_target_the_cached_frame_still_degrades_to_stale(tmp_path, monkeypatch):
+    """No target_name in the view state means the scan itself was unscoped,
+    so there is nothing to mismatch against — the old degrade still holds."""
+    client = _prime_cache_with_m27(tmp_path, monkeypatch)
+
+    async def raises(root, timeout_s=None, target=None):
+        raise ShareUnreachableError("down")
+
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", raises)
+
+    async def no_target(request, tool, arguments):
+        return OBSERVING_VIEW_STATE
+
+    monkeypatch.setattr(routes, "call_tool", no_target)
+
+    body = client.get("/api/live_preview").json()
+
+    assert body["target"] == "M27"
+    assert body["stale"] is True

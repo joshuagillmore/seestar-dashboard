@@ -612,9 +612,68 @@ def test_a_third_concurrent_analysis_is_refused_rather_than_queued(tmp_path):
         for name in ("A", "B"):
             qa_analysis.start_analysis(registry, cache_dir, name, [tmp_path / "a.fit"], slow)
         await asyncio.sleep(0.05)
-        return qa_analysis.start_analysis(registry, cache_dir, "C", [tmp_path / "a.fit"], slow)
+        with pytest.raises(qa_analysis.TooManyAnalyses) as refused:
+            qa_analysis.start_analysis(registry, cache_dir, "C", [tmp_path / "a.fit"], slow)
+        return refused.value
 
-    third = asyncio.run(run())
+    refusal = asyncio.run(run())
 
-    assert third["status"] == STATUS_FAILED
-    assert "already running" in third["error"]
+    # A refusal is not a job state: it raises rather than returning
+    # status "failed", which the client could not tell from a job that ran
+    # and failed — and which replaced whatever report it was showing.
+    assert "already running" in str(refusal)
+    assert registry.get("C") is None, "a refused start must not register a job"
+
+
+# --- defence in depth: the cache never builds a path outside cache_dir -------
+
+
+@pytest.mark.parametrize(
+    "target_id",
+    [
+        "../outside",
+        "..\\outside",
+        "a/../../outside",
+        "/etc/outside",
+        "C:/outside",
+        "C:outside",
+        "//attacker.example/share/x",
+        "\\\\attacker.example\\share\\x",
+        "M31:stream",
+        "",
+        "NUL",
+    ],
+)
+def test_cache_paths_refuse_anything_that_is_not_a_plain_name_inside_the_cache(
+    tmp_path, target_id
+):
+    """routes.py validates target ids first; this is the second layer, so a
+    future caller that forgets cannot turn a target id into a path outside the
+    cache. Checked lexically: resolving a UNC path to test containment would
+    itself open the SMB connection the check exists to prevent."""
+    from seestar_sidecar import qa_analysis
+
+    cache_dir = tmp_path / "cache"
+    with pytest.raises(ValueError):
+        qa_analysis._cache_path(cache_dir, target_id)
+    with pytest.raises(ValueError):
+        qa_analysis._inflight_path(cache_dir, target_id)
+
+    # The public readers degrade to "nothing there" rather than raising into a
+    # route, and the writer refuses.
+    assert qa_analysis.load_cached_report(cache_dir, target_id) is None
+    assert qa_analysis.load_inflight(cache_dir, target_id) is None
+    with pytest.raises(ValueError):
+        qa_analysis.write_cached_report(cache_dir, target_id, "sig", {"ok": True})
+
+
+def test_ordinary_target_ids_still_map_into_the_cache(tmp_path):
+    from seestar_sidecar import qa_analysis
+
+    cache_dir = tmp_path / "cache"
+    for target_id in ("M31", "NGC2244", "SH2-142", "IC405", "C_33", "Sh2+155", ".."):
+        assert qa_analysis._cache_path(cache_dir, target_id) == cache_dir / f"{target_id}.json"
+        assert (
+            qa_analysis._inflight_path(cache_dir, target_id)
+            == cache_dir / f"{target_id}.inflight.json"
+        )

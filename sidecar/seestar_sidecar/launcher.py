@@ -22,6 +22,7 @@ import uvicorn
 # create_app"), so main.py isn't actually imported until uvicorn.run() below,
 # which is after this module's own argparse defaults have already been built.
 from seestar_sidecar import env as _env  # noqa: F401, E402
+from seestar_sidecar.host_check import is_loopback_bind  # noqa: E402
 
 
 def _port_is_free(host: str, port: int) -> bool:
@@ -64,6 +65,21 @@ def main(argv: list[str] | None = None) -> None:
             file=sys.stderr,
         )
         raise SystemExit(1)
+
+    # uvicorn calls the app factory with no arguments, so this is how the app
+    # learns which Host headers to answer (see host_check.py): an explicit
+    # `--host 192.168.1.50` must still be reachable by that address.
+    os.environ["SEESTAR_BIND_HOST"] = args.host
+    if not is_loopback_bind(args.host):
+        # ASCII only, for the same raw-console reason as the message above.
+        print(
+            f"WARNING: bound to {args.host}, so other machines can reach this "
+            f"server. The API has NO authentication - anyone on this network can "
+            f"read your site and projects and start QA analyses. Omit --host to "
+            f"stay on 127.0.0.1.",
+            file=sys.stderr,
+            flush=True,
+        )
 
     # flush=True: stdout is fully buffered rather than line-buffered
     # whenever it isn't a live terminal (piped to a log file, captured by a
