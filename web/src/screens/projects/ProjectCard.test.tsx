@@ -366,6 +366,28 @@ describe('ProjectCard', () => {
       expect(onSelect).toHaveBeenCalledOnce()
     })
 
+    it('raises a survey thumbnail so its required credit shows on hover, and still selects from it', () => {
+      const onSelect = vi.fn()
+      const image = { url: '/api/target_image/M1', source: 'survey' as const, credit: 'DSS2 · STScI' }
+      render(<ProjectCard project={merged({ image })} selected={false} onSelect={onSelect} />)
+      const badge = screen.getByTestId('survey-badge')
+
+      expect(badge.parentElement!.className).toContain('tip')
+      expect(screen.getByTestId('project-card')).toHaveAccessibleDescription(
+        expect.stringContaining('DSS2 · STScI'),
+      )
+      fireEvent.click(badge)
+      expect(onSelect).toHaveBeenCalledOnce()
+    })
+
+    it('leaves the user\'s own capture unraised: it has no credit to show', () => {
+      const image = { url: '/api/target_image/M1', source: 'own' as const, credit: null }
+      render(<ProjectCard project={merged({ image, goal: null })} selected={false} onSelect={vi.fn()} />)
+
+      expect(screen.getByRole('img', { name: 'Crab Nebula' }).parentElement!.className).not.toContain('tip')
+      expect(screen.getByTestId('project-card')).not.toHaveAttribute('aria-describedby')
+    })
+
     it('gives the button no description when nothing is titled', () => {
       render(<ProjectCard project={merged({ goal: null })} selected={false} onSelect={vi.fn()} />)
 

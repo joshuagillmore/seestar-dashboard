@@ -14,6 +14,10 @@ export interface TargetThumbProps {
    * 64×88 box vs. ProjectCard's 96px full-height cover) — this component
    * only fills whatever box it is given. */
   className?: string
+  /** Lets a caller that raises the thumbnail above its own click layer
+   * (ProjectCard, so the survey credit's title can be hovered) keep the
+   * click it would otherwise have swallowed. */
+  onClick?: () => void
 }
 
 /**
@@ -36,7 +40,7 @@ export interface TargetThumbProps {
  * needs to distinguish "no image" from "an image that didn't load"; neither
  * is an error state worth a broken-image glyph.
  */
-export function TargetThumb({ image, alt, className }: TargetThumbProps) {
+export function TargetThumb({ image, alt, className, onClick }: TargetThumbProps) {
   const [failed, setFailed] = useState(false)
 
   // A remount isn't guaranteed here — both callers key their list by target
@@ -48,7 +52,7 @@ export function TargetThumb({ image, alt, className }: TargetThumbProps) {
   const showImage = Boolean(image) && !failed
 
   return (
-    <div className={`${styles.thumb} ${className ?? ''}`}>
+    <div className={`${styles.thumb} ${className ?? ''}`} onClick={onClick}>
       {showImage && image ? (
         <img
           src={image.url}

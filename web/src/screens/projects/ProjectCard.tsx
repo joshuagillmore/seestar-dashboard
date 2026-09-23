@@ -101,7 +101,11 @@ export function ProjectCard({
   // Every tooltip on the card, also given to the select button as its
   // accessible description: a keyboard or screen-reader user reaches the
   // card through that button and never hovers anything.
-  const tips = [status.title, goal.title, metaTitle].filter((t): t is string => !!t)
+  // A survey cover's credit is attribution the survey requires (TargetThumb's
+  // doc); under .selectArea its title could never be hovered either.
+  const surveyCredit =
+    project.image?.source === 'survey' ? `Survey image: ${project.image.credit ?? 'sky survey'}` : undefined
+  const tips = [status.title, goal.title, metaTitle, surveyCredit].filter((t): t is string => !!t)
   const tipsId = useId()
   // A titled element is raised above .selectArea (see `.tip` in the CSS) so
   // hovering it shows its title. Raised, it takes the click the button
@@ -129,7 +133,12 @@ export function ProjectCard({
             {tips.join(' ')}
           </span>
         )}
-        <TargetThumb image={project.image} alt={project.targetName} className={styles.cover} />
+        <TargetThumb
+          image={project.image}
+          alt={project.targetName}
+          className={`${styles.cover}${tipClass(surveyCredit)}`}
+          onClick={surveyCredit ? onSelect : undefined}
+        />
         <div className={styles.body}>
           <div className={`${styles.titleRow} ${canDouble ? styles.titleRowReserved : ''}`}>
             <span className={styles.id}>{project.targetId}</span>
