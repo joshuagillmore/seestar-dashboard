@@ -124,10 +124,10 @@ legible in the UI rather than reducing it to a colour.
   with side effects has no route at all. Never add one to make a screen easier.
 - Add a real test gate early; this repo is a candidate for orchestrated
   refinement, which requires a fast deterministic gate. The gate as it stands
-  is `npm run lint` (oxlint; warnings pass, errors fail) + `npm test` +
-  `npm run build` in `web/`, and `uv run pytest` in `sidecar/`. Run `web/`
-  first: two tests in `sidecar/tests/test_allowlist.py` expect a built
-  `web/dist`, and fail on a fresh checkout without one.
+  is `npm run lint` (oxlint with `--deny-warnings`) + `npm test` +
+  `npm run build` in `web/`, and `uv run ruff check .` (correctness rules
+  only: pyflakes, bugbear, async-blocking) + `uv run pytest` in `sidecar/`.
+  Neither side depends on the other having been built first.
   **`npx tsc --noEmit` checks nothing here** — the root `tsconfig.json` is a
   solution file with `"files": []`, so it exits 0 having read no source. Use
   `tsc -b`, which `npm run build` already runs.

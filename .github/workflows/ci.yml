@@ -1,6 +1,6 @@
 # The repo's gate, run where nobody's machine is involved. Same commands as
-# CLAUDE.md's Conventions section: lint + test + build in web/, pytest in
-# sidecar/. Linux and UTC, where development happens on Windows in a local
+# CLAUDE.md's Conventions section: lint + test + build in web/, ruff + pytest
+# in sidecar/. Linux and UTC, where development happens on Windows in a local
 # timezone, so a test that only passes because of either shows up here.
 name: CI
 
@@ -40,7 +40,7 @@ jobs:
       - run: npm run build
 
   sidecar:
-    name: sidecar — pytest
+    name: sidecar — ruff, pytest
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -48,18 +48,6 @@ jobs:
         working-directory: sidecar
     steps:
       - uses: actions/checkout@v7
-      # Two tests in tests/test_allowlist.py assert that the app mounts the
-      # built frontend, and create_app() only mounts it when web/dist exists.
-      # They pass on a dev machine because someone ran `npm run build` earlier,
-      # and fail on a fresh checkout. Build it here until those tests supply
-      # their own web_dist. Then these three steps can go.
-      - uses: actions/setup-node@v7
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - run: npm ci && npm run build
-        working-directory: web
       - uses: astral-sh/setup-uv@v10
         with:
           # pyproject allows >=3.11,<3.13; 3.12 is what development runs on.
@@ -69,4 +57,5 @@ jobs:
       # --locked fails if uv.lock is out of step with pyproject.toml, rather
       # than quietly re-resolving to versions nobody has tested.
       - run: uv sync --locked
+      - run: uv run ruff check .
       - run: uv run pytest

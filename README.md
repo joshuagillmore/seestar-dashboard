@@ -192,17 +192,17 @@ and the sidecar's CORS middleware allows that origin — neither is used once
 
 ```
 cd web && npm run lint && npm test && npm run build
-cd sidecar && uv run pytest
+cd sidecar && uv run ruff check . && uv run pytest
 ```
 
 All three web steps must pass. Each catches something the others miss: oxlint
-catches hook-rule violations, and `noUnusedLocals` means a green test suite
+catches hook-rule violations (warnings fail it too), and `noUnusedLocals` means a green test suite
 alone doesn't prove the build is clean. Note that `npx tsc --noEmit` checks
 *nothing* here: the root `tsconfig.json` is a solution file with
 `"files": []`. Use `tsc -b`, which `npm run build` runs.
 
-Run `web/` first. Two sidecar tests (`tests/test_allowlist.py`) expect the
-built frontend in `web/dist` and fail on a fresh checkout without it.
+In `sidecar/`, ruff gates correctness rules only (pyflakes, bugbear,
+async-blocking), not style.
 
 CI (`.github/workflows/ci.yml`) runs the same commands on Linux for every push
 and pull request to `main`.
