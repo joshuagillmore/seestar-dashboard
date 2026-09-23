@@ -14,7 +14,13 @@ import {
   sessionActivity,
 } from '../../test/fixtures'
 import { REQUEST_TIMEOUT_MS } from '../../api/client'
-import { IDLE_DEVICE_CHECK_EVERY, POLL_INTERVAL_MS, SESSION_GAP_MS, useLiveSession } from './useLiveSession'
+import {
+  FAILED_POLLS_LIMIT,
+  IDLE_DEVICE_CHECK_EVERY,
+  POLL_INTERVAL_MS,
+  SESSION_GAP_MS,
+  useLiveSession,
+} from './useLiveSession'
 
 /**
  * useLiveSession across several polls. LiveScreen.test.tsx covers what one
@@ -338,8 +344,145 @@ describe('per-session state does not outlive the session', () => {
     api.routes['/api/get_view_state'] = fail('bridge unreachable')
     api.routes['/api/get_status'] = fail('bridge unreachable')
     await tick(SESSION_GAP_MS + POLL_INTERVAL_MS)
-    // The stale session has been let go: what shows is the bridge itself.
     expect(result.current.phase).toBe('bridge-down')
+
+    // Same target again: a new session, not yesterday's.
+    api.routes['/api/get_view_state'] = ok(recordedViewState())
+    api.routes['/api/get_status'] = ok(recordedStatus())
+    await tick(POLL_INTERVAL_MS)
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.log).toHaveLength(1)
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(Date.parse(starts[starts.length - 1])).toBeGreaterThan(Date.parse('2026-08-02T21:00:00Z') + SESSION_GAP_MS)
+  })
+})
+
+describe('a run of failed polls lets the session go', () => {
+  // Holding every failed read as a stale session overcorrected. The
+  // documented idle signature is get_view_state failing while get_status
+  // answers, and park-then-sleep looks like bridge-down; both kept a finished
+  // session on screen as "Not current" until SESSION_GAP_MS, with the idle
+  // back-off bypassed the whole time.
+  //
+  // Each step is one poll's full answer: get_view_state and get_status.
+  type Step = Record<string, Route>
+  const statusOk = ok(recordedStatus())
+  const VIEW: Step = { '/api/get_view_state': ok(recordedViewState()), '/api/get_status': statusOk }
+  const NO_VIEW: Step = { '/api/get_view_state': ok(noView()), '/api/get_status': statusOk }
+  const RELAYED: Step = { '/api/get_view_state': fail('get_view_state timed out'), '/api/get_status': statusOk }
+  const BRIDGE_DOWN: Step = {
+    '/api/get_view_state': fail('bridge unreachable'),
+    '/api/get_status': fail('bridge unreachable'),
+  }
+  const UNREADABLE: Step = {
+    '/api/get_view_state': ok({ ok: true, result: { View: { stage: 'Stack' } } }),
+    '/api/get_status': statusOk,
+  }
+  const HANG: Step = { '/api/get_view_state': 'hang', '/api/get_status': statusOk }
+  const T0 = Date.parse('2026-08-02T21:00:00Z')
+
+  async function openSession(routes: Record<string, Route> = activeRoutes()) {
+    vi.setSystemTime(new Date(T0))
+    const api = stubRoutes(routes)
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+    return { api, result }
+  }
+
+  /** One poll per step. A 'hang' step also waits out the client timeout, so
+   * the next step starts exactly when the next poll does. */
+  async function poll(api: ReturnType<typeof stubRoutes>, ...steps: Step[]) {
+    for (const step of steps) {
+      Object.assign(api.routes, step)
+      await tick(POLL_INTERVAL_MS)
+      if (step['/api/get_view_state'] === 'hang') await tick(REQUEST_TIMEOUT_MS)
+    }
+  }
+
+  const repeat = (step: Step, n: number): Step[] => Array.from({ length: n }, () => step)
+
+  it('ends the session after FAILED_POLLS_LIMIT relayed view failures in a row', async () => {
+    const { api, result } = await openSession()
+
+    await poll(api, ...repeat(RELAYED, FAILED_POLLS_LIMIT - 1))
+    expect(result.current.phase).toBe('active') // held, as stale
+    await poll(api, RELAYED)
+    expect(result.current.phase).toBe('idle')
+
+    await poll(api, VIEW)
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.log).toHaveLength(1)
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(Date.parse(starts[starts.length - 1])).toBe(T0 + (FAILED_POLLS_LIMIT + 1) * POLL_INTERVAL_MS)
+  })
+
+  // The rule for a mixed run: consecutive idle-looking polls (explicit
+  // no-View answers and relayed failures) count together, ending the session
+  // at IDLE_ANSWERS_TO_END if every one was explicit and at
+  // FAILED_POLLS_LIMIT once any was relayed. Other failures carry no answer
+  // either way, so they neither count nor break the run.
+  it.each<[string, boolean, Step[]]>([
+    ['two explicit no-View answers', true, [NO_VIEW, NO_VIEW]],
+    ['explicit answers either side of a bridge-down', true, [NO_VIEW, BRIDGE_DOWN, NO_VIEW]],
+    ['a relayed failure then an explicit answer', false, [RELAYED, NO_VIEW]],
+    ['an explicit answer then relayed failures, short of the limit', false, [NO_VIEW, ...repeat(RELAYED, FAILED_POLLS_LIMIT - 2)]],
+    ['an explicit answer then relayed failures, to the limit', true, [NO_VIEW, ...repeat(RELAYED, FAILED_POLLS_LIMIT - 1)]],
+    ['relayed failures then an explicit answer, to the limit', true, [...repeat(RELAYED, FAILED_POLLS_LIMIT - 1), NO_VIEW]],
+  ])('%s: ends the session = %s', async (_label, ends, steps) => {
+    const { api, result } = await openSession()
+
+    await poll(api, ...steps, VIEW)
+
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    const last = Date.parse(starts[starts.length - 1])
+    if (ends) {
+      expect(state.log).toHaveLength(1)
+      expect(last).toBe(T0 + (steps.length + 1) * POLL_INTERVAL_MS)
+    } else {
+      expect(state.log).toHaveLength(2)
+      expect(last).toBe(T0)
+    }
+  })
+
+  it.each<[string, Step, string]>([
+    ['the bridge is down', BRIDGE_DOWN, 'bridge-down'],
+    ['get_view_state cannot be read', UNREADABLE, 'unrecognised'],
+    ['get_view_state gets no answer from the sidecar', HANG, 'idle'],
+  ])('after FAILED_POLLS_LIMIT failed polls where %s, shows that failure but keeps the session', async (_label, failure, phase) => {
+    const { api, result } = await openSession()
+
+    await poll(api, ...repeat(failure, FAILED_POLLS_LIMIT - 1))
+    expect(result.current.phase).toBe('active')
+    await poll(api, failure)
+    expect(result.current.phase).toBe(phase)
+
+    // The scope is back: the same session, with its true start.
+    await poll(api, VIEW)
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.stale).toBeNull()
+    expect(state.log).toHaveLength(2)
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(Date.parse(starts[starts.length - 1])).toBe(T0)
+  })
+
+  it('backs off again once FAILED_POLLS_LIMIT polls in a row have failed', async () => {
+    // A hand-driven session (run_state idle), so the back-off applies as
+    // soon as the device check stops being forced.
+    const { api } = await openSession({ ...activeRoutes(), '/api/get_run_state': ok(runStateIdle()) })
+
+    // Held: the device is asked on every one of these polls.
+    await poll(api, ...repeat(UNREADABLE, FAILED_POLLS_LIMIT))
+    const held = api.urls('get_view_state').length
+    expect(held).toBe(1 + FAILED_POLLS_LIMIT)
+
+    // Released: one device check per IDLE_DEVICE_CHECK_EVERY polls.
+    await poll(api, ...repeat(UNREADABLE, IDLE_DEVICE_CHECK_EVERY))
+    expect(api.urls('get_view_state').length - held).toBe(1)
   })
 })
 
@@ -482,11 +625,18 @@ describe('an idle answer ends the session only once confirmed', () => {
     expect(Date.parse(starts[1])).toBeGreaterThan(Date.parse('2026-08-02T21:00:00Z') + POLL_INTERVAL_MS)
   })
 
-  it('starts a new session when the View names a different target', async () => {
+  it('keeps the session clock through a goto to another target, resetting only what belongs to the target', async () => {
+    // A hand-driven multi-target night: no run_state start to recover, so
+    // ending the session on every goto restarted the guardrail's elapsed
+    // clock from "now" at each one — understating elapsed time on a
+    // guardrail that governs a hard stop.
     vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
-    const api = stubRoutes(activeRoutes())
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_run_state': ok(runStateIdle()) })
     const { result } = renderHook(() => useLiveSession())
     await tick()
+    const first = result.current
+    if (first.phase !== 'active') throw new Error('expected active')
+    expect(first.currentTarget).toBe('NGC7380')
 
     const other = recordedViewState() as { view_state: { result: { View: Record<string, unknown> } } }
     other.view_state.result.View.target_name = 'M27'
@@ -495,10 +645,13 @@ describe('an idle answer ends the session only once confirmed', () => {
 
     const state = result.current
     if (state.phase !== 'active') throw new Error('expected active')
-    expect(state.currentTarget).toBe('M27')
-    expect(state.log).toHaveLength(1)
-    expect(state.stageHistory).toEqual(['Stack'])
+    // The session's clock carries on.
     const starts = api.urls('check_night_guardrails').map(sessionStartOf)
-    expect(Date.parse(starts[starts.length - 1])).toBe(Date.parse('2026-08-02T21:00:00Z') + POLL_INTERVAL_MS)
+    expect(starts[starts.length - 1]).toBe('2026-08-02T21:00:00.000Z')
+    // What belonged to the previous target does not.
+    expect(state.currentTarget).toBe('M27')
+    expect(state.stageHistory).toEqual(['Stack'])
+    expect(state.log).toHaveLength(1)
+    expect(api.urls('last_stack').filter((u) => u.includes('M27'))).toHaveLength(1)
   })
 })

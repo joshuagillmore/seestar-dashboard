@@ -80,6 +80,27 @@ export const SESSION_ACTIVITY_LIMIT = 30
 export const IDLE_ANSWERS_TO_END = 2
 
 /**
+ * K: how many polls in a row may fail before a failed read stops being
+ * treated as a blip. Three things turn on it (see endSession and poll in the
+ * hook below):
+ *
+ * - a run of idle-looking polls that includes a relayed get_view_state
+ *   failure (get_status answered; the documented idle signature) ends the
+ *   session at K, where a run of explicit no-View answers alone ends it at
+ *   IDLE_ANSWERS_TO_END;
+ * - after K failed polls of any kind, the screen shows that failure rather
+ *   than the held session marked "Not current". A failure that is not an
+ *   idle sign (bridge down, an unreadable answer, a request that got no
+ *   answer) still does not end the session: it resumes, with its true start,
+ *   if the scope comes back;
+ * - the device check is forced every poll only while a session is open AND
+ *   fewer than K polls have failed. After that the ordinary back-off applies.
+ *
+ * At POLL_INTERVAL_MS that is five minutes of failures.
+ */
+export const FAILED_POLLS_LIMIT = 5
+
+/**
  * A session with no View seen for this long is over, whatever the polls in
  * between said. Failed polls never end a session on their own, so without
  * this a tab left open while the scope was off all day (every poll
@@ -176,9 +197,11 @@ export type LiveSessionState =
       /** `null` for a reading taken on this poll. Otherwise this poll could
        * not read the scope (a failed or unreadable `get_view_state`, or the
        * bridge down), and every field below is the last good reading, held
-       * rather than thrown away: one bad poll does not end a session. The
-       * string says what went wrong, for the screen to show. */
-      stale: string | null
+       * rather than thrown away: one bad poll does not end a session.
+       * `reason` says what went wrong this poll; `failedPolls` is how many
+       * polls in a row have failed, always below FAILED_POLLS_LIMIT (past
+       * that the failure is shown instead). */
+      stale: { reason: string; failedPolls: number } | null
       /** When the reading below was taken, by this client's clock (ISO). */
       readAt: string
       viewState: ViewState
@@ -290,11 +313,12 @@ export type LiveSessionState =
  * Both "idle" rows become `run-without-view` instead when get_run_state says
  * a run is active: never "Scope idle" over a run that is on.
  *
- * And while a session is open and on screen, every failed row (unparseable,
+ * And while a session is open and on screen, a failed row (unparseable,
  * view_state fails, bridge-down) keeps it there instead, as `active` with
- * `stale` set: a failed read is not evidence the session ended. Only the
- * "no View" row can end one, and only on the second answer running — see
- * endSession for the full list.
+ * `stale` set, for up to FAILED_POLLS_LIMIT - 1 failures in a row: one failed
+ * read is not evidence the session ended. Only the "no View" row and a
+ * relayed view_state failure count towards ending one — see endSession for
+ * the full list.
  *
  * "Answered" is not "observing": a connected scope with no view session
  * returns `result: {}`, which parses. Treating any successful fetch as
@@ -352,8 +376,9 @@ export type LiveSessionState =
  *                     IDLE_DEVICE_CHECK_EVERY-th, so a hand-driven session is
  *                     still noticed within a few minutes — and every poll
  *                     while a session is open (from the first View until
- *                     the session ends), since `idle` cannot see a
- *                     hand-driven session at all
+ *                     the session ends, or FAILED_POLLS_LIMIT failures in a
+ *                     row), since `idle` cannot see a hand-driven session
+ *                     at all
  *   run_state fails → device check every poll (fail open — never let a
  *                     missing optimisation hide a live session)
  *
@@ -392,9 +417,14 @@ export function useLiveSession(): LiveSessionState {
   const lastStackRef = useRef<LastStack | null>(null)
   const lastStackTargetRef = useRef<string | null>(null)
   // What decides when a session ends — see endSession below.
-  // Consecutive explicit "no View" answers; failed polls neither count nor
-  // reset it, since they carry no answer either way.
-  const idleAnswersRef = useRef(0)
+  // The current run of idle-looking polls: explicit "no View" answers and
+  // relayed get_view_state failures, and whether every one was explicit.
+  // Other failures carry no answer either way, so they neither count nor
+  // break the run; a View resets it.
+  const idleRunRef = useRef({ length: 0, explicitOnly: true })
+  // Consecutive polls that failed to read the scope, of any kind. Reset by
+  // any answer from the device (a View, or an explicit no-View).
+  const failStreakRef = useRef(0)
   // The last state get_run_state actually reported (a failed fetch is not
   // an answer), and whether it has gone from active to idle/unknown since
   // the device last showed a View.
@@ -402,7 +432,7 @@ export function useLiveSession(): LiveSessionState {
   const runEndedRef = useRef(false)
   // The target_name the session's own Views have reported. Only the View's
   // name, never the preview's: the share lags and can name a previous
-  // session's object, which would end a session that never changed target.
+  // session's object, which would reset a target that never changed.
   const sessionViewTargetRef = useRef<string | null>(null)
   // Date.now() of the last poll that saw a View; see SESSION_GAP_MS.
   const lastViewAtRef = useRef<number | null>(null)
@@ -429,44 +459,94 @@ export function useLiveSession(): LiveSessionState {
      * "now" mid-session — understating elapsed time on a guardrail that
      * governs a hard stop. So a session ends only on evidence that it has:
      *
-     *   - an explicit "no View" answer on IDLE_ANSWERS_TO_END polls running
-     *     (while no skill-driven run is active);
-     *   - a View naming a different target from the session's own;
-     *   - get_run_state going from active to idle/unknown, followed by the
-     *     device showing no View;
+     *   - a run of idle-looking polls (while no skill-driven run is active):
+     *     IDLE_ANSWERS_TO_END explicit "no View" answers, or
+     *     FAILED_POLLS_LIMIT polls once any of them was a relayed
+     *     get_view_state failure, the documented idle signature (see
+     *     countIdleSign);
+     *   - get_run_state going from active to idle/unknown, followed by an
+     *     explicit no-View answer;
      *   - no View at all for SESSION_GAP_MS, whatever the polls said.
      *
-     * A failed poll (fetch error, timeout, a SchemaError, the bridge down)
-     * is none of those: it keeps the session and shows it as stale.
+     * Any other failed poll (the bridge down, a SchemaError, a request that
+     * got no answer) never ends it by count: it is held and shown as stale,
+     * and after FAILED_POLLS_LIMIT of them the failure itself is shown while
+     * the session is still remembered, in case the scope comes back.
+     *
+     * A goto to another target does not end it either (see
+     * resetTargetState): the night's clock carries on.
      */
     function endSession() {
       sessionStartedAtRef.current = null
+      resetTargetState()
+      idleRunRef.current = { length: 0, explicitOnly: true }
+      runEndedRef.current = false
+      sessionViewTargetRef.current = null
+      lastViewAtRef.current = null
+    }
+
+    /**
+     * Forget what belongs to the target being imaged, and nothing else. A
+     * View naming a different target is a goto within the session, not a new
+     * one: ending the session there restarted the guardrail's elapsed clock
+     * at every goto of a hand-driven multi-target night, where no run_state
+     * start exists to recover it — understating elapsed time on a guardrail
+     * that governs a hard stop. So sessionStartedAtRef stays.
+     *
+     * The telemetry log goes with the target: its lines are one stack's
+     * running counts and its elapsed column is measured from its first line,
+     * so two targets run together read as one stack collapsing to zero.
+     */
+    function resetTargetState() {
       currentTargetRef.current = null
       stageHistoryRef.current = []
       logRef.current = []
       lastStackRef.current = null
       lastStackTargetRef.current = null
-      idleAnswersRef.current = 0
-      runEndedRef.current = false
-      sessionViewTargetRef.current = null
-      lastViewAtRef.current = null
     }
 
     /** A session is open from the first View until endSession. */
     const sessionOpen = () => sessionStartedAtRef.current !== null
 
     /**
-     * This poll could not read the scope. If the screen is showing the open
-     * session, keep showing it — marked stale, with why — rather than
-     * swapping in a failure card that implies the session is gone. Otherwise
-     * (no session, or the screen already moved off it on an idle answer)
-     * show `fallback`. The session's memory is kept either way.
+     * Whether the open session is still being held through failed reads:
+     * shown as stale, with the device asked every poll. Only for the first
+     * FAILED_POLLS_LIMIT - 1 failures in a row; past that, a failure is not
+     * a blip, and holding it would keep a finished session on screen and the
+     * back-off off for as long as the failures last.
+     */
+    const holdingSession = () => sessionOpen() && failStreakRef.current < FAILED_POLLS_LIMIT
+
+    /**
+     * This poll looked idle: an explicit no-View answer (`explicit`), or a
+     * get_view_state failure relayed while get_status answered. One run
+     * counts both, and ends the session at IDLE_ANSWERS_TO_END if every
+     * poll in it was explicit, or at FAILED_POLLS_LIMIT once any was
+     * relayed: a relayed failure is the documented idle signature, but also
+     * what a bad moment on the device looks like, so it needs a longer run.
+     * A run_state that has just gone from active to idle/unknown ends it on
+     * the first explicit answer.
+     */
+    function countIdleSign(explicit: boolean) {
+      const run = idleRunRef.current
+      run.length += 1
+      if (!explicit) run.explicitOnly = false
+      const limit = run.explicitOnly ? IDLE_ANSWERS_TO_END : FAILED_POLLS_LIMIT
+      if (run.length >= limit || (explicit && runEndedRef.current)) endSession()
+    }
+
+    /**
+     * This poll could not read the scope. While the open session is being
+     * held (see holdingSession) and on screen, keep showing it — marked
+     * stale, with why — rather than a failure card that implies the session
+     * is gone. Otherwise (no session, the screen already moved off it on an
+     * idle answer, or too many failures in a row) show `fallback`. What
+     * the session remembers is kept either way, until endSession.
      */
     function settleFailure(fallback: LiveSessionState, reason: string, sessionActivity: SessionActivity | null) {
-      const open = sessionOpen()
-      setState((prev) =>
-        open && prev.phase === 'active' ? { ...prev, stale: reason, sessionActivity } : fallback,
-      )
+      const hold = holdingSession()
+      const stale = { reason, failedPolls: failStreakRef.current }
+      setState((prev) => (hold && prev.phase === 'active' ? { ...prev, stale, sessionActivity } : fallback))
     }
 
     /**
@@ -522,11 +602,13 @@ export function useLiveSession(): LiveSessionState {
       if (lastViewAtRef.current !== null && Date.now() - lastViewAtRef.current > SESSION_GAP_MS) {
         endSession()
       }
-      // While a session is open the device is asked every poll, whatever
-      // run_state says: a hand-driven session reads `idle` there throughout,
-      // and the back-off would otherwise hold a stale reading, or the second
-      // idle answer that confirms the end, for up to five minutes.
-      if (!sessionOpen() && !shouldCheckDevice(runState?.state ?? null, idleTicksRef.current)) {
+      // While a session is being held the device is asked every poll,
+      // whatever run_state says: a hand-driven session reads `idle` there
+      // throughout, and the back-off would otherwise hold a stale reading, or
+      // the answer that confirms the end, for up to five minutes. Once
+      // FAILED_POLLS_LIMIT polls in a row have failed, the ordinary back-off
+      // applies again (see holdingSession).
+      if (!holdingSession() && !shouldCheckDevice(runState?.state ?? null, idleTicksRef.current)) {
         const sessionActivity = await sessionActivityPromise
         // Deliberately keeps the previous phase rather than asserting 'idle':
         // this branch did not ask the scope anything, so it has learned
@@ -547,8 +629,10 @@ export function useLiveSession(): LiveSessionState {
         viewState = await fetchViewState(opts)
       } catch (viewCause) {
         if (cancelled) return
-        // Every branch below is a failed read, and none of them ends the
-        // session (see endSession): an open one is held and shown as stale.
+        // Every branch below is a failed read. Only a relayed get_view_state
+        // failure counts towards ending the session (see countIdleSign); an
+        // open one is otherwise held and shown as stale, for a while.
+        failStreakRef.current += 1
         //
         // Answered, unreadably. Not a session we can see, not an idle scope
         // we can vouch for, and not a bridge problem — the sidecar just
@@ -588,6 +672,12 @@ export function useLiveSession(): LiveSessionState {
         const sessionActivity = await sessionActivityPromise
         if (cancelled) return
         const failure = viewFailure(viewCause)
+        // The tool itself said get_view_state failed while get_status
+        // answered: the documented idle signature, so it counts towards
+        // ending the session — as an explicit answer does, and likewise not
+        // while a skill-driven run is active. A request that got no answer
+        // at all says nothing about the scope, and does not count.
+        if (failure.kind === 'relayed' && runState?.state !== 'active') countIdleSign(false)
         settleFailure(withoutView(runState, failure, sessionActivity), describeViewFailure(failure), sessionActivity)
         return
       }
@@ -604,27 +694,28 @@ export function useLiveSession(): LiveSessionState {
       if (view == null) {
         const sessionActivity = await sessionActivityPromise
         if (cancelled) return
-        // An explicit answer, so it counts towards ending the session — but
-        // not while a skill-driven run is active: that run is still the
-        // session, between targets or not.
-        if (runState?.state !== 'active') {
-          idleAnswersRef.current += 1
-          if (idleAnswersRef.current >= IDLE_ANSWERS_TO_END || runEndedRef.current) endSession()
-        }
+        // The device answered, so no failure streak; and an explicit answer
+        // counts towards ending the session — but not while a skill-driven
+        // run is active: that run is still the session, between targets or
+        // not.
+        failStreakRef.current = 0
+        if (runState?.state !== 'active') countIdleSign(true)
         setState(withoutView(runState, null, sessionActivity))
         return
       }
       if (cancelled) return
 
-      // A View, so no idle answer is pending, and a run that ended while the
-      // device still showed one has been outlived by the session: from here
-      // the ordinary two-answer rule applies. A View naming a different
-      // target is a different session.
-      idleAnswersRef.current = 0
+      // A View, so no idle run and no failure streak, and a run that ended
+      // while the device still showed one has been outlived by the session:
+      // from here the ordinary idle-run rule applies. A View naming a
+      // different target is a goto within the session: the target's own
+      // state resets, the session's clock does not.
+      idleRunRef.current = { length: 0, explicitOnly: true }
+      failStreakRef.current = 0
       runEndedRef.current = false
       if (view.target_name) {
         if (sessionViewTargetRef.current !== null && view.target_name !== sessionViewTargetRef.current) {
-          endSession()
+          resetTargetState()
         }
         sessionViewTargetRef.current = view.target_name
       }

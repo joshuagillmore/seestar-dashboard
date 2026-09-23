@@ -25,7 +25,7 @@ import {
 } from '../../test/fixtures'
 import { REQUEST_TIMEOUT_MS } from '../../api/client'
 import { formatStackDate, lastStackReasonLabel } from './lastStack'
-import { POLL_INTERVAL_MS } from './useLiveSession'
+import { FAILED_POLLS_LIMIT, IDLE_DEVICE_CHECK_EVERY, POLL_INTERVAL_MS } from './useLiveSession'
 
 const site = SiteProfileSchema.parse(recordedSite())
 const notReplaying: Health = { ok: true, replay: false }
@@ -823,6 +823,10 @@ describe('the idle card says what actually failed', () => {
     // A request that got no answer is not the scope saying it is idle.
     expect(card).not.toHaveTextContent(/Scope idle/)
     expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+    // With no session held, the idle back-off can skip the device for the
+    // next few polls, so "the next poll asks again" would not be true.
+    expect(card).not.toHaveTextContent(/next poll/)
+    expect(card).toHaveTextContent(`within the next ${IDLE_DEVICE_CHECK_EVERY} polls`)
   })
 
   it('says the same, truthfully, when the get_view_state request never reached the sidecar', async () => {
@@ -841,7 +845,7 @@ describe('a session held through a failed poll', () => {
   // useLiveSession no longer ends a session on one failed read; it keeps the
   // last reading and flags it. The flag has to reach the screen, or a held
   // reading would pass for a fresh one.
-  async function renderThroughOneFailedPoll(mobile: boolean) {
+  async function renderThroughOneFailedPoll(mobile: boolean, failures = 1) {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
     stubMatchMedia(mobile)
     let viewReply: Body = recordedViewState()
@@ -853,10 +857,24 @@ describe('a session held through a failed poll', () => {
     expect(screen.queryByTestId('live-stale')).not.toBeInTheDocument()
 
     viewReply = { ok: false, error: 'get_view_state timed out' }
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
-    })
+    for (let i = 0; i < failures; i += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      })
+    }
   }
+
+  it('says how many polls have failed, and only what holds in that state', async () => {
+    // It said "One failed poll does not end the session" however many had
+    // failed. It is held on screen for fewer than FAILED_POLLS_LIMIT failed
+    // polls in a row, and the device is asked on every poll while it is.
+    await renderThroughOneFailedPoll(false, 2)
+
+    const notice = screen.getByTestId('live-stale')
+    expect(notice).toHaveTextContent(/The last 2 polls could not read the scope/)
+    expect(notice).toHaveTextContent(`up to ${FAILED_POLLS_LIMIT - 1} failed polls in a row`)
+    expect(notice).not.toHaveTextContent(/One failed poll/)
+  })
 
   afterEach(() => {
     vi.useRealTimers()
