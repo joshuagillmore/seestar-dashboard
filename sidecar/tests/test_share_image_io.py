@@ -20,7 +20,7 @@ from seestar_sidecar.last_stack import LastStack
 from seestar_sidecar.live_preview import LiveFrame
 from seestar_sidecar.main import create_app
 
-HANG_SECONDS = 3.0
+HANG_SECONDS = 2.0
 
 
 class HangingPath(type(Path())):

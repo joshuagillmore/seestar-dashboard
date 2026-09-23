@@ -186,8 +186,9 @@ async def _call_tool_on_app(app, tool: str, arguments: dict) -> dict:
     future handler that got that wrong internally (e.g. called
     qa_session_report) would sail past both the FORBIDDEN_TOOLS
     route-absence test and the route-set invariant, since neither inspects
-    what a route's handler body calls. This is the one place left that can
-    still say no.
+    what a route's handler body calls. This can still say no — and so can
+    McpConnection.call itself, which refuses anything outside the set it was
+    built with, for any caller that reaches a connection some other way.
 
     Deliberately a `raise`, not an `assert`: assert statements are compiled
     out entirely under `python -O` / `PYTHONOPTIMIZE=1`, so a defence-in-
