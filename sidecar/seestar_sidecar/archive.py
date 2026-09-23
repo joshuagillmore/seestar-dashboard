@@ -184,7 +184,7 @@ class ArchiveNight:
     minutes: float
     #: The night's earliest and latest frame, as aware UTC instants. Used by
     #: projects_union to match a store session to its night when the session
-    #: was logged the next day (see projects_union._late_logged_nights).
+    #: was logged the next day (see projects_union._claimed_nights).
     #: Never serialised: projects_combined builds its `nights` payload field
     #: by field. `None` only for a night constructed without them (tests).
     first_frame_utc: datetime | None = None

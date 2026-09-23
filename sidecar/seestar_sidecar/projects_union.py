@@ -43,7 +43,7 @@ def _logged_at(sessions: list[dict]) -> list[datetime]:
 
 
 #: How long after a night's last frame a session may be logged and still be
-#: matched to that night by `_late_logged_nights`. The case this exists for
+#: matched to that night by `_claimed_nights`. The case this exists for
 #: is a dawn wind-down that crosses 12:00 UTC (a winter dawn in the Americas
 #: does), minutes to a couple of hours after the last frame. Six hours after
 #: a night's last frame is still daylight, so no LATER night's session can
@@ -53,38 +53,62 @@ def _logged_at(sessions: list[dict]) -> list[datetime]:
 LATE_LOG_WINDOW = timedelta(hours=6)
 
 
-def _late_logged_nights(
-    sessions: list[dict], archive_nights: list[ArchiveNight], claimed: set[str]
-) -> set[str]:
-    """Archive nights claimed by sessions that were logged the day after.
+def _claimed_nights(sessions: list[dict], archive_nights: list[ArchiveNight]) -> set[str]:
+    """The archive nights a store project's sessions account for — the
+    nights `combine_projects` must not count again from the archive.
 
-    seestar-mcp stamps a session's `date_utc` when log_session_result is
-    CALLED (its wind-down time), not when it was observed. Logged after 12:00
-    UTC the next morning, that instant falls in the next observing night, so
-    `_store_nights` keys it one night late: it matched none of its own frames,
-    and they were counted twice — store_minutes and archive_minutes both.
+    Each session claims at most one night, in two passes.
 
-    For a session whose own night has no archive frames, this claims the
-    latest earlier night that no session has claimed yet — but ONLY if the
-    session was logged between that night's first frame and LATE_LOG_WINDOW
-    after its last. The bound is the point. The archive is a periodic export
-    that lags the scope by weeks, so "latest night on or before" alone would
-    let a recent session whose frames are not exported yet claim an older
-    night it has nothing to do with, silently removing real minutes. A
-    session cannot contain frames captured after it was logged, and outside
-    the window this falls back to the old behaviour — possibly counting a
-    night twice, never dropping one.
+    **Exact.** A session claims its own key night (`_store_nights`, i.e.
+    `observing_night(date_utc)`) only if that night has a frame captured at
+    or before the session was logged. A session cannot contain frames
+    captured after it was logged, so a key night whose frames ALL come later
+    is not this session's night, whatever its date says. Several sessions
+    may claim one night this way (two runs logged the same night).
+
+    **Late.** seestar-mcp stamps `date_utc` when log_session_result is CALLED
+    (its wind-down time), not when the session was observed. Logged after
+    12:00 UTC the next morning, that instant keys to the NEXT observing
+    night. When the target was imaged that next night too — the normal
+    multi-night project — the key night has frames, but every one of them
+    was captured after the log. The first version of this heuristic took
+    "my key night has frames" to mean "my key night is mine": it claimed the
+    next night, dropping minutes no session holds, and left its own night
+    unclaimed, counting it twice.
+
+    So a session the exact pass did not place claims, INSTEAD of its key
+    night, the latest night no session has claimed yet whose first frame is
+    at or before the log AND whose last frame is at most LATE_LOG_WINDOW
+    before it. The bound is the point. The archive is a periodic export that
+    lags the scope by weeks, so "latest night on or before" alone would let
+    a recent session whose frames are not exported yet claim an older night
+    it has nothing to do with, silently removing real minutes. Late
+    sessions go in log order, after every exact claim, so a late log never
+    takes a night its own session claims exactly.
+
+    A session neither pass places claims nothing: its minutes stay in the
+    store and every night it might have been stays in the archive. That can
+    count a night twice; it never drops one. A night with frames and no
+    claiming session is always counted.
 
     Remains a heuristic: the robust fix is a session-START (or observing
     night) field on seestar-mcp's SessionRecord — a hand-back item, since
     `date_utc` alone cannot say which night a session observed.
     """
     by_night = {n.night: n for n in archive_nights}
-    claimed = set(claimed)
-    extra: set[str] = set()
-    for instant in sorted(_logged_at(sessions)):
-        if observing_night(instant).isoformat() in by_night:
-            continue  # its own night has frames: the exact pass handles it
+    claimed: set[str] = set()
+    unplaced: list[datetime] = []
+    for session in sessions:
+        for instant in _logged_at([session]):
+            own = by_night.get(observing_night(instant).isoformat())
+            if own is not None and (own.first_frame_utc is None or own.first_frame_utc <= instant):
+                # Through _store_nights, the exact keying rule, rather than
+                # `own.night` — test_night_dedup_real_case mutates it.
+                claimed |= _store_nights([session])
+            else:
+                unplaced.append(instant)
+
+    for instant in sorted(unplaced):
         candidates = [
             n
             for n in archive_nights
@@ -94,10 +118,8 @@ def _late_logged_nights(
             and n.first_frame_utc <= instant <= n.last_frame_utc + LATE_LOG_WINDOW
         ]
         if candidates:
-            night = max(candidates, key=lambda n: n.night).night
-            claimed.add(night)
-            extra.add(night)
-    return extra
+            claimed.add(max(candidates, key=lambda n: n.night).night)
+    return claimed
 
 
 def combine_projects(
@@ -140,7 +162,6 @@ def combine_projects(
     so there is nothing archive-side to add.
     """
     combined: dict[str, dict] = {}
-    store_nights_by_target: dict[str, set[str]] = {}
     sessions_by_target: dict[str, list[dict]] = {}
 
     for project in store_projects:
@@ -165,7 +186,6 @@ def combine_projects(
                 "archive nights against store sessions, so proceeding would "
                 "inflate archive_minutes silently. Pass detail='full'."
             )
-        store_nights_by_target[target_id] = _store_nights(project["sessions"])
         sessions_by_target[target_id] = project["sessions"]
         combined[target_id] = {
             "target_id": target_id,
@@ -177,10 +197,7 @@ def combine_projects(
         }
 
     for target_id, archive_target in archive_targets.items():
-        known_nights = store_nights_by_target.get(target_id, set())
-        known_nights = known_nights | _late_logged_nights(
-            sessions_by_target.get(target_id, []), archive_target.nights, known_nights
-        )
+        known_nights = _claimed_nights(sessions_by_target.get(target_id, []), archive_target.nights)
         included_nights = [n for n in archive_target.nights if n.night not in known_nights]
         archive_minutes = round(sum(n.minutes for n in included_nights), 4)
         nights_payload = [
