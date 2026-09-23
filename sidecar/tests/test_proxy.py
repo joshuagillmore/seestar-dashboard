@@ -1,17 +1,45 @@
+import asyncio
 import sys
+import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
 
+from seestar_sidecar import mcp_proxy
+from seestar_sidecar.allowlist import FORBIDDEN_TOOLS
 from seestar_sidecar.mcp_proxy import McpConnection, ProxyTransportError
 from tests.stub_mcp_server import CANNED_PROFILE
 
 STUB = str(Path(__file__).parent / "stub_mcp_server.py")
 
+#: The stub's tools are test fixtures, not seestar-mcp tools, so they are not
+#: in ALLOWED_TOOLS — and McpConnection itself refuses anything outside the
+#: set it was built with (see test_the_connection_itself_refuses_*). Tests
+#: that drive the stub name its tools explicitly rather than widening the
+#: production allowlist to fit them.
+STUB_TOOLS = frozenset(
+    {
+        "get_site_profile",
+        "whoami",
+        "failing_tool",
+        "crash_the_server",
+        "slow_tool",
+        "blocking_tool",
+        "exit_soon",
+    }
+)
+
+
+def _stub_connection(**overrides) -> McpConnection:
+    kwargs = dict(allowed_tools=STUB_TOOLS)
+    kwargs.update(overrides)
+    return McpConnection(command=sys.executable, args=[STUB], **kwargs)
+
 
 @pytest.fixture
 async def connection():
-    conn = McpConnection(command=sys.executable, args=[STUB])
+    conn = _stub_connection()
     await conn.start()
     yield conn
     await conn.aclose()
@@ -22,7 +50,9 @@ async def test_call_returns_the_tools_dict_verbatim(connection):
 
 
 async def test_unreachable_subprocess_raises_transport_error():
-    conn = McpConnection(command=sys.executable, args=["/nonexistent/path.py"])
+    conn = McpConnection(
+        command=sys.executable, args=["/nonexistent/path.py"], allowed_tools=STUB_TOOLS
+    )
     with pytest.raises(ProxyTransportError):
         await conn.start()
 
@@ -83,3 +113,150 @@ async def test_session_restarts_after_a_transport_failure(connection):
         await connection.call("crash_the_server", {})
     assert await connection.call("get_site_profile", {}) == CANNED_PROFILE
     assert connection.is_started
+
+
+# --- the allowlist is enforced by the connection itself ----------------------
+#
+# routes.call_tool checks ALLOWED_TOOLS, but that guard only covers callers
+# that go through it. McpConnection.call is the one place every call to the
+# server passes, so a caller that reached the connection some other way — a
+# new route, a background task, a script — still cannot send `park`.
+
+
+@pytest.mark.parametrize("tool", sorted(FORBIDDEN_TOOLS))
+async def test_the_connection_itself_refuses_a_forbidden_tool(tool):
+    conn = McpConnection(command=sys.executable, args=[STUB])  # production default
+
+    with pytest.raises(ProxyTransportError, match="allowlist"):
+        await conn.call(tool, {})
+
+    # Refused before anything was spawned, not after a round trip.
+    assert not conn.is_started
+
+
+async def test_the_default_allowlist_is_the_production_one():
+    from seestar_sidecar.allowlist import ALLOWED_TOOLS
+
+    conn = McpConnection(command=sys.executable, args=[STUB])
+    assert conn.allowed_tools == ALLOWED_TOOLS
+
+
+# --- timeouts ---------------------------------------------------------------
+#
+# Every call used to wait on one lock with no timeout: a hung call held it, and
+# every live poll behind it, forever.
+
+
+async def test_a_slow_call_times_out_without_resetting_a_healthy_session():
+    """The server is still answering (it responds to a ping), so the session
+    is kept: tearing down a healthy server because one call was slow would
+    cost every other caller a respawn for nothing."""
+    conn = _stub_connection(call_timeout_s=0.5, ping_timeout_s=2.0)
+    try:
+        pid = (await conn.call("whoami", {}))["pid"]
+        started = time.monotonic()
+        with pytest.raises(ProxyTransportError, match="timed out"):
+            await conn.call("slow_tool", {"seconds": 10})
+        assert time.monotonic() - started < 5, "the call was not bounded by the timeout"
+
+        assert conn.is_started
+        assert (await conn.call("whoami", {}))["pid"] == pid
+    finally:
+        await conn.aclose()
+
+
+async def test_a_call_that_hangs_the_server_resets_the_session():
+    """A server that cannot answer a ping is not healthy: keeping it would
+    leave every later call to time out against it in turn."""
+    conn = _stub_connection(call_timeout_s=0.5, ping_timeout_s=0.5)
+    try:
+        pid = (await conn.call("whoami", {}))["pid"]
+        with pytest.raises(ProxyTransportError, match="timed out"):
+            await conn.call("blocking_tool", {"seconds": 10})
+        assert not conn.is_started
+
+        # And the next call gets a fresh server rather than the wedged one.
+        assert (await conn.call("whoami", {}))["pid"] != pid
+    finally:
+        await conn.aclose()
+
+
+async def test_a_timed_out_call_releases_the_lock_for_the_next_caller():
+    conn = _stub_connection(call_timeout_s=0.5, ping_timeout_s=2.0)
+    try:
+        await conn.start()
+        slow = asyncio.create_task(conn.call("slow_tool", {"seconds": 30}))
+        await asyncio.sleep(0.05)
+        started = time.monotonic()
+        assert await conn.call("get_site_profile", {}) == CANNED_PROFILE
+        assert time.monotonic() - started < 5
+        with pytest.raises(ProxyTransportError):
+            await slow
+    finally:
+        await conn.aclose()
+
+
+async def test_a_server_that_never_initialises_fails_start_within_the_timeout():
+    conn = McpConnection(
+        command=sys.executable,
+        args=["-c", "import time; time.sleep(60)"],
+        allowed_tools=STUB_TOOLS,
+        start_timeout_s=1.0,
+    )
+    started = time.monotonic()
+    with pytest.raises(ProxyTransportError, match="could not start"):
+        await conn.start()
+    assert time.monotonic() - started < 15
+    assert not conn.is_started
+
+
+# --- teardown ---------------------------------------------------------------
+
+
+async def test_closing_from_a_different_task_tears_down_cleanly(monkeypatch):
+    """The session's anyio task groups were entered in whichever request task
+    happened to start the server, and exited in whichever task later reset or
+    closed it — the lifespan's, or another request's. anyio refuses that
+    ("Attempted to exit cancel scope in a different task than it was entered
+    in"), and _reset swallowed the error, so teardown silently stopped part
+    way. Closing from a second task must now exit cleanly."""
+    teardown_errors: list[BaseException] = []
+    real_session = mcp_proxy.ClientSession
+
+    class SpyingSession(real_session):
+        async def __aexit__(self, *exc_info):
+            try:
+                return await super().__aexit__(*exc_info)
+            except BaseException as exc:
+                teardown_errors.append(exc)
+                raise
+
+    monkeypatch.setattr(mcp_proxy, "ClientSession", SpyingSession)
+    conn = _stub_connection()
+
+    async def start_in_one_task():
+        await conn.start()
+        await conn.call("whoami", {})
+
+    await asyncio.create_task(start_in_one_task())
+    await asyncio.create_task(conn.aclose())
+
+    assert teardown_errors == []
+    assert not conn.is_started
+
+
+async def test_the_first_call_after_an_idle_death_names_what_failed():
+    """A server that died between calls surfaces on the next call as an
+    exception whose str() is empty (anyio's ClosedResourceError), which used to
+    render as `call to 'whoami' failed: ` — a 502 with no reason at all."""
+    conn = _stub_connection()
+    try:
+        await conn.call("exit_soon", {})
+        await asyncio.sleep(1.0)
+        with pytest.raises(ProxyTransportError) as raised:
+            await conn.call("whoami", {})
+        message = str(raised.value)
+        reason = message.split("failed:", 1)[-1].strip()
+        assert reason, f"empty failure reason: {message!r}"
+    finally:
+        await conn.aclose()
