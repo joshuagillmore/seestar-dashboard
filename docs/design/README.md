@@ -14,9 +14,9 @@
 > build, and where the two differ the build is usually what needs justifying.**
 > Four factual notes where following it literally would now be wrong:
 >
-> 1. **`joshuagillmore/SeeStar-AI` (below) is private and 404s.** The public repo
->    is `github.com/joshuagillmore/seestar-mcp`; history was rewritten, so every
->    SHA changed.
+> 1. **`OrangeAgente/SeeStar-AI` (below; now `joshuagillmore/SeeStar-AI`) is
+>    private and 404s.** The public repo is `github.com/OrangeAgente/seestar-mcp`,
+>    now `joshuagillmore/seestar-mcp`; history was rewritten, so every SHA changed.
 > 2. **Review must not call `qa_session_report`** — see the note on that row in
 >    "Server state, by screen", and §3 of the slice-4 spec.
 > 3. **"The repo today has no UI at all" was true at handoff.** Four screens
@@ -29,7 +29,7 @@
 ## Overview
 
 A desktop-web control and review console for a **Seestar S50** smart telescope, sitting on top of the
-`joshuagillmore/SeeStar-AI` MCP server (Python, stdio MCP + a TCP bridge to the scope on port 5555).
+`OrangeAgente/SeeStar-AI` MCP server (Python, stdio MCP + a TCP bridge to the scope on port 5555).
 
 The repo today has **no UI at all** — it is an MCP server plus a set of Claude Code skills
 (`observing-planner`, `run-session`, `qa-policy`, `seestar-refine`). This design is the first
