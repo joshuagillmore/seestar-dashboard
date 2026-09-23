@@ -259,3 +259,45 @@ async def test_the_first_call_after_an_idle_death_names_what_failed():
         assert reason, f"empty failure reason: {message!r}"
     finally:
         await conn.aclose()
+
+
+async def test_closing_past_the_grace_period_fails_the_in_flight_call_promptly(monkeypatch):
+    """aclose() gives an in-flight call CLOSE_GRACE_SECONDS, then tears the
+    session down. That used to leave the call waiting: ClientSession.__aexit__
+    cancels the SDK's receive loop, whose `finally` (the part that tells
+    pending requests the connection closed) then runs under that cancellation
+    and delivers nothing. The call hung until its own read timeout — an hour,
+    for qa_tier2. It must fail with a transport error at the grace period."""
+    monkeypatch.setattr(mcp_proxy, "CLOSE_GRACE_SECONDS", 0.5)
+    # Shaped like qa_tier2: a long read timeout, a server too busy to answer.
+    conn = _stub_connection(call_timeout_s=60.0)
+    await conn.start()
+    in_flight = asyncio.create_task(conn.call("blocking_tool", {"seconds": 30}))
+    await asyncio.sleep(0.3)
+    assert not in_flight.done()
+
+    started = time.monotonic()
+    closing = asyncio.create_task(conn.aclose())
+    try:
+        with pytest.raises(ProxyTransportError, match="closed"):
+            await asyncio.wait_for(in_flight, timeout=10)
+        # Grace 0.5 s; the unfixed call waits out its 60 s read timeout.
+        assert time.monotonic() - started < 5, "the call outlived the grace period"
+    finally:
+        await closing
+    assert not conn.is_started
+
+
+async def test_a_cancelled_caller_is_still_cancelled_not_turned_into_a_transport_error():
+    """The scope aclose() cancels catches only its own cancellation. A caller
+    that goes away (a client disconnect) must still see CancelledError."""
+    conn = _stub_connection(call_timeout_s=60.0)
+    try:
+        await conn.start()
+        call = asyncio.create_task(conn.call("slow_tool", {"seconds": 30}))
+        await asyncio.sleep(0.3)
+        call.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await call
+    finally:
+        await conn.aclose()
