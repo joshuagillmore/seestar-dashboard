@@ -71,6 +71,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from seestar_sidecar.archive import _SUB_DIR_SUFFIX, normalize_target_id
+from seestar_sidecar.share_io import run_share_io
 from seestar_sidecar.live_preview import (
     SHARE_SCAN_TIMEOUT_SECONDS,
     ShareUnreachableError,
@@ -177,8 +178,9 @@ async def discover_last_stack_within_timeout(
     Path.iterdir()/glob()/stat() walk, and over a live SMB share that must
     neither block the event loop while it runs nor be allowed to hang past
     `timeout_s` if the share has gone quiet (a dropped session, the scope
-    rebooting). `asyncio.to_thread` keeps the blocking walk off the event
-    loop; `asyncio.wait_for` is the hard ceiling.
+    rebooting). `share_io.run_share_io` keeps the blocking walk off the event
+    loop on the share's own bounded threads (see live_preview.py's version);
+    `asyncio.wait_for` is the hard ceiling.
 
     Deliberately a single attempt, not a retry loop — same "never retry
     aggressively" rule live_preview.py's own version documents: a failed/slow
@@ -192,7 +194,7 @@ async def discover_last_stack_within_timeout(
     """
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(discover_last_stack, root, target), timeout=timeout_s
+            run_share_io(discover_last_stack, root, target), timeout=timeout_s
         )
     except asyncio.TimeoutError as exc:
         raise ShareUnreachableError(f"scan of {root} exceeded {timeout_s}s") from exc

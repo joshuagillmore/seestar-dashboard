@@ -60,6 +60,7 @@ from seestar_sidecar.mcp_proxy import LONG_RUNNING_TOOLS, ProxyTransportError, e
 from seestar_sidecar.host_check import LOOPBACK_HOSTS, normalise_host
 from seestar_sidecar.json_safety import replace_non_finite
 from seestar_sidecar.redaction import redact_payload, redact_secrets
+from seestar_sidecar.share_io import run_share_io
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar import qa_analysis
 from seestar_sidecar.qa_analysis import DEFAULT_QA_CACHE_DIR, QaJobRegistry
@@ -778,11 +779,13 @@ async def _share_image_response(path: Path, *, missing: str) -> Response:
     and a stat on an SMB share that has gone quiet can hang for as long as
     Windows' SMB client cares to wait — with every other route and poll
     frozen behind it. Bounded exactly as discover_frame_within_timeout bounds
-    the metadata routes' scans: off the loop, under the same ceiling.
+    the metadata routes' scans: off the loop on the share's own bounded
+    threads (share_io.py — a full pool raises an OSError, answered 503 here
+    at once), under the same ceiling.
     """
     try:
         exists = await asyncio.wait_for(
-            asyncio.to_thread(path.is_file), timeout=SHARE_SCAN_TIMEOUT_SECONDS
+            run_share_io(path.is_file), timeout=SHARE_SCAN_TIMEOUT_SECONDS
         )
     except (asyncio.TimeoutError, OSError):
         return JSONResponse(_SHARE_UNREACHABLE_BODY, status_code=503)
