@@ -625,11 +625,18 @@ describe('an idle answer ends the session only once confirmed', () => {
     expect(Date.parse(starts[1])).toBeGreaterThan(Date.parse('2026-08-02T21:00:00Z') + POLL_INTERVAL_MS)
   })
 
-  it('starts a new session when the View names a different target', async () => {
+  it('keeps the session clock through a goto to another target, resetting only what belongs to the target', async () => {
+    // A hand-driven multi-target night: no run_state start to recover, so
+    // ending the session on every goto restarted the guardrail's elapsed
+    // clock from "now" at each one — understating elapsed time on a
+    // guardrail that governs a hard stop.
     vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
-    const api = stubRoutes(activeRoutes())
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_run_state': ok(runStateIdle()) })
     const { result } = renderHook(() => useLiveSession())
     await tick()
+    const first = result.current
+    if (first.phase !== 'active') throw new Error('expected active')
+    expect(first.currentTarget).toBe('NGC7380')
 
     const other = recordedViewState() as { view_state: { result: { View: Record<string, unknown> } } }
     other.view_state.result.View.target_name = 'M27'
@@ -638,10 +645,13 @@ describe('an idle answer ends the session only once confirmed', () => {
 
     const state = result.current
     if (state.phase !== 'active') throw new Error('expected active')
-    expect(state.currentTarget).toBe('M27')
-    expect(state.log).toHaveLength(1)
-    expect(state.stageHistory).toEqual(['Stack'])
+    // The session's clock carries on.
     const starts = api.urls('check_night_guardrails').map(sessionStartOf)
-    expect(Date.parse(starts[starts.length - 1])).toBe(Date.parse('2026-08-02T21:00:00Z') + POLL_INTERVAL_MS)
+    expect(starts[starts.length - 1]).toBe('2026-08-02T21:00:00.000Z')
+    // What belonged to the previous target does not.
+    expect(state.currentTarget).toBe('M27')
+    expect(state.stageHistory).toEqual(['Stack'])
+    expect(state.log).toHaveLength(1)
+    expect(api.urls('last_stack').filter((u) => u.includes('M27'))).toHaveLength(1)
   })
 })

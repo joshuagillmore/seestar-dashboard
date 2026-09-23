@@ -430,7 +430,7 @@ export function useLiveSession(): LiveSessionState {
   const runEndedRef = useRef(false)
   // The target_name the session's own Views have reported. Only the View's
   // name, never the preview's: the share lags and can name a previous
-  // session's object, which would end a session that never changed target.
+  // session's object, which would reset a target that never changed.
   const sessionViewTargetRef = useRef<string | null>(null)
   // Date.now() of the last poll that saw a View; see SESSION_GAP_MS.
   const lastViewAtRef = useRef<number | null>(null)
@@ -462,7 +462,6 @@ export function useLiveSession(): LiveSessionState {
      *     FAILED_POLLS_LIMIT polls once any of them was a relayed
      *     get_view_state failure, the documented idle signature (see
      *     countIdleSign);
-     *   - a View naming a different target from the session's own;
      *   - get_run_state going from active to idle/unknown, followed by an
      *     explicit no-View answer;
      *   - no View at all for SESSION_GAP_MS, whatever the polls said.
@@ -471,18 +470,37 @@ export function useLiveSession(): LiveSessionState {
      * got no answer) never ends it by count: it is held and shown as stale,
      * and after FAILED_POLLS_LIMIT of them the failure itself is shown while
      * the session is still remembered, in case the scope comes back.
+     *
+     * A goto to another target does not end it either (see
+     * resetTargetState): the night's clock carries on.
      */
     function endSession() {
       sessionStartedAtRef.current = null
+      resetTargetState()
+      idleRunRef.current = { length: 0, explicitOnly: true }
+      runEndedRef.current = false
+      sessionViewTargetRef.current = null
+      lastViewAtRef.current = null
+    }
+
+    /**
+     * Forget what belongs to the target being imaged, and nothing else. A
+     * View naming a different target is a goto within the session, not a new
+     * one: ending the session there restarted the guardrail's elapsed clock
+     * at every goto of a hand-driven multi-target night, where no run_state
+     * start exists to recover it — understating elapsed time on a guardrail
+     * that governs a hard stop. So sessionStartedAtRef stays.
+     *
+     * The telemetry log goes with the target: its lines are one stack's
+     * running counts and its elapsed column is measured from its first line,
+     * so two targets run together read as one stack collapsing to zero.
+     */
+    function resetTargetState() {
       currentTargetRef.current = null
       stageHistoryRef.current = []
       logRef.current = []
       lastStackRef.current = null
       lastStackTargetRef.current = null
-      idleRunRef.current = { length: 0, explicitOnly: true }
-      runEndedRef.current = false
-      sessionViewTargetRef.current = null
-      lastViewAtRef.current = null
     }
 
     /** A session is open from the first View until endSession. */
@@ -689,13 +707,14 @@ export function useLiveSession(): LiveSessionState {
       // A View, so no idle run and no failure streak, and a run that ended
       // while the device still showed one has been outlived by the session:
       // from here the ordinary idle-run rule applies. A View naming a
-      // different target is a different session.
+      // different target is a goto within the session: the target's own
+      // state resets, the session's clock does not.
       idleRunRef.current = { length: 0, explicitOnly: true }
       failStreakRef.current = 0
       runEndedRef.current = false
       if (view.target_name) {
         if (sessionViewTargetRef.current !== null && view.target_name !== sessionViewTargetRef.current) {
-          endSession()
+          resetTargetState()
         }
         sessionViewTargetRef.current = view.target_name
       }
