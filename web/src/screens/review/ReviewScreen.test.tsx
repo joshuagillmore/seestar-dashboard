@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -960,6 +961,25 @@ describe('an empty table says why it is empty', () => {
 
 describe('the Projects → Review handoff', () => {
   beforeEach(() => window.sessionStorage.clear())
+
+  it('opens the handed-over target under StrictMode, as main.tsx renders it in dev', async () => {
+    // StrictMode runs the mount effect, cleans it up and runs it again. The
+    // first run took the target out of storage and was then cancelled; the
+    // second found nothing, so in dev the handoff selected nothing.
+    setPendingReviewTarget('M81')
+    stubFetch()
+    render(
+      <StrictMode>
+        <ReviewScreen view="review" onNavigate={vi.fn()} site={site} health={notReplaying} />
+      </StrictMode>,
+    )
+
+    await waitFor(() =>
+      expect(calls.some((u) => u.includes('qa_analysis_status') && u.includes('M81'))).toBe(true),
+    )
+    // Still consumed: a later, ordinary visit does not reopen it.
+    expect(window.sessionStorage.getItem('seestar.review.pendingTarget')).toBeNull()
+  })
 
   it('is consumed even when the listing fails, so it cannot reopen a target later', async () => {
     setPendingReviewTarget('M81')
