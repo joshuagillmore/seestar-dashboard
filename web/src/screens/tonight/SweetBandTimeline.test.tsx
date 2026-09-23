@@ -55,7 +55,7 @@ describe('SweetBandTimeline', () => {
     const { container } = render(
       <SweetBandTimeline conditions={conditions} targets={plan.targets} />,
     )
-    // Pinned against the recorded fixture (dark 19:43:20–03:58:20 UTC):
+    // Pinned against the fixture (dark 19:43:20–03:58:20 UTC, across midnight):
     // buildScale pads an hour each side and rounds outward to the hour, giving
     // an 18:00Z–05:00Z axis (12 hourly ticks) and a first band starting at
     // ~15.67% of it, 21.26% wide. These are exact enough that reverting
