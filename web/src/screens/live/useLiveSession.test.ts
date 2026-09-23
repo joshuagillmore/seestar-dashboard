@@ -9,6 +9,7 @@ import {
   recordedStatus,
   recordedTier1,
   recordedViewState,
+  runStateIdle,
   sessionActivity,
 } from '../../test/fixtures'
 import { POLL_INTERVAL_MS, useLiveSession } from './useLiveSession'
@@ -82,6 +83,56 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+})
+
+describe('the idle back-off and a session driven by hand', () => {
+  // run_state.json is written only by skill-driven runs, so a session
+  // started from the phone app reads `idle` on every poll. The back-off
+  // counted that answer, so polls 2-5 skipped the device check: stack count,
+  // preview, guardrails and log froze for ~4 minutes, and the session's end
+  // went unnoticed for up to 5.
+  const handDriven = () => ({ ...activeRoutes(), '/api/get_run_state': ok(runStateIdle()) })
+
+  it('checks the device on every poll while it reports a View', async () => {
+    const api = stubRoutes(handDriven())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+    expect(result.current.phase).toBe('active')
+
+    const moved = recordedViewState() as { view_state: { result: { View: { Stack: { stacked_frame: number } } } } }
+    moved.view_state.result.View.Stack.stacked_frame = 131
+    api.routes['/api/get_view_state'] = ok(moved)
+    await tick(POLL_INTERVAL_MS)
+    await tick(POLL_INTERVAL_MS)
+
+    expect(api.urls('get_view_state')).toHaveLength(3)
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.viewState.view_state?.result?.View?.Stack?.stacked_frame).toBe(131)
+  })
+
+  it('notices on the very next poll when the hand-driven session ends', async () => {
+    const api = stubRoutes(handDriven())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+    expect(result.current.phase).toBe('active')
+
+    api.routes['/api/get_view_state'] = ok(noView())
+    await tick(POLL_INTERVAL_MS)
+
+    expect(result.current.phase).toBe('idle')
+  })
+
+  it('still backs off once the scope itself says it is idle', async () => {
+    // The saving the back-off exists for must survive the fix: a parked
+    // scope is asked once, then left alone for IDLE_DEVICE_CHECK_EVERY polls.
+    const api = stubRoutes({ ...handDriven(), '/api/get_view_state': ok(noView()) })
+    renderHook(() => useLiveSession())
+    await tick()
+    for (let i = 0; i < 4; i += 1) await tick(POLL_INTERVAL_MS)
+
+    expect(api.urls('get_view_state')).toHaveLength(1)
+  })
 })
 
 describe('per-session state does not outlive the session', () => {

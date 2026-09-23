@@ -233,7 +233,9 @@ export type LiveSessionState =
  *                     as free; the writer may have died mid-run)
  *   state 'idle'    → device check on the FIRST poll, then every
  *                     IDLE_DEVICE_CHECK_EVERY-th, so a hand-driven session is
- *                     still noticed within a few minutes
+ *                     still noticed within a few minutes — and every poll
+ *                     once the device reports a View, since `idle` cannot
+ *                     see a hand-driven session at all
  *   run_state fails → device check every poll (fail open — never let a
  *                     missing optimisation hide a live session)
  *
@@ -262,7 +264,8 @@ export function useLiveSession(): LiveSessionState {
   const currentTargetRef = useRef<string | null>(null)
   const sessionStartedAtRef = useRef<string | null>(null)
   // Consecutive polls reporting idle, counting the current one. Reset by any
-  // non-idle answer so a session start restores full cadence immediately.
+  // non-idle run_state answer AND by any poll where the device reports a
+  // View, so a session (skill-driven or by hand) gets full cadence.
   const idleTicksRef = useRef(0)
   // Carries the last_stack result forward across polls where the target
   // hasn't changed, alongside which target it was actually fetched for —
@@ -362,6 +365,17 @@ export function useLiveSession(): LiveSessionState {
         setState({ phase: 'idle', viewError: null, sessionActivity })
         return
       }
+      if (cancelled) return
+
+      // The device itself says it is observing, which outranks run_state's
+      // `idle`: that only means "no skill-driven run", and a session started
+      // by hand from the phone app reads idle on every poll. Counting those
+      // answers put polls 2-5 of a live hand-driven session behind the
+      // back-off: stack count, preview, guardrails and log froze for ~4
+      // minutes, and the session's end went unnoticed for up to 5. Full
+      // cadence for as long as a View is there; the back-off starts from the
+      // first poll that finds none.
+      idleTicksRef.current = 0
 
       // The scope's own start when the server can tell us, and only then the
       // "since I started watching" fallback. Handback item 20: the guardrail
