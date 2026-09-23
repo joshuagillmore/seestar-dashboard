@@ -144,7 +144,16 @@ def start_analysis(client, target: str):
     )
 
 
-def _wait_until_not_running(client, target="M31", timeout_s=2.0):
+#: A hang detector, not an assertion: the stubbed jobs finish in
+#: milliseconds, so this only ever expires when something is genuinely stuck.
+#: It was 2 s — close enough to a loaded machine's scheduling jitter to fail
+#: a correct suite now and then, the same flake 0343b75 fixed in the web
+#: suite. Widening it costs no coverage; a passing wait returns as soon as the
+#: job leaves "running".
+WAIT_FOR_JOB_TIMEOUT_S = 10.0
+
+
+def _wait_until_not_running(client, target="M31", timeout_s=WAIT_FOR_JOB_TIMEOUT_S):
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         body = client.get(f"/api/qa_analysis_status?target={target}").json()
