@@ -28,5 +28,5 @@ def replace_non_finite(value: Any) -> Any:
         return value if all(cleaned[k] is value[k] for k in value) else cleaned
     if isinstance(value, list):
         cleaned_list = [replace_non_finite(item) for item in value]
-        return value if all(a is b for a, b in zip(cleaned_list, value)) else cleaned_list
+        return value if all(a is b for a, b in zip(cleaned_list, value, strict=True)) else cleaned_list
     return value

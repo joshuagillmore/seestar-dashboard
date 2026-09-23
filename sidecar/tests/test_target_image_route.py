@@ -12,7 +12,6 @@ when it isn't given an explicit http_get.
 """
 import json
 from datetime import timedelta, timezone
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient

@@ -75,7 +75,7 @@ async def blocking_tool(seconds: float) -> dict:
     analyze_session() runs synchronously inside an async tool. Nothing else,
     a ping included, is answered until it returns.
     """
-    time.sleep(seconds)
+    time.sleep(seconds)  # noqa: ASYNC251 - blocking the loop is this tool's whole point
     return {"blocked": seconds}
 
 

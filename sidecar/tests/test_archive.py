@@ -100,7 +100,7 @@ def _light_fit(dir_path, target_display, date_str, time_str, seq, exposure="10.0
     (dir_path / f"{stem}.fit").write_text("fit", encoding="utf-8")
     (dir_path / f"{stem}.jpg").write_text("jpg", encoding="utf-8")
     (dir_path / f"{stem}_thn.jpg").write_text("thn", encoding="utf-8")
-    seq  # unused, kept for call-site readability of "the Nth frame"
+    del seq  # unused, kept for call-site readability of "the Nth frame"
 
 
 def test_missing_root_returns_an_empty_scan_not_an_error(tmp_path):

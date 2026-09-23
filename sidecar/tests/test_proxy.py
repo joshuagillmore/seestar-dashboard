@@ -1,7 +1,6 @@
 import asyncio
 import sys
 import time
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest

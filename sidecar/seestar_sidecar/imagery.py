@@ -39,6 +39,7 @@ below is not the whole notice (that belongs in the docs file, once, not
 repeated on every response); it is short enough for a UI label while still
 naming the actual rights holders, not just the delivery service.
 """
+import asyncio
 import logging
 import os
 import re
@@ -263,6 +264,9 @@ async def fetch_survey_cutout(
     if not image_bytes:
         return None
 
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path.write_bytes(image_bytes)
+    def _store() -> None:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_path.write_bytes(image_bytes)
+
+    await asyncio.to_thread(_store)
     return image_bytes
