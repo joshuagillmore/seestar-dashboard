@@ -712,6 +712,17 @@ async def live_preview(request: Request) -> JSONResponse:
         return JSONResponse(_live_preview_absent(REASON_NOT_CONFIGURED))
 
     cache: LiveFrame | None = getattr(request.app.state, "live_preview_cache", None)
+    # The last known frame is only a fallback for the object the scope is on
+    # NOW. It used to be served whatever it showed, so after a slew a share
+    # hiccup put the previous target's frame up, marked merely "stale" — the
+    # wrong-target mistake the scoped scan above exists to prevent. With no
+    # active target the scan itself was unscoped, so there is nothing to
+    # mismatch and the old degrade holds.
+    if cache is not None and active_target is not None and cache.target != active_target:
+        # Cleared, not just skipped: /api/live_preview/image serves whatever
+        # is cached, and must not go on serving the old target's bytes.
+        request.app.state.live_preview_cache = None
+        cache = None
     try:
         frame = await discover_frame_within_timeout(share_dir, target=active_target)
     except ShareUnreachableError:
