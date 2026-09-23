@@ -180,7 +180,26 @@ def test_qa_tier2_has_no_direct_passthrough_route(client):
     assert client.get("/api/qa_tier2").status_code == 404
 
 
-def test_registered_routes_are_exactly_health_plus_the_allowlist_plus_sidecar_routes():
+@pytest.fixture
+def built_dist(tmp_path):
+    """A stand-in for a built web/dist, so the mount the two invariants below
+    inspect exists whether or not `npm run build` has run in this checkout.
+
+    They used create_app()'s default, the real web/dist, which is gitignored:
+    they passed where the frontend had been built and failed in a fresh clone
+    or worktree, where mount_frontend() registers a plain GET "/" instead of
+    the mount. A gate that depends on an unrelated build artefact is not
+    deterministic.
+    """
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<!doctype html>", encoding="utf-8")
+    return dist
+
+
+def test_registered_routes_are_exactly_health_plus_the_allowlist_plus_sidecar_routes(
+    built_dist,
+):
     """The parametrised FORBIDDEN_TOOLS test above only fails for a listed
     tool. A route for a side-effecting tool nobody thought to list — the live
     server already has several ALLOWED_TOOLS and FORBIDDEN_TOOLS both miss
@@ -215,11 +234,11 @@ def test_registered_routes_are_exactly_health_plus_the_allowlist_plus_sidecar_ro
       there is no filter left for an unexpected prefix to hide behind. Proven
       by mutation in test_a_route_under_a_foreign_prefix_would_be_caught.
     """
-    app = create_app()
+    app = create_app(web_dist=built_dist)
     assert _registered_routes(app) == _expected_routes()
 
 
-def test_the_only_non_route_entry_is_the_frontend_mount():
+def test_the_only_non_route_entry_is_the_frontend_mount(built_dist):
     """_registered_routes() above only inspects `Route` instances — a Mount
     (like the frontend's) has no `.methods` and isn't a Route subclass, so
     it's invisible to that check by the same kind of construction the
@@ -228,7 +247,7 @@ def test_the_only_non_route_entry_is_the_frontend_mount():
     may exist in the whole app, and it must be the static-files frontend
     mount, not some new sub-application quietly mounted elsewhere.
     """
-    app = create_app()
+    app = create_app(web_dist=built_dist)
     non_routes = [route for route in app.routes if not isinstance(route, Route)]
 
     # Exactly one MOUNT, and it is the frontend. A mount is the thing that can
