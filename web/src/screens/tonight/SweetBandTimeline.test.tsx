@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SweetBandTimeline } from './SweetBandTimeline'
 import { minutesBetween } from './timeline'
 import { ConditionsSchema, PlanTargetsSchema } from '../../api/schemas'
@@ -8,7 +8,43 @@ import { recordedConditions, recordedPlan } from '../../test/fixtures'
 const conditions = ConditionsSchema.parse(recordedConditions())
 const plan = PlanTargetsSchema.parse(recordedPlan())
 
+/** Pin the zone the Date APIs see for a block; restored afterwards. */
+function inZone(tz: string) {
+  let saved: string | undefined
+  beforeEach(() => {
+    saved = process.env.TZ
+    process.env.TZ = tz
+  })
+  afterEach(() => {
+    if (saved === undefined) delete process.env.TZ
+    else process.env.TZ = saved
+  })
+}
+
+describe('SweetBandTimeline in a half-hour zone (UTC+5:30)', () => {
+  inZone('Asia/Kolkata')
+
+  it('labels the axis with the local hours it actually marks', () => {
+    // Fixture dark window 19:43–03:58 UTC is 01:13–09:28 in UTC+5:30. Padded
+    // an hour and rounded out to LOCAL hours, the axis runs 00:00–11:00.
+    // Ticks on UTC hours were 23:30…10:30 locally and read "23"…"10" — every
+    // label half an hour off.
+    const { container } = render(
+      <SweetBandTimeline conditions={conditions} targets={plan.targets} />,
+    )
+    const labels = [...container.querySelectorAll('[data-tick]')].map((t) => t.textContent)
+
+    expect(labels[0]).toBe('00')
+    expect(labels[labels.length - 1]).toBe('11')
+    expect(labels).toHaveLength(12)
+  })
+})
+
 describe('SweetBandTimeline', () => {
+  // The axis aligns to the viewer's local hours; pin a whole-hour zone so the
+  // exact positions asserted below do not move with the runner's zone.
+  inZone('UTC')
+
   it('renders one lane per ranked target', () => {
     render(<SweetBandTimeline conditions={conditions} targets={plan.targets} />)
     for (const target of plan.targets) {

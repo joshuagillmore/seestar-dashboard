@@ -43,9 +43,31 @@ export const parse = (iso: string): number =>
 export const minutesBetween = ([from, to]: [string, string]): number =>
   Math.round((parse(to) - parse(from)) / 60_000)
 
+/** The browser zone's offset from UTC at `ms`, in ms (positive = ahead). */
+const localOffsetMs = (ms: number): number => -new Date(ms).getTimezoneOffset() * 60_000
+
+/** Round `ms` down (or up) to a LOCAL hour boundary. */
+const toLocalHour = (ms: number, round: (x: number) => number): number => {
+  const offset = localOffsetMs(ms)
+  return round((ms + offset) / HOUR_MS) * HOUR_MS - offset
+}
+
+/**
+ * The axis, padded an hour each side of the dark window and rounded outward
+ * to the hour — to the viewer's LOCAL hour.
+ *
+ * The ticks are labelled with the local hour (SweetBandTimeline), so they
+ * must sit on local hour boundaries. They used to sit on UTC hours, which in
+ * a half-hour zone (UTC+5:30, +9:30, −3:30 …) are all HH:30 locally, so every
+ * label was half an hour off. In a whole-hour zone the two coincide and
+ * nothing moves.
+ *
+ * Ticks step a real hour from a local-hour start. A DST change inside the
+ * window shifts the offset by a whole hour, so they stay on local hours.
+ */
 export function buildScale([darkStart, darkEnd]: [string, string]): Scale {
-  const startMs = Math.floor((parse(darkStart) - HOUR_MS) / HOUR_MS) * HOUR_MS
-  const endMs = Math.ceil((parse(darkEnd) + HOUR_MS) / HOUR_MS) * HOUR_MS
+  const startMs = toLocalHour(parse(darkStart) - HOUR_MS, Math.floor)
+  const endMs = toLocalHour(parse(darkEnd) + HOUR_MS, Math.ceil)
   const ticks: number[] = []
   for (let t = startMs; t <= endMs; t += HOUR_MS) ticks.push(t)
   return { startMs, endMs, ticks }
