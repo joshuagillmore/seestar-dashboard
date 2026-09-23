@@ -58,6 +58,13 @@ export function useQaReview(): QaReviewState {
   // or adding it to the mount effect's deps (which would re-run the listing
   // fetch every time the callback identity changed).
   const selectRef = useRef<((targetId: string) => void) | null>(null)
+  // The handed-over target, once taken. `undefined` until the first mount
+  // effect has taken it. A ref, not a local, because StrictMode (main.tsx)
+  // runs the mount effect, cleans it up and runs it again: taken into a
+  // local, the first run consumed it and was cancelled, and the second found
+  // storage empty, so in dev the Projects → Review handoff selected nothing.
+  // Refs survive that re-run; the second run reuses what the first took.
+  const pendingRef = useRef<string | null | undefined>(undefined)
 
   useEffect(() => {
     let cancelled = false
@@ -67,7 +74,8 @@ export function useQaReview(): QaReviewState {
     // consumed HERE, before the listing is fetched, because taking it only
     // on success left it in storage after a failed listing to reopen the
     // target on some later, unrelated visit.
-    const pending = takePendingReviewTarget()
+    if (pendingRef.current === undefined) pendingRef.current = takePendingReviewTarget()
+    const pending = pendingRef.current
     fetchQaTargets()
       .then((data) => {
         if (cancelled) return

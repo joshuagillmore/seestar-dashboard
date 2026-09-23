@@ -81,8 +81,9 @@ The eccentricity MARGINAL line **was** a flat 0.42 and stopped being one in
 contract 1.1.0. `0.42` survives as a perceptibility *floor*, not the cutoff:
 an alt-az rig baselines near 0.49, so measured over 970 real subs the flat
 constant graded 96.5% of a good night MARGINAL. Contract 1.1.1 then guaranteed
-the derived value is finite and never above the REJECT line, which is what lets
-`MetricChart` draw both lines without checking their order.
+the derived value is finite and never above the REJECT line; `MetricChart`
+still draws the server's lines as sent and visibly flags an inverted pair, as a
+report cached before 1.1.1 can carry.
 
 A stale copy of these numbers in the client is exactly the failure this section
 exists to prevent, so **read `summary.thresholds` off the payload** and treat

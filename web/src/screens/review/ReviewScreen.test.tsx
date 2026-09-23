@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -861,6 +862,44 @@ describe('a start the sidecar refuses (HTTP 429)', () => {
     expect(await screen.findByText(REFUSAL.error)).toBeInTheDocument()
     expect(screen.getByText('STALE')).toBeInTheDocument()
   })
+
+  // After a failed job the button reads "Try again". Refused, it used to
+  // flash "Starting…" and change nothing else: the failed branch never
+  // rendered `error`, and errorNoteText returns null for a failed status, so
+  // "job crashed" stayed on screen as if the retry had not happened.
+  const refuseAfterFailure = () =>
+    stubRoutes((url) => {
+      if (url.includes('qa_analysis_start')) return json(REFUSAL, 429)
+      if (url.includes('qa_analysis_status')) {
+        return json({ ok: true, target_id: 'M81', sub_count: 587, status: 'failed', error: 'job crashed' })
+      }
+      return undefined
+    })
+
+  it('says why when "Try again" after a failed job is refused', async () => {
+    refuseAfterFailure()
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText(new RegExp(REFUSAL.error))).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(REFUSAL.error)
+    // The job's own failure is still what the status says, and still shown.
+    expect(screen.getByText(/job crashed/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
+  })
+
+  it('says why on mobile when "Try again" is refused', async () => {
+    refuseAfterFailure()
+    renderMobile()
+
+    await pickMobile('M81')
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText(new RegExp(REFUSAL.error))).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(REFUSAL.error)
+  })
 })
 
 describe('mobile keeps step with desktop', () => {
@@ -960,6 +999,25 @@ describe('an empty table says why it is empty', () => {
 
 describe('the Projects → Review handoff', () => {
   beforeEach(() => window.sessionStorage.clear())
+
+  it('opens the handed-over target under StrictMode, as main.tsx renders it in dev', async () => {
+    // StrictMode runs the mount effect, cleans it up and runs it again. The
+    // first run took the target out of storage and was then cancelled; the
+    // second found nothing, so in dev the handoff selected nothing.
+    setPendingReviewTarget('M81')
+    stubFetch()
+    render(
+      <StrictMode>
+        <ReviewScreen view="review" onNavigate={vi.fn()} site={site} health={notReplaying} />
+      </StrictMode>,
+    )
+
+    await waitFor(() =>
+      expect(calls.some((u) => u.includes('qa_analysis_status') && u.includes('M81'))).toBe(true),
+    )
+    // Still consumed: a later, ordinary visit does not reopen it.
+    expect(window.sessionStorage.getItem('seestar.review.pendingTarget')).toBeNull()
+  })
 
   it('is consumed even when the listing fails, so it cannot reopen a target later', async () => {
     setPendingReviewTarget('M81')

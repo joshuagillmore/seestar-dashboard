@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -23,7 +23,9 @@ import {
   runStateIdle,
   sessionActivity,
 } from '../../test/fixtures'
+import { REQUEST_TIMEOUT_MS } from '../../api/client'
 import { formatStackDate, lastStackReasonLabel } from './lastStack'
+import { POLL_INTERVAL_MS } from './useLiveSession'
 
 const site = SiteProfileSchema.parse(recordedSite())
 const notReplaying: Health = { ok: true, replay: false }
@@ -174,7 +176,22 @@ describe('LiveScreen', () => {
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByTestId('live-bridge-down')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
-    expect(screen.getByTestId('session-activity-not-running')).toBeInTheDocument()
+    // With the bridge down this client cannot know whether a session is
+    // running, so the feed must not say "No session is running right now".
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+
+  it('does not contradict get_run_state when it reports an active run with the bridge down', async () => {
+    // run_state is a file read on the server, so it can still answer while
+    // the scope link is gone.
+    stubBridgeDown({ '/api/get_run_state': runStateActiveFixture() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-bridge-down')).toBeInTheDocument())
+    const runTarget = (runStateActiveFixture() as { run: { target: string } }).run.target
+    expect(screen.getByTestId('live-bridge-down')).toHaveTextContent(/active run/)
+    expect(screen.getByTestId('live-bridge-down')).toHaveTextContent(runTarget)
+    await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
   })
 
   it('does not show the "not running" note during an active session — a session genuinely is running', async () => {
@@ -753,6 +770,115 @@ describe('never idle while get_run_state says a run is active', () => {
     expect(screen.getAllByTestId('dot')[1]).not.toHaveAttribute('data-dot', 'idle')
     await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
     expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+})
+
+describe('the idle card says what actually failed', () => {
+  // It used to wrap every get_view_state error in "The bridge answered, but
+  // get_view_state did not (…)". On this client's own 45 s timeout that
+  // error carries "make sure the sidecar is running", inside a sentence
+  // saying the bridge answered.
+  const SIDECAR_ADVICE = /make sure the sidecar is running/
+
+  /** get_status answers; get_view_state is whatever `viewState` does. */
+  function stubViewFailure(viewState: () => Promise<unknown>) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const path = url.split('?')[0]
+        if (path === '/api/get_view_state') return viewState()
+        if (path === '/api/get_status') return { ok: true, status: 200, json: async () => recordedStatus() }
+        if (path === '/api/session_activity') return { ok: true, status: 200, json: async () => sessionActivity() }
+        return { ok: false, status: 404, json: async () => ({ ok: false, error: `no stub for ${url}` }) }
+      }),
+    )
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('says the bridge answered when the tool itself reported the failure', async () => {
+    stubIdle()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    expect(screen.getByTestId('live-idle')).toHaveTextContent(
+      'The bridge answered, but get_view_state reported a failure (get_view_state timed out — scope not observing)',
+    )
+  })
+
+  it('does not claim the bridge answered get_view_state when this client timed out waiting', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
+    stubViewFailure(() => new Promise(() => {}))
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+    })
+
+    const card = screen.getByTestId('live-idle')
+    expect(card).toHaveTextContent(`get_view_state got no answer (no answer within ${REQUEST_TIMEOUT_MS / 1000} s)`)
+    expect(card).toHaveTextContent(/get_status answered/)
+    expect(card).not.toHaveTextContent(SIDECAR_ADVICE)
+    expect(card).not.toHaveTextContent(/The bridge answered, but get_view_state/)
+    // A request that got no answer is not the scope saying it is idle.
+    expect(card).not.toHaveTextContent(/Scope idle/)
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+
+  it('says the same, truthfully, when the get_view_state request never reached the sidecar', async () => {
+    stubViewFailure(() => Promise.reject(new TypeError('Failed to fetch')))
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+
+    const card = screen.getByTestId('live-idle')
+    expect(card).toHaveTextContent(/did not reach the sidecar/)
+    expect(card).not.toHaveTextContent(SIDECAR_ADVICE)
+    expect(card).not.toHaveTextContent(/Scope idle/)
+  })
+})
+
+describe('a session held through a failed poll', () => {
+  // useLiveSession no longer ends a session on one failed read; it keeps the
+  // last reading and flags it. The flag has to reach the screen, or a held
+  // reading would pass for a fresh one.
+  async function renderThroughOneFailedPoll(mobile: boolean) {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
+    stubMatchMedia(mobile)
+    let viewReply: Body = recordedViewState()
+    stubApi({ '/api/get_view_state': () => viewReply })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.queryByTestId('live-stale')).not.toBeInTheDocument()
+
+    viewReply = { ok: false, error: 'get_view_state timed out' }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+    })
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps the telemetry on screen, visibly marked stale, with why', async () => {
+    await renderThroughOneFailedPoll(false)
+
+    expect(screen.getByTestId('live-stale')).toHaveTextContent(/get_view_state timed out/)
+    expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument()
+    expect(screen.queryByTestId('live-idle')).not.toBeInTheDocument()
+    // Not the green "live" dot: this is not a live reading.
+    expect(screen.getAllByTestId('dot')[1]).toHaveAttribute('data-dot', 'marginal')
+    // Nor can the feed claim a session is, or is not, running.
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+
+  it('marks it stale on mobile too', async () => {
+    await renderThroughOneFailedPoll(true)
+
+    expect(screen.getByTestId('live-stale')).toHaveTextContent(/get_view_state timed out/)
+    expect(screen.getByTestId('mobile-live-tiles')).toBeInTheDocument()
   })
 })
 

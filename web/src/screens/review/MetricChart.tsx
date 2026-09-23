@@ -150,8 +150,8 @@ export function MetricChart({
       {inverted && (
         <p className={styles.warning} role="note">
           These cutoffs arrived out of order: the marginal line is not below the reject line.
-          They are drawn as the report sent them. Reports cached before seestar-mcp contract
-          1.1.1 can carry this; a fresh analysis will not.
+          They are drawn as the report sent them. A report cached before seestar-mcp contract
+          1.1.1 can carry this.
         </p>
       )}
     </div>
