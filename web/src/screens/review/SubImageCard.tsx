@@ -1,6 +1,13 @@
 import { subImageSrc } from '../../api/client'
 import type { QaSubVerdict } from '../../api/schemas'
-import { formatMetric, isUnanalysed, measuredValue, METRIC_LABELS, toneFor } from './qa'
+import {
+  formatMetric,
+  isUnanalysed,
+  measuredValue,
+  METRIC_LABELS,
+  noReasonText,
+  toneFor,
+} from './qa'
 import styles from './SubImageCard.module.css'
 
 export interface SubImageCardProps {
@@ -89,7 +96,7 @@ export function SubImageCard({ targetId, sub, onClose }: SubImageCardProps) {
               ))}
             </ul>
           ) : (
-            <p className={styles.reason}>Clears every gate.</p>
+            <p className={styles.reason}>{noReasonText(sub)}</p>
           )}
         </div>
       </div>

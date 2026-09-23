@@ -63,3 +63,25 @@ describe('SubTable — an unanalysable sub', () => {
     expect(within(screen.getByTitle(sub.name).parentElement!).getByText('NOT ANALYSED')).toBeInTheDocument()
   })
 })
+
+describe('SubTable — a sub with no reasons', () => {
+  // The server always sends at least one line (PASS subs get "PASS: all
+  // metrics within session norms"), but an empty list must not be read as
+  // a clean bill of health for a sub the server did not pass.
+  it('says "clears every gate" only for a PASS', () => {
+    render(
+      <SubTable
+        subs={[
+          makeSub('p', 'PASS', [], { eccentricity: 0.4 }),
+          makeSub('r', 'REJECT', [], { eccentricity: 0.4 }),
+          makeSub('m', 'MARGINAL', [], { eccentricity: 0.4 }),
+        ]}
+      />,
+    )
+
+    expect(screen.getAllByText(/clears every gate/i)).toHaveLength(1)
+    const reject = screen.getByTitle('r').parentElement!
+    expect(within(reject).queryByText(/clears every gate/i)).not.toBeInTheDocument()
+    expect(within(reject).getByText(/no reason given/i)).toBeInTheDocument()
+  })
+})

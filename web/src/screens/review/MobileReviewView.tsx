@@ -1,6 +1,13 @@
 import type { QaSubVerdict, QaSummary, QaTarget } from '../../api/schemas'
 import { MetricChart } from './MetricChart'
-import { formatMetric, isUnanalysed, keptPercent, thresholdLinesFor, toneFor } from './qa'
+import {
+  formatMetric,
+  isUnanalysed,
+  keptPercent,
+  noReasonText,
+  thresholdLinesFor,
+  toneFor,
+} from './qa'
 import styles from './MobileReviewView.module.css'
 
 /** Fewer than the desktop table's twelve. The charts still carry the whole
@@ -179,7 +186,7 @@ function SubRow({ sub }: { sub: QaSubVerdict }) {
           ? sub.metrics.error
           : sub.reasons.length > 0
             ? sub.reasons.join(' · ')
-            : 'Clears every gate.'}
+            : noReasonText(sub)}
       </p>
     </div>
   )

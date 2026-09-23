@@ -42,6 +42,18 @@ export function isUnanalysed(sub: QaSubVerdict): boolean {
   return sub.metrics.error != null
 }
 
+/**
+ * What to say for a sub whose `reasons[]` is empty.
+ *
+ * The server never sends an empty list today — a PASS carries "PASS: all
+ * metrics within session norms" — but an empty list is not evidence of a
+ * clean sub, and only the server's own PASS may be described as clearing
+ * every gate. Anything else says plainly that no reason came with it.
+ */
+export function noReasonText(sub: QaSubVerdict): string {
+  return toneFor(sub.verdict) === 'pass' ? 'Clears every gate.' : 'No reason given by the server.'
+}
+
 /** A metric value the server actually measured, or null.
  *
  * Null for an unanalysable sub regardless of what its fields hold: on the

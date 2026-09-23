@@ -1,5 +1,12 @@
 import type { QaSubVerdict } from '../../api/schemas'
-import { blamedMetrics, formatMetric, isUnanalysed, measuredValue, toneFor } from './qa'
+import {
+  blamedMetrics,
+  formatMetric,
+  isUnanalysed,
+  measuredValue,
+  noReasonText,
+  toneFor,
+} from './qa'
 import styles from './SubTable.module.css'
 
 export interface SubTableProps {
@@ -127,7 +134,7 @@ export function SubTable({
                   <>
                     <span className={`${styles.badge} ${styles[tone]}`}>{sub.verdict}</span>
                     <span className={styles.reason}>
-                      {sub.reasons.length > 0 ? sub.reasons.join(' · ') : 'clears every gate'}
+                      {sub.reasons.length > 0 ? sub.reasons.join(' · ') : noReasonText(sub)}
                     </span>
                   </>
                 )}
