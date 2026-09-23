@@ -83,21 +83,27 @@ def test_projects_combined_asks_for_full_detail_too(captured):
     )
 
 
-def test_recommend_projects_does_not_pass_detail(captured):
-    """`recommend_projects` has NO `detail` parameter server-side — it builds
-    its payload with `dataclasses.asdict` rather than `_project_payload`, so
-    it still returns full projects. Passing `detail` to a tool that does not
-    accept it would be an error, so this pins the asymmetry deliberately
-    rather than letting someone "fix" it for consistency.
-
-    Flagged back to seestar-mcp: their round-3 note said both tools would gain
-    the parameter, and only `list_projects` did. If they close that gap the
-    same way, our RecommendProjectsSchema (= ListProjectsSchema, `sessions`
-    required) breaks with no parameter to escape with.
+def test_recommend_projects_asks_for_full_detail_too(captured):
+    """`recommend_projects` gained the same `detail` parameter in seestar-mcp
+    fffa8b6, with the same `"summary"` default — which drops `sessions`, and
+    RecommendProjectsSchema (= ListProjectsSchema) requires it. This test used
+    to pin the opposite (that no `detail` was sent, because the tool had no
+    such parameter then), which is exactly the gap that note predicted: the
+    route broke against the live server with nothing here noticing.
     """
     with TestClient(create_app()) as client:
         client.get("/api/recommend_projects")
 
     sent = [args for tool, args in captured if tool == "recommend_projects"]
     assert sent, "recommend_projects was never called"
-    assert "detail" not in sent[0]
+    assert sent[0].get("detail") == "full", (
+        "without detail='full' the server omits `sessions` and the schema rejects it"
+    )
+
+
+def test_recommend_projects_still_forwards_its_limit(captured):
+    with TestClient(create_app()) as client:
+        client.get("/api/recommend_projects?limit=5")
+
+    sent = [args for tool, args in captured if tool == "recommend_projects"]
+    assert sent[0] == {"limit": 5, "detail": "full"}

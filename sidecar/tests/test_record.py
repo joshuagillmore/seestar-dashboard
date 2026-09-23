@@ -19,6 +19,16 @@ def test_current_arguments_match_the_allowlist_exactly():
     record._assert_arguments_complete(record.ARGUMENTS, record.ALLOWED_TOOLS)
 
 
+@pytest.mark.parametrize("tool", ["list_projects", "recommend_projects"])
+def test_project_tools_are_recorded_with_full_detail(tool):
+    """Both default to detail="summary" server-side, which drops each
+    project's `sessions`. A fixture recorded with `{}` would then be the
+    summary shape — which the web schemas reject, and which the replay path
+    would serve as if it were what the live routes return (they pass
+    detail="full"; see routes._FULL_DETAIL)."""
+    assert record.ARGUMENTS[tool].get("detail") == "full"
+
+
 def test_missing_entry_fails_fast():
     allowed = record.ALLOWED_TOOLS | {"some_new_tool"}
     with pytest.raises(AssertionError, match="some_new_tool"):

@@ -28,8 +28,11 @@ ARGUMENTS: dict[str, dict] = {
     "assess_conditions": {},
     "plan_targets": {"limit": 12},
     "get_site_profile": {},
-    "list_projects": {},
-    "recommend_projects": {"limit": 12},
+    # detail="full", exactly as routes._FULL_DETAIL sends it: both tools
+    # default to "summary", which drops `sessions`, so `{}` would record a
+    # shape the live routes never return and the web schemas reject.
+    "list_projects": {"detail": "full"},
+    "recommend_projects": {"limit": 12, "detail": "full"},
     # --- slice 3 (Live session screen) ------------------------------------
     "get_view_state": {},
     "get_status": {},

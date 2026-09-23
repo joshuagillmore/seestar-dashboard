@@ -337,8 +337,8 @@ async def get_site_profile(request: Request) -> JSONResponse:
     return await _serve(request, "get_site_profile", {})
 
 
-#: `list_projects` and `recommend_projects` default to `detail="summary"`
-#: server-side as of seestar-mcp a66f2d3, which OMITS each project's
+#: `list_projects` (since seestar-mcp a66f2d3) and `recommend_projects`
+#: (since fffa8b6) default to `detail="summary"` server-side, which OMITS each project's
 #: `sessions` history (replacing it with `sessions_count` /
 #: `last_session_utc`). Omitting the key rather than emptying it was our own
 #: request — an empty list renders as "no sessions logged", which is a real
@@ -361,7 +361,10 @@ async def list_projects(request: Request) -> JSONResponse:
 async def recommend_projects(
     request: Request, limit: int | None = Query(default=None, ge=1, le=50)
 ) -> JSONResponse:
-    return await _serve(request, "recommend_projects", {"limit": limit})
+    # detail="full" for the same reason as list_projects above: since
+    # seestar-mcp fffa8b6 this tool has the same parameter and the same
+    # "summary" default, which drops `sessions`.
+    return await _serve(request, "recommend_projects", {"limit": limit, **_FULL_DETAIL})
 
 
 # --- slice 3 (Live session screen) — plain passthroughs, same _serve pattern
