@@ -53,6 +53,18 @@ describe('QualityBar', () => {
     expect(screen.getByText(/5 rejected/)).toBeInTheDocument()
   })
 
+  it('keeps everything the server did not REJECT — an unrecognised verdict included', () => {
+    // The server's keep rule is `verdict != "REJECT"` (qa_tier2.py keep_list),
+    // so a verdict outside the three is KEPT. pass + marginal would drop it
+    // from the caption and understate what survives. The payload carries no
+    // kept count here (verdict_counts has none), so it is total − reject.
+    render(
+      <QualityBar verdicts={counts({ pass: 10, marginal: 0, reject: 5, unknown: 5, total: 20 })} />,
+    )
+
+    expect(screen.getByText(/15 of 20 subs keepable/)).toBeInTheDocument()
+  })
+
   it('renders nothing at all for an empty report', () => {
     // Distinct from "never analysed", which the CALLER handles by passing no
     // verdicts. Either way the card must not show an empty bar, which reads

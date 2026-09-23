@@ -143,7 +143,11 @@ describe('ProjectsScreen', () => {
     // docs/design-review-2026-07-30.md for why the counts changed from the
     // old store-backed-only 12/2/1).
     expect(screen.getAllByText('needs data')).toHaveLength(22)
-    expect(screen.getAllByText('complete')).toHaveLength(3)
+    // Two archive-only targets clear their suggested goal. The third that
+    // does, M27, is store-backed and "active" on the server — so its tag
+    // says "active", never a "complete" the server has not said.
+    expect(screen.getAllByText('complete')).toHaveLength(2)
+    expect(screen.getByText('active')).toBeInTheDocument()
     // IC 405 — archive-only, and its photometry is flagged unreliable rather
     // than blank (see CLAUDE.md's honesty requirements for this exact case).
     expect(screen.getByText('photometry not credible')).toBeInTheDocument()

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { describeGoal, formatHours, goalLabel, goalProgressPct, hasNumericGoal } from './integrationGoal'
+import {
+  describeGoal,
+  formatHours,
+  goalLabel,
+  goalMet,
+  goalProgressPct,
+  hasNumericGoal,
+} from './integrationGoal'
 import type { IntegrationGoal } from './schemas'
 
 const goal = (overrides: Partial<IntegrationGoal> = {}): IntegrationGoal => ({
@@ -99,6 +106,33 @@ describe('goalProgressPct', () => {
 
   it('halves the percentage when doubled', () => {
     expect(goalProgressPct(30, goal({ suggested_hours: 1.0 }), true)).toBe(25)
+  })
+
+  it('never shows 100 for a goal not yet met — 99.5% is not complete', () => {
+    // 597 of 600 minutes: three minutes short. Math.round(99.5) is 100, which
+    // drew a full bar and (via projectStatus) a "complete" tag.
+    expect(goalProgressPct(597, goal({ suggested_hours: 10 }), false)).toBe(99)
+    expect(goalProgressPct(600, goal({ suggested_hours: 10 }), false)).toBe(100)
+  })
+})
+
+describe('goalMet — compares the raw minutes, never a rounded percentage', () => {
+  it('is false three minutes short of a 10 h goal', () => {
+    expect(goalMet(597, goal({ suggested_hours: 10 }), false)).toBe(false)
+  })
+
+  it('is true at and past the goal', () => {
+    expect(goalMet(600, goal({ suggested_hours: 10 }), false)).toBe(true)
+    expect(goalMet(900, goal({ suggested_hours: 10 }), false)).toBe(true)
+  })
+
+  it('measures against the doubled figure when doubled', () => {
+    expect(goalMet(900, goal({ suggested_hours: 10 }), true)).toBe(false)
+  })
+
+  it('is null when there is no numeric goal to meet', () => {
+    expect(goalMet(100, null, false)).toBeNull()
+    expect(goalMet(100, goal({ beyond_reach: true, suggested_hours: null }), false)).toBeNull()
   })
 })
 

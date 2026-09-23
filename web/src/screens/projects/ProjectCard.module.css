@@ -15,6 +15,10 @@
    not a radius on the cover itself, is what clips the image to the card's
    own rounded corners on the left edge. */
 .card {
+  position: relative;
+  /* Own stacking context: the selection area's z-index stays inside the
+     card, so the doubling toggle (a later sibling) still paints above it. */
+  isolation: isolate;
   display: flex;
   flex-direction: row;
   align-items: stretch;
@@ -31,6 +35,27 @@
 }
 
 .card:hover { border-color: var(--border-control-hover); }
+
+/* The card's selection control: an empty button stretched over the whole
+   card, above its content (which is inert text and imagery) so a click
+   anywhere selects — but a SIBLING of every other control, never their
+   parent. See ProjectCard.tsx. */
+.selectArea {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.selectArea:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* A control inside the card with its own job (the quality bar's "open the
+   QA report"), lifted above .selectArea so it takes its own clicks. */
+.raised { position: relative; z-index: 2; }
 
 .selected { border-color: var(--accent-border); background: var(--accent-bg); }
 

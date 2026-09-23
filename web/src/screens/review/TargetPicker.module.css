@@ -72,11 +72,20 @@
    brightness against `.idle` below, which cannot be misread as a verdict the
    way a green chip on this screen can. See statusLabel() in TargetPicker.tsx. */
 .status.ready { color: var(--text-secondary); }
-/* These two keep the verdict palette on purpose: their valence matches it
-   (amber = wants attention, red = something went wrong) and both are
-   conventional well beyond this app's PASS/MARGINAL/REJECT vocabulary. */
-.status.marginal { color: var(--marginal); }
-.status.reject { color: var(--reject); }
+/* Stale and failed are job states too, and on this screen amber and red read
+   as MARGINAL and REJECT — a failed job said in red looks like a rejected
+   target. So neither borrows a verdict colour: both are marked by an outline
+   chip instead (dashed for "a report exists but is out of date", solid for
+   "the job itself errored"), and the word says which. */
+.status.stale,
+.status.failed {
+  justify-self: start;
+  padding: 0 5px;
+  border: 1px solid var(--border-control-hover);
+  border-radius: var(--radius-chip);
+}
+.status.stale { border-style: dashed; color: var(--text-muted); }
+.status.failed { color: var(--text-primary); }
 .status.running { color: var(--accent); }
 /* "Not analysed" is the ordinary state of a fresh archive, not a problem —
    toned as quiet, never as a warning. */

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Health, QaSubVerdict, SiteProfile } from '../../api/schemas'
+import type { Health, SiteProfile } from '../../api/schemas'
 import { AppShell } from '../../shell/AppShell'
 import { MOBILE_QUERY } from '../../shell/breakpoints'
 import { MobileNav } from '../../shell/MobileNav'
@@ -14,6 +14,8 @@ import { ReportHeader } from './ReportHeader'
 import { SubTable } from './SubTable'
 import { TargetPicker } from './TargetPicker'
 import { thresholdLinesFor, toneFor, type QaTone } from './qa'
+import { AnalysisState, ErrorNote, StaleNotice } from './ReviewStates'
+import { errorNoteText, hasReport } from './statusHelpers'
 import { SubImageCard } from './SubImageCard'
 import { useQaReview } from './useQaReview'
 import styles from './ReviewScreen.module.css'
@@ -93,21 +95,45 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
   // default state cannot be confused with a filter that happens to include
   // everything.
   const [hidden, setHidden] = useState<ReadonlySet<QaTone>>(new Set())
-  // Stored WITH the target it belongs to. Holding the sub alone let it
-  // outlive a target change: the card then paired the new target's id with
-  // the old target's sub, showing one report's metrics and reasons under
-  // another's heading and requesting an image URL for a sub that target does
-  // not contain. Keyed this way, a mismatch simply renders nothing.
-  const [openSub, setOpenSub] = useState<{ targetId: string; sub: QaSubVerdict } | null>(null)
+  // The open sub, by NAME, with the target it belongs to — looked up in the
+  // CURRENT report on every render.
+  //
+  // Keyed by target because holding the sub alone let it outlive a target
+  // change: the card paired the new target's id with the old target's sub.
+  // Keyed by name, not by the sub object, because the object is a snapshot:
+  // after a re-analyse the card kept the OLD verdict and reasons beside the
+  // new rows. A name the new report no longer has simply renders nothing.
+  const [openSub, setOpenSub] = useState<{ targetId: string; name: string } | null>(null)
   const isMobile = useMediaQuery(MOBILE_QUERY)
 
   const selectedTarget = targets?.targets.find((t) => t.target_id === selected) ?? null
+  const subCount = selectedTarget?.sub_count ?? 0
   // Narrowed once, here, so the render below never has to re-test the union.
   // `stale` carries a real report and must keep rendering one — it is a
   // usable result with a caveat, not an absent one.
   const finished =
     status != null && (status.status === 'complete' || status.status === 'stale') ? status : null
-  const report = finished?.report
+  const report = hasReport(status) ? finished?.report : undefined
+  const stale = finished?.status === 'stale'
+  const note = errorNoteText(error, status)
+
+  // One description of the non-report states, for both layouts — see
+  // ReviewStates.tsx for why they are no longer written twice.
+  const analysisState = (compact: boolean) => (
+    <AnalysisState
+      selected={selected}
+      status={status}
+      error={error}
+      starting={starting}
+      subCount={subCount}
+      onAnalyse={analyse}
+      onReload={() => {
+        if (selected != null) select(selected)
+      }}
+      compact={compact}
+    />
+  )
+  const staleNotice = <StaleNotice subCount={subCount} starting={starting} onAnalyse={analyse} />
 
   // Mobile — not in the design handoff (phone frames were specified for
   // Tonight and Live only), so this is an extension. Same shape as those two:
@@ -133,34 +159,11 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
             onSelect={select}
             summary={report?.summary ?? null}
             displayName={selectedTarget?.display_name ?? null}
-            state={
-              selected == null ? (
-                <p className={styles.stateText}>
-                  Pick a target to see its analysis. Nothing runs until you ask for it.
-                </p>
-              ) : status?.status === 'running' ? (
-                <p className={styles.stateText}>
-                  Analysing {selectedTarget?.sub_count ?? 0} subs — {status.elapsed_seconds}s
-                  elapsed.
-                </p>
-              ) : (
-                <>
-                  <p className={styles.stateText}>
-                    {status?.status === 'failed'
-                      ? `The analysis failed.${status.error ? ` ${status.error}` : ''}`
-                      : 'No analysis yet for this target. That is the ordinary state of a fresh archive, not a problem.'}
-                  </p>
-                  <button
-                    type="button"
-                    className={styles.action}
-                    onClick={analyse}
-                    disabled={starting}
-                  >
-                    {starting ? 'Starting…' : `Analyse ${selectedTarget?.sub_count ?? 0} subs`}
-                  </button>
-                </>
-              )
-            }
+            state={analysisState(true)}
+            analysedAt={finished?.analysed_at ?? null}
+            stale={stale}
+            staleNotice={stale ? staleNotice : null}
+            errorNote={note}
           />
         )}
       </div>
@@ -203,206 +206,126 @@ export function ReviewScreen({ view, onNavigate, site, health }: ReviewScreenPro
             <TargetPicker targets={targets} selected={selected} onSelect={select} />
 
             <div className={styles.main}>
-              {selected == null ? (
-                <div className={styles.state}>
-                  <p className={styles.stateText}>
-                    Pick a target to see its analysis. Nothing runs until you ask for it — a full
-                    session is minutes of work, so the sub count on each row is what you are
-                    committing to.
-                  </p>
-                </div>
-              ) : (
+              {!(report && finished && selectedTarget) && (
+                <div className={styles.state}>{analysisState(false)}</div>
+              )}
+
+              {report && finished && selectedTarget && (
                 <>
-                  {status?.status === 'not_analysed' && (
-                    <div className={styles.state}>
-                      <p className={styles.stateText}>
-                        No analysis yet for this target. That is the ordinary state of a fresh
-                        archive, not a problem.
-                      </p>
-                      <button
-                        type="button"
-                        className={styles.action}
-                        onClick={analyse}
-                        disabled={starting}
-                      >
-                        {starting
-                          ? 'Starting…'
-                          : `Analyse ${selectedTarget?.sub_count ?? 0} subs`}
-                      </button>
-                    </div>
-                  )}
+                  <ReportHeader
+                    targetId={selectedTarget.target_id}
+                    displayName={selectedTarget.display_name}
+                    summary={report.summary}
+                    analysedAt={finished.analysed_at}
+                    stale={stale}
+                  />
 
-                  {status?.status === 'running' && (
-                    <div className={styles.state}>
-                      <p className={styles.stateText}>
-                        Analysing {selectedTarget?.sub_count ?? 0} subs — {status.elapsed_seconds}s
-                        elapsed. This takes minutes on a real session; the page polls and will fill
-                        in when it finishes.
-                      </p>
-                    </div>
-                  )}
+                  {stale && staleNotice}
 
-                  {status?.status === 'failed' && (
-                    <div className={styles.state}>
-                      <p className={styles.stateText}>
-                        The analysis failed.{status.error ? ` ${status.error}` : ''}
-                      </p>
-                      <button
-                        type="button"
-                        className={styles.action}
-                        onClick={analyse}
-                        disabled={starting}
-                      >
-                        {starting ? 'Starting…' : 'Try again'}
-                      </button>
+                  <div className={styles.card}>
+                    <div className={styles.legend}>
+                      <Swatch tone="pass" label="pass" />
+                      <Swatch tone="marginal" label="marginal" />
+                      <Swatch tone="reject" label="reject" />
+                      <span className={styles.legendNote}>
+                        each bar is the worst sub in its slice, toned by the verdict the
+                        server&rsquo;s reasons give that metric; dashed lines are the
+                        cutoffs this session was scored against — session-relative, so
+                        another night&rsquo;s are different numbers
+                      </span>
                     </div>
-                  )}
 
-                  {report && finished && selectedTarget && (
-                    <>
-                      <ReportHeader
-                        targetId={selectedTarget.target_id}
-                        displayName={selectedTarget.display_name}
-                        summary={report.summary}
-                        analysedAt={finished.analysed_at}
-                        stale={finished.status === 'stale'}
+                    <MetricChart
+                      eyebrow="Per-sub eccentricity across the session"
+                      subs={report.summary.subs}
+                      metric="eccentricity"
+                      totalSubs={report.summary.total}
+                      thresholds={thresholdLinesFor('eccentricity', report.summary.thresholds)}
+                    />
+
+                    <div className={styles.split}>
+                      <MetricChart
+                        eyebrow="Star count — cloud signal"
+                        subs={report.summary.subs}
+                        metric="star_count"
+                        height={44}
+                        totalSubs={report.summary.total}
+                        thresholds={thresholdLinesFor('star_count', report.summary.thresholds)}
                       />
+                      <div className={styles.divider} />
+                      <RejectionsByCause summary={report.summary} />
+                    </div>
+                  </div>
 
-                      {/* A stale report was a dead end: the only Analyse
-                          buttons lived in the not_analysed and failed
-                          branches, so once new subs arrived — an entirely
-                          ordinary thing to happen — the screen showed
-                          obsolete numbers with no way to refresh them, even
-                          though the start endpoint recomputes happily on a
-                          changed signature. */}
-                      {finished.status === 'stale' && (
-                        <div className={styles.staleBar}>
-                          <p className={styles.stateText}>
-                            New subs have arrived since this ran, so these numbers describe an
-                            older set. Re-analysing covers all{' '}
-                            {selectedTarget.sub_count} on disk now.
-                          </p>
-                          <button
-                            type="button"
-                            className={styles.action}
-                            onClick={analyse}
-                            disabled={starting}
-                          >
-                            {starting
-                              ? 'Starting…'
-                              : `Re-analyse ${selectedTarget.sub_count} subs`}
-                          </button>
+                  {(() => {
+                    // Filtering applies to the TABLE only. The charts show
+                    // the session's distribution and filtering them would
+                    // misrepresent it — a chart of only the rejects is not
+                    // a picture of the night.
+                    const visible = report.summary.subs.filter((s) => {
+                      const tone = toneFor(s.verdict)
+                      // An unrecognised verdict is never hidden — see FILTERS.
+                      return !FILTERS.some((f) => f.tone === tone) || !hidden.has(tone)
+                    })
+                    const countFor = (tone: QaTone) =>
+                      report.summary.subs.filter((s) => toneFor(s.verdict) === tone).length
+                    const openName =
+                      openSub?.targetId === selectedTarget.target_id ? openSub.name : null
+                    const open =
+                      openName == null
+                        ? undefined
+                        : report.summary.subs.find((s) => s.name === openName)
+
+                    return (
+                      <>
+                        <div className={styles.filterBar}>
+                          <span className={styles.filterLabel}>Show</span>
+                          {FILTERS.map(({ tone, label }) => {
+                            const on = !hidden.has(tone)
+                            return (
+                              <button
+                                key={tone}
+                                type="button"
+                                aria-pressed={on}
+                                className={`${styles.chip} ${styles[tone]} ${on ? styles.chipOn : ''}`}
+                                onClick={() =>
+                                  setHidden((prev) => {
+                                    const next = new Set(prev)
+                                    if (next.has(tone)) next.delete(tone)
+                                    else next.add(tone)
+                                    return next
+                                  })
+                                }
+                              >
+                                {label} <span className={styles.chipCount}>{countFor(tone)}</span>
+                              </button>
+                            )
+                          })}
                         </div>
-                      )}
 
-                      <div className={styles.card}>
-                        <div className={styles.legend}>
-                          <Swatch tone="pass" label="pass" />
-                          <Swatch tone="marginal" label="marginal" />
-                          <Swatch tone="reject" label="reject" />
-                          <span className={styles.legendNote}>
-                            bars toned by the server&rsquo;s verdict; dashed lines are the
-                            cutoffs this session was scored against — session-relative, so
-                            another night&rsquo;s are different numbers
-                          </span>
-                        </div>
-
-                        <MetricChart
-                          eyebrow="Per-sub eccentricity across the session"
-                          subs={report.summary.subs}
-                          metric="eccentricity"
-                          totalSubs={report.summary.total}
-                          thresholds={thresholdLinesFor('eccentricity', report.summary.thresholds)}
-                        />
-
-                        <div className={styles.split}>
-                          <MetricChart
-                            eyebrow="Star count — cloud signal"
-                            subs={report.summary.subs}
-                            metric="star_count"
-                            height={44}
-                            totalSubs={report.summary.total}
-                            thresholds={thresholdLinesFor(
-                              'star_count',
-                              report.summary.thresholds,
-                            )}
+                        {open && (
+                          <SubImageCard
+                            targetId={selectedTarget.target_id}
+                            sub={open}
+                            onClose={() => setOpenSub(null)}
                           />
-                          <div className={styles.divider} />
-                          <RejectionsByCause summary={report.summary} />
-                        </div>
-                      </div>
+                        )}
 
-                      {(() => {
-                        // Filtering applies to the TABLE only. The charts show
-                        // the session's distribution and filtering them would
-                        // misrepresent it — a chart of only the rejects is not
-                        // a picture of the night.
-                        const visible = report.summary.subs.filter((s) => {
-                          const tone = toneFor(s.verdict)
-                          // An unrecognised verdict is never hidden — see FILTERS.
-                          return !FILTERS.some((f) => f.tone === tone) || !hidden.has(tone)
-                        })
-                        const countFor = (tone: QaTone) =>
-                          report.summary.subs.filter((s) => toneFor(s.verdict) === tone).length
-
-                        return (
-                          <>
-                            <div className={styles.filterBar}>
-                              <span className={styles.filterLabel}>Show</span>
-                              {FILTERS.map(({ tone, label }) => {
-                                const on = !hidden.has(tone)
-                                return (
-                                  <button
-                                    key={tone}
-                                    type="button"
-                                    aria-pressed={on}
-                                    className={`${styles.chip} ${styles[tone]} ${on ? styles.chipOn : ''}`}
-                                    onClick={() =>
-                                      setHidden((prev) => {
-                                        const next = new Set(prev)
-                                        if (next.has(tone)) next.delete(tone)
-                                        else next.add(tone)
-                                        return next
-                                      })
-                                    }
-                                  >
-                                    {label} <span className={styles.chipCount}>{countFor(tone)}</span>
-                                  </button>
-                                )
-                              })}
-                            </div>
-
-                            {openSub?.targetId === selectedTarget.target_id && (
-                              <SubImageCard
-                                targetId={openSub.targetId}
-                                sub={openSub.sub}
-                                onClose={() => setOpenSub(null)}
-                              />
-                            )}
-
-                            <SubTable
-                              subs={visible}
-                              totalUnfiltered={report.summary.subs.length}
-                              onSelect={(sub) =>
-                                setOpenSub({ targetId: selectedTarget.target_id, sub })
-                              }
-                              selectedName={
-                                openSub?.targetId === selectedTarget.target_id
-                                  ? openSub.sub.name
-                                  : null
-                              }
-                            />
-                          </>
-                        )
-                      })()}
-                    </>
-                  )}
+                        <SubTable
+                          subs={visible}
+                          totalUnfiltered={report.summary.subs.length}
+                          onSelect={(sub) =>
+                            setOpenSub({ targetId: selectedTarget.target_id, name: sub.name })
+                          }
+                          selectedName={open ? open.name : null}
+                        />
+                      </>
+                    )
+                  })()}
                 </>
               )}
 
-              {error && status?.status !== 'failed' && (
-                <p className={styles.errorNote}>{error}</p>
-              )}
+              {note && <ErrorNote text={note} />}
             </div>
           </div>
         )}

@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 
 import { Tier2Schema, type QaTarget } from '../../api/schemas'
 import { MobileReviewView } from './MobileReviewView'
+import { makeSub } from './testReasons'
 
 const summary = Tier2Schema.parse(
   JSON.parse(readFileSync(resolve(__dirname, '../../../../fixtures/qa_tier2.subs.json'), 'utf-8')),
@@ -90,5 +91,22 @@ describe('MobileReviewView', () => {
     view()
 
     expect(screen.getByText(/showing 6 of 25/)).toBeInTheDocument()
+  })
+})
+
+describe('MobileReviewView — a sub with no reasons', () => {
+  it('says "clears every gate" only for a PASS', () => {
+    view({
+      summary: {
+        ...summary,
+        subs: [
+          makeSub('p', 'PASS', [], { eccentricity: 0.4 }),
+          makeSub('r', 'REJECT', [], { eccentricity: 0.4 }),
+        ],
+      },
+    })
+
+    expect(screen.getAllByText(/clears every gate/i)).toHaveLength(1)
+    expect(screen.getByText(/no reason given/i)).toBeInTheDocument()
   })
 })

@@ -13,12 +13,42 @@ import styles from './PlanCard.module.css'
  * may parse back out. `null` when the id has no projects_combined entry at
  * all (a target genuinely never observed, or a Caldwell/alias id — like
  * "C14" vs the union's "C14_DoubleCluster" — the two sources don't yet
- * agree on): renders no progress row at all rather than a fabricated zero.
+ * agree on; a server-side id mismatch, handed back rather than papered over
+ * with an alias table here): renders no progress row at all rather than a
+ * fabricated zero, and Detail's reason is qualified by the id.
  * Never doubled here — the doubling control is a Projects-screen concept
  * (see doubling.ts); Tonight shows the model's own number as-is. */
 export interface PlanCardProgress {
   totalMinutes: number
   goal: IntegrationGoal | null
+}
+
+/**
+ * Why Detail is disabled, when it is — each says only what is actually known:
+ *
+ * - `checking`: the projects_combined lookup has not answered yet.
+ * - `lookup-failed`: it failed, so whether there are subs is UNKNOWN. Saying
+ *   "no subs on disk" here would be a claim about the disk nobody checked.
+ * - `no-entry`: nothing on record under THIS id. Usually a target never
+ *   shot — but a Caldwell/alias id (plan_targets' "C14" vs the union's
+ *   "C14_DoubleCluster") misses the same way, so the message is qualified
+ *   by the id rather than asserting the target has no subs.
+ * - `no-subs`: on record, with no archive minutes: nothing to score.
+ */
+export type ReviewUnavailable = 'checking' | 'lookup-failed' | 'no-entry' | 'no-subs'
+
+function detailTitle(id: string, reason: ReviewUnavailable | undefined): string {
+  switch (reason) {
+    case 'checking':
+      return `Checking whether ${id} has subs on disk…`
+    case 'lookup-failed':
+      return `Could not check whether ${id} has subs on disk — the projects_combined lookup failed`
+    case 'no-entry':
+      return `No archive entry under the id ${id} — nothing to review under that name`
+    case 'no-subs':
+    default:
+      return `No subs on disk for ${id} yet — nothing to review`
+  }
 }
 
 /**
@@ -38,6 +68,7 @@ export function PlanCard({
   target,
   progress = null,
   onOpenQa,
+  reviewUnavailable,
   verdicts,
 }: {
   target: PlanTarget
@@ -54,6 +85,9 @@ export function PlanCard({
    * a screen that would silently ignore the target (useQaReview drops a
    * pending target it cannot find, which would look like a dead button). */
   onOpenQa?: () => void
+  /** Why Detail is disabled when `onOpenQa` is absent — see
+   * ReviewUnavailable. Defaults to `no-subs`. */
+  reviewUnavailable?: ReviewUnavailable
 }) {
   const [from, to] = target.best_window_utc
   const reasons = target.reasons.filter((r) => !r.startsWith('best window '))
@@ -169,9 +203,7 @@ export function PlanCard({
           onClick={onOpenQa}
           disabled={!onOpenQa}
           title={
-            onOpenQa
-              ? `Open ${target.id} on Review & QA`
-              : `No subs on disk for ${target.id} yet — nothing to review`
+            onOpenQa ? `Open ${target.id} on Review & QA` : detailTitle(target.id, reviewUnavailable)
           }
         >
           Detail

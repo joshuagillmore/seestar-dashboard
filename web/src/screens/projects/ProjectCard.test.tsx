@@ -248,7 +248,9 @@ describe('ProjectCard', () => {
     expect(fill.style.width).toBe('50%')
     expect(screen.getByText('needs data')).toBeInTheDocument()
 
-    const complete = merged({ totalMinutes: 90, goal: goal({ suggested_hours: 1.0 }) }) // 150%, clamped
+    // Archive-only: with no server record, completion is the goal model's to
+    // state. (A store project's tag follows the server's status instead.)
+    const complete = merged({ store: null, totalMinutes: 90, goal: goal({ suggested_hours: 1.0 }) }) // 150%, clamped
     const { container } = render(<ProjectCard project={complete} selected={false} onSelect={vi.fn()} />)
     const completeFill = container.querySelector('[data-testid="progress-track"]')?.firstElementChild as HTMLElement
     expect(completeFill.style.width).toBe('100%')
@@ -280,7 +282,12 @@ describe('ProjectCard', () => {
       expect(m27.goal?.coarse).toBe(true)
       render(<ProjectCard project={m27} selected={false} onSelect={vi.fn()} />)
       expect(screen.getByText('of ~1.0 h suggested')).toBeInTheDocument()
-      expect(screen.getByText('complete')).toBeInTheDocument() // store-backed, so the tag itself reflects completion
+      // Store-backed and "active" on the server: the card must not contradict
+      // that by calling it complete. The bar still shows the suggested
+      // figure met — that is what the bar measures.
+      expect(screen.queryByText('complete')).not.toBeInTheDocument()
+      const tag = screen.getByText('active')
+      expect(tag.title).toMatch(/suggested/)
       const fill = screen.getByTestId('progress-track').firstElementChild as HTMLElement
       expect(fill.style.width).toBe('100%')
     })
@@ -322,6 +329,62 @@ describe('ProjectCard', () => {
     render(<ProjectCard project={merged()} selected={false} onSelect={onSelect} />)
     fireEvent.click(screen.getByTestId('project-card'))
     expect(onSelect).toHaveBeenCalledTimes(1)
+  })
+
+  describe('with a quality bar that opens the QA report', () => {
+    const verdicts = { pass: 10, marginal: 5, reject: 5, unknown: 0, total: 20 }
+
+    it('never nests one interactive element inside another', () => {
+      // A <button> inside the card's own <button> is invalid DOM, and the
+      // inner click bubbled into onSelect.
+      const { container } = render(
+        <ProjectCard
+          project={merged()}
+          selected={false}
+          onSelect={vi.fn()}
+          verdicts={verdicts}
+          onOpenQa={vi.fn()}
+        />,
+      )
+
+      expect(container.querySelectorAll('button button, button a, a button, a a')).toHaveLength(0)
+    })
+
+    it('opens the report without also selecting the card', () => {
+      const onSelect = vi.fn()
+      const onOpenQa = vi.fn()
+      render(
+        <ProjectCard
+          project={merged()}
+          selected={false}
+          onSelect={onSelect}
+          verdicts={verdicts}
+          onOpenQa={onOpenQa}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /keepable/ }))
+
+      expect(onOpenQa).toHaveBeenCalledOnce()
+      expect(onSelect).not.toHaveBeenCalled()
+    })
+
+    it('still selects the card from its own control', () => {
+      const onSelect = vi.fn()
+      render(
+        <ProjectCard
+          project={merged()}
+          selected={false}
+          onSelect={onSelect}
+          verdicts={verdicts}
+          onOpenQa={vi.fn()}
+        />,
+      )
+
+      fireEvent.click(screen.getByTestId('project-card'))
+
+      expect(onSelect).toHaveBeenCalledOnce()
+    })
   })
 
   it('reflects the selected prop via aria-pressed on the card, not the doubling toggle', () => {
