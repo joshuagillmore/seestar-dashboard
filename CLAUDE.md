@@ -124,10 +124,20 @@ legible in the UI rather than reducing it to a colour.
   with side effects has no route at all. Never add one to make a screen easier.
 - Add a real test gate early; this repo is a candidate for orchestrated
   refinement, which requires a fast deterministic gate. The gate as it stands
-  is `npm test` + `npm run build` in `web/` and `uv run pytest` in `sidecar/`.
+  is `npm run lint` (oxlint; warnings pass, errors fail) + `npm test` +
+  `npm run build` in `web/`, and `uv run pytest` in `sidecar/`. Run `web/`
+  first: two tests in `sidecar/tests/test_allowlist.py` expect a built
+  `web/dist`, and fail on a fresh checkout without one.
   **`npx tsc --noEmit` checks nothing here** — the root `tsconfig.json` is a
   solution file with `"files": []`, so it exits 0 having read no source. Use
   `tsc -b`, which `npm run build` already runs.
+  - **CI** (`.github/workflows/ci.yml`) runs that gate on ubuntu-latest (Node
+    LTS, Python 3.12) for pushes and pull requests to `main`. It uses Linux,
+    UTC and LF line endings, where development here is Windows, a local
+    timezone and `core.autocrlf`. A test that only passes because of one of
+    those will fail there. Added 2026-09-23. Before its first run on GitHub it
+    was checked only by running the same commands in Linux containers against
+    an LF export of the tree.
 - **Playwright was planned for slice 2 and never adopted.** Slices 1–4 shipped
   without it; browser behaviour is verified by hand instead. Worth knowing
   before writing a plan that assumes an e2e layer exists — there is none, so
