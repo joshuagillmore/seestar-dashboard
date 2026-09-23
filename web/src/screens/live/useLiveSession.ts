@@ -22,7 +22,7 @@ import type {
   ViewState,
 } from '../../api/schemas'
 import { appendTelemetryEntry, type TelemetryEntry } from './telemetryLog'
-import { shouldFetchLastStack } from './lastStack'
+import { lastStackIsSettled, shouldFetchLastStack } from './lastStack'
 
 /**
  * How often the screen re-checks scope/session state and re-polls the
@@ -434,11 +434,14 @@ export function useLiveSession(): LiveSessionState {
       // Target-gated, not poll-gated — see shouldFetchLastStack's own doc
       // comment. A poll where the target hasn't changed reuses whatever is
       // already in lastStackRef rather than re-requesting a ~730 KB image.
+      // The target is recorded as done only once the answer settles it (see
+      // lastStackIsSettled); a transient failure is shown this poll and
+      // asked again the next.
       if (target !== null && shouldFetchLastStack(target, lastStackTargetRef.current)) {
         const lastStack = await fetchLastStack(target).catch(() => null)
         if (cancelled) return
-        lastStackTargetRef.current = target
         lastStackRef.current = lastStack
+        if (lastStackIsSettled(lastStack)) lastStackTargetRef.current = target
       }
 
       if (tier1) logRef.current = appendTelemetryEntry(logRef.current, tier1)

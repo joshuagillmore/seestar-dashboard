@@ -12,10 +12,27 @@ import { parse } from '../tonight/timeline'
  *
  * `target: null` means nothing has resolved a current target yet, so there
  * is nothing to fetch for. `fetchedFor` is the target the caller already has
- * a result for (or attempted); a `null` current target never overwrites it.
+ * a SETTLED result for (see `lastStackIsSettled` — a failed attempt does not
+ * count); a `null` current target never overwrites it.
  */
 export function shouldFetchLastStack(target: string | null, fetchedFor: string | null): boolean {
   return target !== null && target !== fetchedFor
+}
+
+/**
+ * Whether a `/api/last_stack` answer settles the question for its target, so
+ * the caller may stop asking until the target changes. Only two answers do:
+ * a stack was found, or the share was read and holds none (`no_stack`).
+ *
+ * Everything else — a rejected fetch (`null`), `share_unreachable`,
+ * `bridge_down`, `idle` (the sidecar's own view check racing ours) — is a
+ * transient failure to find out. The target used to be recorded before the
+ * fetch, so one such hiccup was never retried for that target and the panel
+ * said "unreachable" for the rest of the night.
+ */
+export function lastStackIsSettled(lastStack: LastStack | null): boolean {
+  if (lastStack === null) return false
+  return lastStack.target !== null || lastStack.reason === 'no_stack'
 }
 
 /** Jan/Feb/… — spelled out rather than reached for via `Intl` so the render

@@ -135,6 +135,46 @@ describe('the idle back-off and a session driven by hand', () => {
   })
 })
 
+describe('the last completed stack is fetched until it actually answers', () => {
+  // Fetched per target, not per poll (a ~730 KB JPEG). The target used to be
+  // recorded BEFORE the fetch, so one transient failure was never retried
+  // for that target: the panel stayed on "unreachable" all night.
+  const absent = (reason: string) => ok({ ok: true, target: null, captured_at: null, frame_count: null, url: '/api/last_stack/image', reason })
+
+  it.each([
+    ['the share was unreachable', absent('share_unreachable')],
+    ['the bridge was down', absent('bridge_down')],
+    ['the sidecar saw the scope idle (a race with our own check)', absent('idle')],
+    ['the request itself failed', fail('sidecar hiccup')],
+  ])('retries on the next poll when %s', async (_label, firstReply) => {
+    const api = stubRoutes({ ...activeRoutes(), '/api/last_stack': firstReply })
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+    expect(api.urls('last_stack')).toHaveLength(1)
+
+    api.routes['/api/last_stack'] = ok(lastStackFound())
+    await tick(POLL_INTERVAL_MS)
+
+    expect(api.urls('last_stack')).toHaveLength(2)
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.lastStack?.frame_count).toBe(178)
+  })
+
+  it.each([
+    ['a stack was found', ok(lastStackFound())],
+    ['there is no completed stack for this target yet', absent('no_stack')],
+  ])('does not ask again for the same target once %s', async (_label, reply) => {
+    const api = stubRoutes({ ...activeRoutes(), '/api/last_stack': reply })
+    renderHook(() => useLiveSession())
+    await tick()
+    await tick(POLL_INTERVAL_MS)
+    await tick(POLL_INTERVAL_MS)
+
+    expect(api.urls('last_stack')).toHaveLength(1)
+  })
+})
+
 describe('per-session state does not outlive the session', () => {
   it.each([
     ['get_view_state reports no View', () => ok(noView())],

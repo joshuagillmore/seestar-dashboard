@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { LastStack } from '../../api/schemas'
-import { MONTH_ABBR, formatStackDate, lastStackImageSrc, shouldFetchLastStack } from './lastStack'
+import {
+  MONTH_ABBR,
+  formatStackDate,
+  lastStackImageSrc,
+  lastStackIsSettled,
+  shouldFetchLastStack,
+} from './lastStack'
 
 describe('shouldFetchLastStack', () => {
   it('does not fetch when no target has resolved yet', () => {
@@ -21,6 +27,31 @@ describe('shouldFetchLastStack', () => {
 
   it('does not fetch when the target disappears again (a momentary preview hiccup) — the caller keeps its prior result', () => {
     expect(shouldFetchLastStack(null, 'M27')).toBe(false)
+  })
+})
+
+describe('lastStackIsSettled', () => {
+  const absent = (reason: string): LastStack => ({
+    ok: true,
+    target: null,
+    captured_at: null,
+    frame_count: null,
+    url: '/api/last_stack/image',
+    reason,
+  })
+
+  it('settles on a found stack and on an honest "none yet"', () => {
+    expect(
+      lastStackIsSettled({ ok: true, target: 'M27', captured_at: '2026-07-12T21:44:10Z', frame_count: 178, url: '/api/last_stack/image', reason: null }),
+    ).toBe(true)
+    expect(lastStackIsSettled(absent('no_stack'))).toBe(true)
+  })
+
+  it('does not settle on a failure to find out', () => {
+    expect(lastStackIsSettled(null)).toBe(false)
+    for (const reason of ['share_unreachable', 'bridge_down', 'idle', 'not_configured']) {
+      expect(lastStackIsSettled(absent(reason))).toBe(false)
+    }
   })
 })
 
