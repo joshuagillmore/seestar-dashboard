@@ -18,7 +18,7 @@ import { useMediaQuery } from '../../shell/useMediaQuery'
 import type { View } from '../../shell/view'
 import { setPendingReviewTarget } from '../review/pendingTarget'
 import { MobileTonightView } from './MobileTonightView'
-import { PlanCard } from './PlanCard'
+import { PlanCard, type ReviewUnavailable } from './PlanCard'
 import { shortlistOrderLabel } from './shortlist'
 import { SweetBandTimeline } from './SweetBandTimeline'
 import { VerdictBanner } from './VerdictBanner'
@@ -46,6 +46,17 @@ function canReview(entry: ProjectsCombinedEntry | undefined): boolean {
   return entry != null && entry.archive_minutes > 0
 }
 
+/** Why Detail is disabled for a target `canReview` rejected — only what is
+ * actually known. A failed or pending lookup says nothing about the disk. */
+function reviewUnavailable(
+  lookup: 'loading' | 'ok' | 'failed',
+  entry: ProjectsCombinedEntry | undefined,
+): ReviewUnavailable {
+  if (lookup === 'loading') return 'checking'
+  if (lookup === 'failed') return 'lookup-failed'
+  return entry == null ? 'no-entry' : 'no-subs'
+}
+
 export interface TonightScreenProps {
   view: View
   onNavigate: (view: View) => void
@@ -66,6 +77,10 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
   // it, so a failure here degrades every card to "no progress bar" instead
   // of taking down Tonight the way a conditions/plan failure does.
   const [progressById, setProgressById] = useState<Map<string, ProjectsCombinedEntry>>(new Map())
+  // Whether that lookup has answered. An empty map means three different
+  // things — not yet, failed, or genuinely nothing — and Detail's disabled
+  // reason must not claim "no subs on disk" for the first two.
+  const [progressLookup, setProgressLookup] = useState<'loading' | 'ok' | 'failed'>('loading')
   // Keyed by target_id — the quality bar under each card's progress bar.
   // Same soft-fail contract as progressById: this is context on a screen that
   // is already useful without it, so a failure leaves the bars off rather
@@ -103,9 +118,12 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
       .then((combined) => {
         if (cancelled) return
         setProgressById(new Map(combined.projects.map((p) => [p.target_id, p])))
+        setProgressLookup('ok')
       })
       .catch(() => {
-        // Soft-fail by design — see the state's own doc comment above.
+        // Soft-fail by design — see the state's own doc comment above. The
+        // cards lose their progress rows; Detail says the lookup failed.
+        if (!cancelled) setProgressLookup('failed')
       })
     return () => {
       cancelled = true
@@ -248,6 +266,7 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
                         target={target}
                         progress={entry ? { totalMinutes: entry.total_minutes, goal: entry.goal } : null}
                         onOpenQa={canReview(entry) ? () => openQa(target.id) : undefined}
+                        reviewUnavailable={reviewUnavailable(progressLookup, entry)}
                         verdicts={verdictsById.get(target.id)}
                       />
                     )

@@ -34,7 +34,7 @@ def _run_start(monkeypatch) -> dict:
         yield ("read", "write")
 
     class FakeSession:
-        def __init__(self, read, write):
+        def __init__(self, read, write, **kwargs):
             pass
 
         async def __aenter__(self):
@@ -51,7 +51,12 @@ def _run_start(monkeypatch) -> dict:
     monkeypatch.setattr(mcp_proxy, "ClientSession", FakeSession)
 
     conn = mcp_proxy.McpConnection("uv", ["run", "server"])
-    asyncio.run(conn.start())
+
+    async def start_then_close():
+        await conn.start()
+        await conn.aclose()
+
+    asyncio.run(start_then_close())
     return captured
 
 

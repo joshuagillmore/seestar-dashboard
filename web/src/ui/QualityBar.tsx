@@ -43,7 +43,12 @@ export function QualityBar({ verdicts, onOpen }: QualityBarProps) {
   if (total === 0) return null
 
   const pct = (n: number) => (n / total) * 100
-  const keepable = verdicts.pass + verdicts.marginal
+  // The SERVER's keep rule, not one of ours: qa_tier2's keep_list is every
+  // sub whose verdict is not REJECT — so an unrecognised verdict is kept
+  // too, which `pass + marginal` silently dropped. This payload
+  // (`/api/qa_targets` verdict_counts) carries no kept count to read
+  // instead, so it is the complement of the one verdict the server drops.
+  const keepable = total - verdicts.reject
 
   const bar = (
     <div className={styles.track} data-testid="quality-bar">

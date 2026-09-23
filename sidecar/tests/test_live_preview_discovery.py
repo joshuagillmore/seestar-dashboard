@@ -242,7 +242,6 @@ async def test_discover_frame_within_timeout_raises_share_unreachable_on_real_ti
     proves the asyncio.wait_for ceiling actually fires, not just that OSError
     is caught.
     """
-    import asyncio
 
     share_root.mkdir()
 

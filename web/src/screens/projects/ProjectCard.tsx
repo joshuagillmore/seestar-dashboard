@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { goalLabel as describeGoalLabel, hasNumericGoal } from '../../api/integrationGoal'
 import type { QaVerdictCounts } from '../../api/schemas'
 import { TargetThumb } from '../../ui/TargetThumb'
@@ -23,6 +23,10 @@ const TAG_CLASS: Record<ProjectTag, string> = {
   'beyond-reach': styles.tagNoGoal,
   'needs-data': styles.tagNeedsData,
   complete: styles.tagComplete,
+  // The server's own list_projects status, shown because it disagrees with
+  // what the suggested goal alone would say (see projectStatus). Neutral: it
+  // is the server's word, not a judgement of ours.
+  'server-status': styles.tagNoGoal,
 }
 
 const FWHM_ABSENT_TITLE =
@@ -56,12 +60,22 @@ export interface ProjectCardProps {
  * the label text and its title, per the design's own gap here (see
  * integrationGoal.ts's describeGoal).
  *
+ * **No interactive element nests inside another.** The card used to BE a
+ * `<button>`, and the quality bar's "open the QA report" button sat inside
+ * it — invalid DOM, and its click bubbled into onSelect, persisting a
+ * selection nobody asked for. Now the card is a plain box and selection is
+ * its own `<button>` (`.selectArea`), stretched over the whole card beneath
+ * the content, so the whole card still selects on click. Controls that must
+ * sit above it — the quality bar — are raised out of its way, siblings in
+ * the DOM rather than children of it. So is every element with a tooltip
+ * (the status tag, the goal label, the FWHM note on the meta line): beneath
+ * the button, hovering them hovered the button and the title never showed.
+ * Their text is also the button's accessible description.
+ *
  * The doubling toggle (view-only, localStorage-persisted — see doubling.ts)
- * sits as a sibling overlay, not nested inside the card's own selection
- * button: two nested `<button>`s is invalid content and would double-fire
- * clicks, so the toggle is a separate button absolutely positioned inside
- * the card's own rounded box (top-right corner), only rendered when there is
- * a real number to double. `titleRowReserved` reserves the matching
+ * sits the same way: a separate button absolutely positioned inside the
+ * card's own rounded box (top-right corner), only rendered when there is a
+ * real number to double. `titleRowReserved` reserves the matching
  * horizontal space in the title row so the toggle never overlaps the status
  * tag, which also lives in that corner.
  *
@@ -83,27 +97,63 @@ export function ProjectCard({
   const summary = summarizeSessions(project)
   const goal = describeGoalLabel(project.goal, doubled)
   const canDouble = hasNumericGoal(project.goal)
+  const metaTitle = summary?.fwhmAbsent ? FWHM_ABSENT_TITLE : undefined
+  // Every tooltip on the card, also given to the select button as its
+  // accessible description: a keyboard or screen-reader user reaches the
+  // card through that button and never hovers anything.
+  // A survey cover's credit is attribution the survey requires (TargetThumb's
+  // doc); under .selectArea its title could never be hovered either.
+  const surveyCredit =
+    project.image?.source === 'survey' ? `Survey image: ${project.image.credit ?? 'sky survey'}` : undefined
+  const tips = [status.title, goal.title, metaTitle, surveyCredit].filter((t): t is string => !!t)
+  const tipsId = useId()
+  // A titled element is raised above .selectArea (see `.tip` in the CSS) so
+  // hovering it shows its title. Raised, it takes the click the button
+  // beneath it would have had; forwarding it keeps "click anywhere selects".
+  const tipClass = (title: string | undefined) => (title ? ` ${styles.tip}` : '')
+  const tipProps = (title: string | undefined) => (title ? { title, onClick: onSelect } : {})
 
   return (
     <div className={styles.cardWrap}>
-      <button
-        type="button"
-        className={`${styles.card} ${selected ? styles.selected : ''}`}
-        aria-pressed={selected}
-        onClick={onSelect}
-        data-testid="project-card"
-      >
-        <TargetThumb image={project.image} alt={project.targetName} className={styles.cover} />
+      <div className={`${styles.card} ${selected ? styles.selected : ''}`}>
+        {/* Selection. Empty and stretched over the whole card, so clicking
+            anywhere on it selects — without making the card itself a
+            button that other controls would have to nest inside. */}
+        <button
+          type="button"
+          className={styles.selectArea}
+          aria-pressed={selected}
+          aria-label={`${project.targetId} — ${project.targetName}`}
+          aria-describedby={tips.length > 0 ? tipsId : undefined}
+          onClick={onSelect}
+          data-testid="project-card"
+        />
+        {tips.length > 0 && (
+          <span id={tipsId} className={styles.srOnly}>
+            {tips.join(' ')}
+          </span>
+        )}
+        <TargetThumb
+          image={project.image}
+          alt={project.targetName}
+          className={`${styles.cover}${tipClass(surveyCredit)}`}
+          onClick={surveyCredit ? onSelect : undefined}
+        />
         <div className={styles.body}>
           <div className={`${styles.titleRow} ${canDouble ? styles.titleRowReserved : ''}`}>
             <span className={styles.id}>{project.targetId}</span>
-            <span className={`${styles.tag} ${TAG_CLASS[status.tag]}`}>{status.label}</span>
+            <span
+              className={`${styles.tag} ${TAG_CLASS[status.tag]}${tipClass(status.title)}`}
+              {...tipProps(status.title)}
+            >
+              {status.label}
+            </span>
           </div>
           <div className={styles.name}>{project.targetName}</div>
           <div className={styles.spacer} />
           <div className={styles.hoursRow}>
             <span className={styles.hours}>{formatHours(project.totalMinutes)}</span>
-            <span className={styles.goal} title={goal.title}>
+            <span className={`${styles.goal}${tipClass(goal.title)}`} {...tipProps(goal.title)}>
               {goal.text}
             </span>
           </div>
@@ -112,11 +162,12 @@ export function ProjectCard({
             data-testid="progress-track"
           >
             {pct !== null && (
-              // `pct` and `status.tag` ('complete' vs 'needs-data') always
-              // agree now that completion is driven purely by the goal math
-              // (see projectStatus) — this keys the fill color off `pct`
-              // directly simply because it's already in scope here, not
-              // because the two can diverge.
+              // The bar measures captured time against the SUGGESTED goal,
+              // so its fill says whether that suggestion is met — `pct` is
+              // 100 only when goalMet is true (integrationGoal.ts). It can
+              // now differ from the tag, deliberately: a store project the
+              // server still lists as "active" shows a met suggestion here
+              // and the server's "active" in the tag.
               <div
                 className={`${styles.fill} ${pct >= 100 ? styles.fillComplete : styles.fillProgress}`}
                 style={{ width: `${pct}%` }}
@@ -129,20 +180,18 @@ export function ProjectCard({
               time and be mostly rejects. Rendered only when the target has
               actually been analysed. */}
           {verdicts && (
-            <QualityBar
-              verdicts={verdicts}
-              onOpen={onOpenQa}
-            />
+            // Raised above the selection area, so its own button takes the
+            // click and the card is not selected along with it.
+            <div className={styles.raised}>
+              <QualityBar verdicts={verdicts} onOpen={onOpenQa} />
+            </div>
           )}
           <div className={styles.provenance}>{provenanceLabel(project)}</div>
-          <div
-            className={styles.meta}
-            title={summary?.fwhmAbsent ? FWHM_ABSENT_TITLE : undefined}
-          >
+          <div className={`${styles.meta}${tipClass(metaTitle)}`} {...tipProps(metaTitle)}>
             {summary ? summary.text : 'archive only — no per-session detail (aggregate minutes only)'}
           </div>
         </div>
-      </button>
+      </div>
       {canDouble && (
         <button
           type="button"

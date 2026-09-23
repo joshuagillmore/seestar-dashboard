@@ -144,7 +144,16 @@ def start_analysis(client, target: str):
     )
 
 
-def _wait_until_not_running(client, target="M31", timeout_s=2.0):
+#: A hang detector, not an assertion: the stubbed jobs finish in
+#: milliseconds, so this only ever expires when something is genuinely stuck.
+#: It was 2 s — close enough to a loaded machine's scheduling jitter to fail
+#: a correct suite now and then, the same flake 0343b75 fixed in the web
+#: suite. Widening it costs no coverage; a passing wait returns as soon as the
+#: job leaves "running".
+WAIT_FOR_JOB_TIMEOUT_S = 10.0
+
+
+def _wait_until_not_running(client, target="M31", timeout_s=WAIT_FOR_JOB_TIMEOUT_S):
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         body = client.get(f"/api/qa_analysis_status?target={target}").json()
@@ -231,7 +240,7 @@ def test_qa_analysis_start_returns_running_immediately_then_completes(app_factor
         start_body = start.json()
         assert start_body["ok"] is True
         assert start_body["status"] == "running"
-        assert "report" not in start_body  # qa_analysis_start never embeds the report
+        assert "report" not in start_body  # a start that launched a job has none yet
 
         final = _wait_until_not_running(client)
 
@@ -518,3 +527,282 @@ def test_verdict_counts_are_withheld_once_the_sub_set_changes(
 
     assert stale["status"] == "stale"
     assert "verdicts" not in stale, "a stale report must not carry an unqualified count"
+
+
+# --- qa_analysis_start contract: refusals and short-circuits ----------------
+
+
+def test_starting_past_the_concurrency_limit_is_a_429_not_a_failed_job(
+    app_factory, synthetic_archive, monkeypatch
+):
+    """A refusal is not a job state. It used to come back as a 200 with
+    status "failed", which the client could not tell from an analysis that
+    ran and failed — and which replaced the stale report it was showing."""
+    import asyncio
+
+    from seestar_sidecar import qa_analysis
+
+    for name in ("M 33", "M 42"):
+        subs = synthetic_archive / f"{name}-sub"
+        subs.mkdir()
+        _write_light_fit(subs, name, "20240102", "172320")
+
+    async def never_finishes(app, tool, arguments):
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", never_finishes)
+    with TestClient(app_factory()) as client:
+        assert start_analysis(client, "M33").json()["status"] == "running"
+        assert start_analysis(client, "M42").json()["status"] == "running"
+        refused = start_analysis(client, "M31")
+        after = client.get("/api/qa_analysis_status?target=M31").json()
+
+    assert refused.status_code == 429
+    body = refused.json()
+    assert set(body) == {"ok", "error"}
+    assert body["ok"] is False
+    assert f"(limit {qa_analysis.MAX_CONCURRENT_ANALYSES})" in body["error"]
+    # Nothing was registered for the refused target.
+    assert after["status"] == "not_analysed"
+
+
+def test_a_start_answered_from_the_cache_carries_the_report(app_factory, monkeypatch):
+    """When start short-circuits on a finished analysis of the current sub
+    set, it returns that report exactly as qa_analysis_status would, so the
+    client need not poll once more just to fetch what start already knew."""
+    async def record(app, tool, arguments):
+        return REAL_REPORT
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", record)
+    with TestClient(app_factory()) as client:
+        start_analysis(client, "M31")
+        _wait_until_not_running(client)
+        again = start_analysis(client, "M31").json()
+        polled = client.get("/api/qa_analysis_status?target=M31").json()
+
+    assert again["status"] == "complete"
+    assert again["report"] == REAL_REPORT
+    assert again == polled
+
+
+def test_a_start_answered_from_the_disk_cache_after_a_restart_carries_the_report(
+    app_factory, monkeypatch
+):
+    async def record(app, tool, arguments):
+        return REAL_REPORT
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", record)
+    with TestClient(app_factory()) as client:
+        start_analysis(client, "M31")
+        _wait_until_not_running(client)
+
+    def boom(app, tool, arguments):
+        raise AssertionError("a disk-cache hit must not re-run the analysis")
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", boom)
+    with TestClient(app_factory()) as client:  # fresh registry, same cache dir
+        again = start_analysis(client, "M31").json()
+
+    assert again["status"] == "complete"
+    assert again["report"] == REAL_REPORT
+
+
+# --- target-id validation: the cache path is built from `target` -----------
+#
+# qa_analysis builds `cache_dir / f"{target}.json"` from the query string.
+# Unchecked, `../x` read a file outside the cache, and `//host/share/x` made
+# Windows open an SMB connection to an attacker's host — leaking the user's
+# NTLM hash — from nothing more than an <img> tag on any page they had open.
+
+#: Every shape that must never reach a filesystem path: parent traversal in
+#: both separator styles, an absolute path, a drive path, a UNC path in both
+#: separator styles, and an NTFS alternate-data-stream suffix.
+HOSTILE_TARGETS = [
+    "../outside",
+    "..\\outside",
+    "sub/../../outside",
+    "/etc/outside",
+    "C:/outside",
+    "C:outside",
+    "//attacker.example/share/x",
+    "\\\\attacker.example\\share\\x",
+    "M31:stream",
+]
+
+
+@pytest.mark.parametrize("target", HOSTILE_TARGETS)
+def test_qa_analysis_status_refuses_a_path_shaped_target(app_factory, monkeypatch, target):
+    touched = []
+
+    def spy(cache_dir, target_id):
+        touched.append(target_id)
+        return None
+
+    # The refusal must happen before anything builds a path from `target`,
+    # not after a read that happened to find nothing.
+    monkeypatch.setattr(routes.qa_analysis, "load_cached_report", spy)
+    monkeypatch.setattr(routes.qa_analysis, "load_inflight", spy)
+    with TestClient(app_factory()) as client:
+        response = client.get("/api/qa_analysis_status", params={"target": target})
+
+    assert response.status_code == 404
+    assert response.json()["ok"] is False
+    assert touched == []
+
+
+def test_a_traversal_target_cannot_read_a_report_outside_the_cache(app_factory, tmp_path):
+    """The concrete exploit, end to end: a file shaped like a cache entry
+    sitting one directory above the cache used to come back as a report."""
+    import json
+
+    (tmp_path / "planted.json").write_text(
+        json.dumps({"target_id": "x", "signature": "s", "analysed_at": "t", "result": {"leak": 1}}),
+        encoding="utf-8",
+    )
+    with TestClient(app_factory()) as client:
+        response = client.get("/api/qa_analysis_status", params={"target": "../planted"})
+
+    assert response.status_code == 404
+    assert "leak" not in response.text
+
+
+@pytest.mark.parametrize("target", HOSTILE_TARGETS)
+def test_qa_analysis_start_refuses_a_path_shaped_target(app_factory, monkeypatch, target):
+    def boom(app, tool, arguments):
+        raise AssertionError("must not reach the tool for a path-shaped target")
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", boom)
+    with TestClient(app_factory()) as client:
+        response = client.post(
+            "/api/qa_analysis_start",
+            params={"target": target},
+            headers={routes.CLIENT_HEADER: "test"},
+        )
+
+    assert response.status_code == 404
+    assert response.json()["ok"] is False
+
+
+# --- real archive ids the plausible-id pattern does not cover ---------------
+#
+# The id check above is a whitelist of characters, and a real archive
+# directory can hold others: "Thor's Helmet_sub" normalises to "Thor'sHelmet".
+# qa_targets listed it, and both QA routes 404'd it, so it could never be
+# analysed. An id the archive scan itself produced is accepted as well; the
+# cache path is still checked lexically in qa_analysis (see _contained).
+
+APOSTROPHE_ID = "Thor'sHelmet"
+
+
+@pytest.fixture
+def apostrophe_archive(tmp_path):
+    root = tmp_path / "archive-apostrophe"
+    subs = root / "Thor's Helmet_sub"
+    subs.mkdir(parents=True)
+    for i in range(3):
+        _write_light_fit(subs, "Thor's Helmet", "20240102", f"17232{i}")
+        (subs / f"Light_Thor's Helmet_10.0s_IRCUT_20240102-17232{i}_thn.jpg").write_bytes(b"jpeg")
+    return root
+
+
+def _poll(client, target):
+    deadline = time.monotonic() + WAIT_FOR_JOB_TIMEOUT_S
+    while time.monotonic() < deadline:
+        response = client.get("/api/qa_analysis_status", params={"target": target})
+        assert response.status_code == 200, response.text
+        if response.json()["status"] != "running":
+            return response.json()
+        time.sleep(0.01)
+    raise AssertionError("job never left 'running' within the timeout")
+
+
+def test_an_archive_id_outside_the_plausible_pattern_is_listed_startable_and_pollable(
+    app_factory, apostrophe_archive, monkeypatch, tmp_path
+):
+    calls = []
+
+    async def record(app, tool, arguments):
+        calls.append(arguments["paths"])
+        return REAL_REPORT
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", record)
+    with TestClient(app_factory(archive_dir=apostrophe_archive)) as client:
+        listed = client.get("/api/qa_targets").json()["targets"]
+        assert [t["target_id"] for t in listed] == [APOSTROPHE_ID]
+
+        started = client.post(
+            "/api/qa_analysis_start",
+            params={"target": APOSTROPHE_ID},
+            headers={routes.CLIENT_HEADER: "test"},
+        )
+        assert started.status_code == 200, started.text
+        assert started.json()["target_id"] == APOSTROPHE_ID
+        body = _poll(client, APOSTROPHE_ID)
+
+        # The Review table's thumbnails for the same target.
+        sub = "Light_Thor's Helmet_10.0s_IRCUT_20240102-172320"
+        thumbnail = client.get(f"/api/sub_image/{APOSTROPHE_ID}/{sub}")
+
+    assert body["status"] == "complete"
+    assert body["report"] == REAL_REPORT
+    assert len(calls) == 1 and len(calls[0]) == 3
+    assert (tmp_path / "qa_cache" / f"{APOSTROPHE_ID}.json").is_file()
+    assert thumbnail.status_code == 200
+    assert thumbnail.content == b"jpeg"
+
+
+@pytest.mark.parametrize("target", ["Nobody'sTarget", "x" * 65])
+def test_an_implausible_id_the_archive_does_not_hold_is_still_refused(
+    app_factory, apostrophe_archive, monkeypatch, target
+):
+    def boom(app, tool, arguments):
+        raise AssertionError("must not reach the tool for an unknown target")
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", boom)
+    with TestClient(app_factory(archive_dir=apostrophe_archive)) as client:
+        status = client.get("/api/qa_analysis_status", params={"target": target})
+        start = client.post(
+            "/api/qa_analysis_start",
+            params={"target": target},
+            headers={routes.CLIENT_HEADER: "test"},
+        )
+
+    assert status.status_code == 404
+    assert start.status_code == 404
+
+
+def test_an_archive_id_that_cannot_name_a_cache_file_is_refused_before_analysis(
+    app_factory, monkeypatch, tmp_path
+):
+    """A Linux-hosted archive can hold a directory name Windows could not —
+    "A|B_sub" — and its id cannot name a cache file on Windows. Starting it
+    would run minutes of analysis only to fail saving the report, so the
+    start is refused up front instead."""
+    from seestar_sidecar.archive import ArchiveScan, ArchiveStatus, ArchiveTarget
+
+    fit = tmp_path / "a.fit"
+    fit.write_text("fit", encoding="utf-8")
+    scan = ArchiveScan(
+        targets={"A|B": ArchiveTarget("A|B", "A|B", 0.1, sub_paths=[fit])},
+        warnings=[],
+        status=ArchiveStatus(configured=True, path="archive", exists=True, target_count=1),
+    )
+    monkeypatch.setattr(routes, "scan_archive", lambda *a, **k: scan)
+
+    def boom(app, tool, arguments):
+        raise AssertionError("must not analyse a target whose report cannot be saved")
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", boom)
+    with TestClient(app_factory()) as client:
+        start = client.post(
+            "/api/qa_analysis_start",
+            params={"target": "A|B"},
+            headers={routes.CLIENT_HEADER: "test"},
+        )
+        status = client.get("/api/qa_analysis_status", params={"target": "A|B"})
+
+    assert start.status_code == 404
+    assert start.json()["ok"] is False
+    # Polling such a target still answers honestly rather than failing.
+    assert status.status_code == 200
+    assert status.json()["status"] == "not_analysed"

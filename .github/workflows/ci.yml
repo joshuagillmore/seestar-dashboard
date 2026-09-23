@@ -1,0 +1,62 @@
+# The repo's gate, run where nobody's machine is involved. Same commands as
+# CLAUDE.md's Conventions section: lint + test + build in web/, ruff + pytest
+# in sidecar/. Linux and UTC, where development happens on Windows in a local
+# timezone, so a test that only passes because of either shows up here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web — lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      # tsc -b then vite build. `tsc --noEmit` would check nothing here: the
+      # root tsconfig.json is a solution file with "files": [].
+      - run: npm run build
+
+  sidecar:
+    name: sidecar — ruff, pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sidecar
+    steps:
+      - uses: actions/checkout@v7
+      # setup-uv publishes no floating major tag past v7; pin the release.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          # pyproject allows >=3.11,<3.13; 3.12 is what development runs on.
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: sidecar/uv.lock
+      # --locked fails if uv.lock is out of step with pyproject.toml, rather
+      # than quietly re-resolving to versions nobody has tested.
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run pytest

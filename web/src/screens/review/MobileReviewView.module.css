@@ -18,6 +18,31 @@
   color: var(--text-primary);
 }
 
+.titleRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* When the report was computed — a stale report must not read as current,
+   here any more than on desktop (ReportHeader). */
+.meta {
+  margin-top: -6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dimmer);
+}
+
+/* Same treatment as desktop's STALE tag: a job state, not a verdict, so a
+   dashed outline rather than the MARGINAL amber. */
+.staleTag {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px dashed var(--border-control-hover);
+  border-radius: var(--radius-chip);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+}
+
 /* A native select rather than a rebuilt list: on a phone this gets the
    platform's own picker, which is better than anything reimplemented here,
    and it collapses twenty-two targets into one control. */

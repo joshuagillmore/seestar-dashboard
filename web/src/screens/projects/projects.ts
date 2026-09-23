@@ -1,4 +1,4 @@
-import { describeGoal, goalProgressPct } from '../../api/integrationGoal'
+import { describeGoal, goalMet, goalProgressPct } from '../../api/integrationGoal'
 import type { ArchiveNight, IntegrationGoal, Project, ProjectsCombinedEntry, TargetImage } from '../../api/schemas'
 
 /**
@@ -68,11 +68,14 @@ export function mergeProjects(
   }))
 }
 
-export type ProjectTag = 'no-goal' | 'beyond-reach' | 'needs-data' | 'complete'
+export type ProjectTag = 'no-goal' | 'beyond-reach' | 'needs-data' | 'complete' | 'server-status'
 
 export interface StatusInfo {
   tag: ProjectTag
   label: string
+  /** Why the tag says what it says, when that is not obvious — e.g. the
+   * server's status overriding what the suggested goal alone would show. */
+  title?: string
 }
 
 /**
@@ -94,15 +97,53 @@ export interface StatusInfo {
  * reasons (see integrationGoal.ts's describeGoal), one badge; the honest
  * distinction between them lives in the hours-row label and its title, where
  * there's room for a real sentence instead of a 9px tag.
+ *
+ * ## The server's status is never contradicted
+ *
+ * A target with a `list_projects` record carries the SERVER's own `status`
+ * ("active" | "complete" | "paused" — seestar-mcp planning/projects.py), and
+ * the server's planner acts on it: an "active" project is still one it plans
+ * sessions for. The suggested goal above is the sidecar's display-only model.
+ * So when the two disagree the server wins the tag:
+ *
+ *   - server says anything but "active" → that, verbatim ("complete" keeps
+ *     its complete styling; anything else is shown as-is, neutrally);
+ *   - server says "active" and the suggested goal is met → "active", titled
+ *     to say the suggestion is met — never "complete", which the server has
+ *     not said;
+ *   - server says "active" and the goal is not met → "needs data", which
+ *     agrees with it.
+ *
+ * Only a target with NO server record (archive-only) takes "complete" from
+ * the goal model alone: there is no server status there to contradict.
+ * Completion compares raw minutes (goalMet), never the rounded percentage.
  */
 export function projectStatus(project: MergedProject, doubled: boolean): StatusInfo {
+  const server = project.store?.status
+  if (server != null && server !== 'active') {
+    return server === 'complete'
+      ? { tag: 'complete', label: 'complete', title: 'list_projects marks this project complete.' }
+      : { tag: 'server-status', label: server, title: `list_projects status: ${server}` }
+  }
+
   const display = describeGoal(project.goal)
   if (display.kind === 'beyond-reach') return { tag: 'beyond-reach', label: 'beyond reach' }
   if (display.kind !== 'goal') return { tag: 'no-goal', label: 'no goal' }
-  const pct = goalProgressPct(project.totalMinutes, project.goal, doubled)
-  return pct !== null && pct >= 100
-    ? { tag: 'complete', label: 'complete' }
-    : { tag: 'needs-data', label: 'needs data' }
+  if (!goalMet(project.totalMinutes, project.goal, doubled)) {
+    return { tag: 'needs-data', label: 'needs data' }
+  }
+  if (server === 'active') {
+    const hours = display.hours * (doubled ? 2 : 1)
+    return {
+      tag: 'server-status',
+      label: 'active',
+      title:
+        `Past the suggested ${display.coarse ? '~' : ''}${hours.toFixed(1)} h, but list_projects ` +
+        'still lists this project as active. The suggested figure is a display-only model; the ' +
+        "project's status is the server's.",
+    }
+  }
+  return { tag: 'complete', label: 'complete' }
 }
 
 /**

@@ -17,7 +17,15 @@ import { SweetBandGauge } from './SweetBandGauge'
 import { TargetHeader } from './TargetHeader'
 import { TelemetryGrid } from './TelemetryGrid'
 import { TelemetryLogCard } from './TelemetryLogCard'
-import { useLiveSession } from './useLiveSession'
+import { formatWhen } from './timestamps'
+import {
+  describeViewFailure,
+  FAILED_POLLS_LIMIT,
+  IDLE_DEVICE_CHECK_EVERY,
+  POLL_INTERVAL_MS,
+  useLiveSession,
+  type LiveSessionState,
+} from './useLiveSession'
 import styles from './LiveScreen.module.css'
 
 export interface LiveScreenProps {
@@ -34,11 +42,49 @@ export interface LiveScreenProps {
  * unreachable. Kept out of Sidebar itself, same pattern as Tonight's own
  * `verdict`/`verdictTone` — Sidebar stays presentational and does not need
  * to know this screen's phase shape. */
-function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | null } {
+function sidebarStatus(state: LiveSessionState): { tone: DotTone | null; meta: string | null } {
+  const { phase } = state
+  // A held reading is not a live one: not the green dot.
+  if (phase === 'active' && state.stale !== null) return { tone: 'marginal', meta: 'stale' }
   if (phase === 'active') return { tone: 'pass', meta: 'live' }
   if (phase === 'bridge-down') return { tone: 'reject', meta: 'bridge down' }
+  // A get_view_state request that got no answer is not the scope saying
+  // it is idle.
+  if (phase === 'idle' && state.viewError?.kind === 'no-answer') return { tone: 'marginal', meta: 'no reading' }
   if (phase === 'idle') return { tone: 'idle', meta: 'idle' }
+  // Neither is idle, and neither is a fault of the bridge: the scope is
+  // answering, but not in a way this screen can show as a session.
+  if (phase === 'run-without-view') return { tone: 'marginal', meta: 'run, no view' }
+  if (phase === 'unrecognised') return { tone: 'marginal', meta: 'unrecognised' }
   return { tone: null, meta: null }
+}
+
+/**
+ * Shown over an active session whose reading is held from an earlier poll
+ * because the latest could not read the scope (see `stale` on
+ * useLiveSession's active state). Says what failed, how many polls in a row
+ * have, and how old the reading is, so a held stack count cannot pass for a
+ * current one. Not an alert: a failed poll is expected now and then.
+ *
+ * Every claim here holds in every state it appears in. It appears only for
+ * fewer than FAILED_POLLS_LIMIT failed polls in a row, and while it does the
+ * device is asked on every poll (useLiveSession's holdingSession), so "the
+ * next poll asks again" is true; past the limit the failure card replaces it.
+ */
+function StaleNotice({ reason, failedPolls, readAt }: { reason: string; failedPolls: number; readAt: string }) {
+  const when = formatWhen(readAt)
+  const which = failedPolls === 1 ? 'This poll' : `The last ${failedPolls} polls`
+  return (
+    <div className={styles.staleNotice} role="status" data-testid="live-stale">
+      <Dot tone="marginal" />
+      <p className={styles.staleText}>
+        <span className={styles.staleTitle}>Not current.</span> {which} could not read the scope
+        {failedPolls === 1 ? '' : '; the latest'}: {reason}. Showing the last reading
+        {when ? `, from ${when}` : ''}. The session is held here for up to {FAILED_POLLS_LIMIT - 1} failed
+        polls in a row, and the next poll asks again.
+      </p>
+    </div>
+  )
 }
 
 /**
@@ -84,10 +130,13 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
  * sidebar — the user's own reasoning: "most of the time this screen is
  * open, no session is running," and the feed answers what actually happened
  * while nobody was watching, which is the more useful question exactly
- * when there's no live camera to show. `sessionRunning={false}` on the card
- * is what keeps that honest — the feed's own timestamps already say when
- * each entry is from, but the card adds a plain-language note too, so a
+ * when there's no live camera to show. `sessionRunning={false}` on the idle
+ * card is what keeps that honest — the feed's own timestamps already say
+ * when each entry is from, but the card adds a plain-language note too, so a
  * three-nights-old entry can't read as something happening right now.
+ * Bridge-down passes `null` instead (or `true` when get_run_state reports an
+ * active run): with the scope unreachable, "no session is running" is a
+ * claim this client cannot make.
  *
  * **Mobile breakpoint** (slice added later, design README.md:711-737): below
  * `MOBILE_QUERY` (600px), this screen skips `AppShell` entirely rather than
@@ -110,7 +159,7 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
 export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) {
   const state = useLiveSession()
   const isMobile = useMediaQuery(MOBILE_QUERY)
-  const { tone: liveTone, meta: liveMeta } = sidebarStatus(state.phase)
+  const { tone: liveTone, meta: liveMeta } = sidebarStatus(state)
 
   // Mobile — Live (design README.md:724-737) only has a dedicated
   // composition for the 'active' phase — there's no mobile design for
@@ -144,26 +193,101 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
             <div>
               <div className={styles.stateTitle}>Bridge unreachable</div>
               <p className={styles.stateBody}>{state.error}</p>
+              {state.runActive && (
+                <p className={styles.stateBody}>
+                  get_run_state still reports an active run{state.runTarget ? ` on ${state.runTarget}` : ''}. It
+                  may be carrying on without this screen.
+                </p>
+              )}
             </div>
           </div>
-          <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
+          {/* The scope cannot be asked, so this client cannot know whether a
+              session is running: no claim, unless run_state says one is. */}
+          <SessionActivityCard
+            activity={state.sessionActivity}
+            sessionRunning={state.runActive ? true : null}
+            wide
+          />
         </div>
       )}
 
-      {state.phase === 'idle' && (
+      {state.phase === 'idle' && state.viewError?.kind !== 'no-answer' && (
         <div className={styles.idleColumns}>
           <div className={styles.stateCard} data-testid="live-idle">
             <Dot tone="idle" />
             <div>
               <div className={styles.stateTitle}>Scope idle — not observing</div>
               <p className={styles.stateBody}>
-                The bridge answered, but `get_view_state` timed out, which means there is no
-                active session right now rather than a fault. This is the normal state for most of
-                the day, and most of the night.
+                {state.viewError === null
+                  ? 'The scope answered and reports no view session, so nothing is being observed right now.'
+                  : `The bridge answered, but ${describeViewFailure(state.viewError)}, which on this scope means no active session rather than a fault.`}{' '}
+                This is the normal state for most of the day, and most of the night.
               </p>
             </div>
           </div>
           <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
+        </div>
+      )}
+
+      {/* The request for get_view_state got no answer at all. get_status
+          answered, so the bridge is up, but the scope has said nothing
+          either way: not "idle", and not the sidecar advice the client's
+          own message carries, which get_status answering disproves. */}
+      {state.phase === 'idle' && state.viewError?.kind === 'no-answer' && (
+        <div className={styles.idleColumns}>
+          <div className={styles.stateCard} data-testid="live-idle">
+            <Dot tone="marginal" />
+            <div>
+              <div className={styles.stateTitle}>No reading from the scope</div>
+              <p className={styles.stateBody}>
+                When last asked, get_status answered, so the bridge is up, but{' '}
+                {describeViewFailure(state.viewError)}. That is the request failing, not the scope
+                reporting, so this screen cannot say whether anything is being observed. The idle
+                back-off can skip the scope on the polls in between, but it is asked again within the
+                next {IDLE_DEVICE_CHECK_EVERY} polls ({POLL_INTERVAL_MS / 1000} s apart).
+              </p>
+            </div>
+          </div>
+          <SessionActivityCard activity={state.sessionActivity} sessionRunning={null} wide />
+        </div>
+      )}
+
+      {state.phase === 'run-without-view' && (
+        <div className={styles.idleColumns}>
+          <div className={styles.stateCard} data-testid="live-run-without-view">
+            <Dot tone="marginal" />
+            <div>
+              <div className={styles.stateTitle}>Run in progress — no live view</div>
+              <p className={styles.stateBody}>
+                get_run_state reports an active run{state.runTarget ? ` on ${state.runTarget}` : ''}, but{' '}
+                {state.viewError === null
+                  ? 'the scope reports no view session'
+                  : describeViewFailure(state.viewError)}{' '}
+                this poll. That is not shown as idle: the run may be between targets, or its view may
+                have stopped.
+              </p>
+            </div>
+          </div>
+          <SessionActivityCard activity={state.sessionActivity} sessionRunning={true} wide />
+        </div>
+      )}
+
+      {state.phase === 'unrecognised' && (
+        <div className={styles.idleColumns}>
+          <div className={styles.stateCard} data-testid="live-unrecognised">
+            <Dot tone="marginal" />
+            <div>
+              <div className={styles.stateTitle}>Telescope state unreadable</div>
+              <p className={styles.stateBody}>
+                The telescope answered in a shape this dashboard doesn&apos;t understand, so it cannot
+                tell whether a session is running — and will not guess idle.
+              </p>
+              <p className={styles.stateDetail} data-testid="live-unrecognised-detail">
+                {state.detail}
+              </p>
+            </div>
+          </div>
+          <SessionActivityCard activity={state.sessionActivity} sessionRunning={null} wide />
         </div>
       )}
 
@@ -177,63 +301,84 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
         // `target` field (currentTarget), since it comes from the scope's
         // own live telemetry rather than a directory-name parse.
         const liveView = state.viewState.view_state?.result?.View ?? null
+        const staleNotice =
+          state.stale === null ? null : (
+            <StaleNotice reason={state.stale.reason} failedPolls={state.stale.failedPolls} readAt={state.readAt} />
+          )
 
         if (isMobile) {
           return (
-            <MobileLiveView
-              targetId={state.observability?.target?.id ?? state.currentTarget}
-              targetName={state.observability?.target?.name ?? null}
-              stack={liveView?.Stack ?? null}
-              tier1={state.tier1}
-              focuser={state.focuser}
-              preview={state.preview}
-              log={state.log}
-            />
+            <>
+              {staleNotice}
+              <MobileLiveView
+                targetId={state.observability?.target?.id ?? state.currentTarget}
+                targetName={state.observability?.target?.name ?? null}
+                stack={liveView?.Stack ?? null}
+                tier1={state.tier1}
+                focuser={state.focuser}
+                preview={state.preview}
+                log={state.log}
+              />
+            </>
           )
         }
 
         const targetName =
           state.observability?.target?.name ?? liveView?.target_name ?? state.currentTarget
         return (
-          <div className={styles.columns}>
-            <div className={styles.previewColumn}>
-              <PreviewCard preview={state.preview} annotate={liveView?.Stack?.Annotate ?? null} />
-              <LastStackCard lastStack={state.lastStack} />
-            </div>
+          <>
+            {staleNotice}
+            <div className={styles.columns}>
+              <div className={styles.previewColumn}>
+                <PreviewCard
+                  preview={state.preview}
+                  annotate={liveView?.Stack?.Annotate ?? null}
+                  exposureMs={liveView?.Stack?.Exposure?.exp_ms ?? null}
+                  targetName={liveView?.target_name ?? null}
+                />
+                <LastStackCard lastStack={state.lastStack} />
+              </div>
 
-            <div className={styles.center}>
-              <TargetHeader
-                targetName={targetName}
-                stage={liveView?.stage ?? null}
-                lpFilter={liveView?.lp_filter}
-              />
+              <div className={styles.center}>
+                <TargetHeader
+                  targetName={targetName}
+                  stage={liveView?.stage ?? null}
+                  lpFilter={liveView?.lp_filter}
+                  sessionStartUtc={state.sessionStartUtc}
+                />
 
-              <TelemetryGrid
-                stack={liveView?.Stack ?? null}
-                tier1={state.tier1}
-                focuser={state.focuser}
-                stage={liveView?.stage ?? null}
-                stageHistory={state.stageHistory}
-              />
+                <TelemetryGrid
+                  stack={liveView?.Stack ?? null}
+                  tier1={state.tier1}
+                  focuser={state.focuser}
+                  stage={liveView?.stage ?? null}
+                  stageHistory={state.stageHistory}
+                />
 
-              {site?.profile ? (
-                <div className={styles.row}>
-                  <SweetBandGauge
-                    rotationCeilingDeg={site.profile.field_rotation_ceiling_deg}
-                    altitudeFloorDeg={site.profile.min_altitude_deg}
-                    observability={state.observability?.observability ?? null}
-                  />
+                {site?.profile ? (
+                  <div className={styles.row}>
+                    <SweetBandGauge
+                      rotationCeilingDeg={site.profile.field_rotation_ceiling_deg}
+                      altitudeFloorDeg={site.profile.min_altitude_deg}
+                      observability={state.observability?.observability ?? null}
+                    />
+                    <GuardrailsCard guardrails={state.guardrails} />
+                  </div>
+                ) : (
                   <GuardrailsCard guardrails={state.guardrails} />
-                </div>
-              ) : (
-                <GuardrailsCard guardrails={state.guardrails} />
-              )}
+                )}
 
-              <TelemetryLogCard log={state.log} />
+                <TelemetryLogCard log={state.log} />
+              </div>
+
+              {/* A held reading cannot say whether the session is still
+                  running, so the feed makes no claim either way. */}
+              <SessionActivityCard
+                activity={state.sessionActivity}
+                sessionRunning={state.stale === null ? true : null}
+              />
             </div>
-
-            <SessionActivityCard activity={state.sessionActivity} sessionRunning={true} />
-          </div>
+          </>
         )
       })()}
     </div>

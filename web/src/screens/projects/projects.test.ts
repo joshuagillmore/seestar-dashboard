@@ -201,24 +201,74 @@ describe('projectStatus', () => {
     expect(projectStatus(p, false).tag).toBe('needs-data')
   })
 
-  it('tags a store project past its suggested goal as complete', () => {
-    const p = merged({ totalMinutes: 90, goal: goal({ suggested_hours: 1.0 }) })
+  it('treats hitting the goal exactly as meeting it, not needs-data', () => {
+    // The likeliest off-by-one mutation (>= vs >) lands exactly here.
+    // Archive-only, so completion is the goal model's to state.
+    const p = merged({ store: null, totalMinutes: 60, goal: goal({ suggested_hours: 1.0 }) })
     expect(projectStatus(p, false).tag).toBe('complete')
   })
 
-  it('treats hitting the goal exactly as complete, not needs-data', () => {
-    // The likeliest off-by-one mutation (>= vs >) lands exactly here.
-    const p = merged({ totalMinutes: 60, goal: goal({ suggested_hours: 1.0 }) })
-    expect(projectStatus(p, false).tag).toBe('complete')
+  it('does not call a project complete 3 minutes short of a 10 h goal', () => {
+    // 597 / 600 is 99.5%, which Math.round made 100.
+    const p = merged({ store: null, totalMinutes: 597, goal: goal({ suggested_hours: 10 }) })
+    expect(projectStatus(p, false).tag).toBe('needs-data')
   })
 
   it('doubling the goal can turn a complete project back to needs-data', () => {
-    const p = merged({ totalMinutes: 90, goal: goal({ suggested_hours: 1.0 }) }) // 90 >= 60 undoubled
+    const p = merged({ store: null, totalMinutes: 90, goal: goal({ suggested_hours: 1.0 }) }) // 90 >= 60 undoubled
     expect(projectStatus(p, false).tag).toBe('complete')
     expect(projectStatus(p, true).tag).toBe('needs-data') // 90 < 120 doubled
   })
 
-  it('matches the real fixture distribution among the 15 store-backed projects: 12 needs-data, 2 no-goal, 1 complete, 0 beyond-reach', () => {
+  describe('the server’s own project status is never contradicted', () => {
+    // The sidecar's suggested goal is a display-only model. list_projects'
+    // `status` ("active" | "complete" | "paused") is the server's, and the
+    // server's planner acts on it — so a card must not say "complete" for a
+    // project the server still lists as active.
+    it('does not say complete for a store project the server lists as active', () => {
+      const p = merged({
+        totalMinutes: 90,
+        goal: goal({ suggested_hours: 1.0 }),
+        store: project({ status: 'active' }),
+      })
+      const status = projectStatus(p, false)
+
+      expect(status.tag).not.toBe('complete')
+      expect(status.label).toBe('active')
+      expect(status.title).toMatch(/suggested/)
+    })
+
+    it('says complete when the server says complete, whatever the goal model thinks', () => {
+      const p = merged({
+        totalMinutes: 10,
+        goal: goal({ suggested_hours: 1.0 }),
+        store: project({ status: 'complete' }),
+      })
+
+      expect(projectStatus(p, false)).toMatchObject({ tag: 'complete', label: 'complete' })
+    })
+
+    it('shows any other server status verbatim', () => {
+      const p = merged({
+        totalMinutes: 10,
+        goal: goal({ suggested_hours: 1.0 }),
+        store: project({ status: 'paused' }),
+      })
+
+      expect(projectStatus(p, false)).toMatchObject({ tag: 'server-status', label: 'paused' })
+    })
+
+    it('the real M27 — active on the server, ~151% of its suggested goal — reads active', () => {
+      const combined = ProjectsCombinedSchema.parse(recordedProjectsCombined()).projects
+      const listed = ListProjectsSchema.parse(recordedListProjects()).projects
+      const m27 = mergeProjects(combined, listed).find((p) => p.targetId === 'M27')!
+      expect(m27.store?.status).toBe('active')
+
+      expect(projectStatus(m27, false)).toMatchObject({ tag: 'server-status', label: 'active' })
+    })
+  })
+
+  it('matches the real fixture distribution among the 15 store-backed projects: 12 needs-data, 2 no-goal, 1 active-past-goal, 0 complete', () => {
     const combined = ProjectsCombinedSchema.parse(recordedProjectsCombined()).projects
     const listed = ListProjectsSchema.parse(recordedListProjects()).projects
     const storeBacked = mergeProjects(combined, listed).filter((p) => p.store !== null)
@@ -228,7 +278,10 @@ describe('projectStatus', () => {
       const tag = projectStatus(p, false).tag
       counts[tag] = (counts[tag] ?? 0) + 1
     }
-    expect(counts).toEqual({ 'needs-data': 12, 'no-goal': 2, complete: 1 })
+    // Every store project in the recording is "active" on the server, so
+    // none may read complete — M27 is past its suggested goal and reads
+    // "active" instead.
+    expect(counts).toEqual({ 'needs-data': 12, 'no-goal': 2, 'server-status': 1 })
   })
 
   it('matches the real fixture distribution across all 33 merged projects, archive-only included — the point of this fix', () => {
@@ -245,7 +298,7 @@ describe('projectStatus', () => {
       const tag = projectStatus(p, false).tag
       counts[tag] = (counts[tag] ?? 0) + 1
     }
-    expect(counts).toEqual({ 'needs-data': 22, 'no-goal': 8, complete: 3 })
+    expect(counts).toEqual({ 'needs-data': 22, 'no-goal': 8, complete: 2, 'server-status': 1 })
   })
 
   it('the real M42 (archive-only, ~279% of its suggested goal) reads complete, not archive-only', () => {

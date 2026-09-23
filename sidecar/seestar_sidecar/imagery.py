@@ -39,6 +39,7 @@ below is not the whole notice (that belongs in the docs file, once, not
 repeated on every response); it is short enough for a UI label while still
 naming the actual rights holders, not just the delivery service.
 """
+import asyncio
 import logging
 import os
 import re
@@ -85,6 +86,20 @@ DEFAULT_IMAGE_SIZE_PX = 480
 MIN_IMAGE_SIZE_PX = 64
 MAX_IMAGE_SIZE_PX = 1024
 
+#: The only sizes ever fetched and cached. A requested `size` snaps UP to the
+#: nearest of these (see snap_image_size). Every size from 64 to 1024 used to
+#: be its own cache file, so any page the user had open could fill the disk
+#: with `<img>` tags — 961 sizes for each of 12,517 catalogue objects. The web
+#: only ever requests the default (the `url` resolve_image_pointer builds has
+#: no size); MAX is kept for a caller that asks to actually look at an image.
+IMAGE_SIZES_PX = (DEFAULT_IMAGE_SIZE_PX, MAX_IMAGE_SIZE_PX)
+
+
+def snap_image_size(size_px: int) -> int:
+    """The smallest of IMAGE_SIZES_PX at least `size_px` — never smaller
+    than asked, so a caller never gets a blurrier image than it requested."""
+    return next((s for s in IMAGE_SIZES_PX if s >= size_px), IMAGE_SIZES_PX[-1])
+
 #: sidecar/seestar_sidecar/imagery.py -> parents[1] is sidecar/. Gitignored
 #: (see .gitignore's "sidecar/.cache/"); a fetched cutout is written here
 #: keyed by target id and requested pixel size so a repeat request never
@@ -103,11 +118,15 @@ DEFAULT_IMAGE_CACHE_DIR = Path(
 #: before it is ever woven into a cache filename or a lookup key: the route
 #: is read-only and path-constrained (see docs/slice-2-backlog.md), and this
 #: is what makes that true rather than assumed.
-_TARGET_ID_RE = re.compile(r"^[A-Za-z0-9_+.-]{1,64}$")
+#:
+#: Applied with fullmatch, never match + `$`: in Python `$` also matches just
+#: before a trailing newline, so `^...$` accepted "M31\n" and let it on into
+#: cache file names.
+_TARGET_ID_RE = re.compile(r"[A-Za-z0-9_+.-]{1,64}")
 
 
 def is_plausible_target_id(target_id: str) -> bool:
-    return bool(_TARGET_ID_RE.match(target_id))
+    return bool(_TARGET_ID_RE.fullmatch(target_id))
 
 
 #: Bumped when the BYTES served at `/api/target_image/<id>` change meaning
@@ -245,6 +264,9 @@ async def fetch_survey_cutout(
     if not image_bytes:
         return None
 
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path.write_bytes(image_bytes)
+    def _store() -> None:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_path.write_bytes(image_bytes)
+
+    await asyncio.to_thread(_store)
     return image_bytes

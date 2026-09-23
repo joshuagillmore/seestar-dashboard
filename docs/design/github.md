@@ -7,11 +7,12 @@ date: 2026-07-27T16:03:31Z
 
 > **The `repo:` line above no longer resolves (noted 2026-08-03).** It is left as
 > the accurate record of what was synced on that date, but the public repository
-> is now **`github.com/joshuagillmore/seestar-mcp`** — `joshuagillmore/SeeStar-AI`
-> was made private on 2026-07-31 and will 404. History was rewritten to strip
-> personal data, so although all 106 commits survive, **every SHA changed** and
-> the file:line references below may have drifted. Re-clone rather than fetch,
-> and treat a citation here as a pointer to the right function, not an address.
+> became **`github.com/OrangeAgente/seestar-mcp`** (now `joshuagillmore/seestar-mcp`),
+> and `OrangeAgente/SeeStar-AI` (now `joshuagillmore/SeeStar-AI`) was made private
+> on 2026-07-31 and will 404. History was rewritten to strip personal data, so
+> although all 106 commits survive, **every SHA changed** and the file:line
+> references below may have drifted. Re-clone rather than fetch, and treat a
+> citation here as a pointer to the right function, not an address.
 >
 > The screen map itself is still broadly right about *which* source each screen
 > came from, with one exception worth knowing: Review (QA) is listed against

@@ -270,6 +270,61 @@ places.
 | Windows (PowerShell) | `$env:SEESTAR_PORT = "9001"` |
 | macOS / Linux | `export SEESTAR_PORT=9001` |
 
+## Network exposure: `--host` and SEESTAR_ALLOWED_HOSTS
+
+**The API has no authentication.** Anything that can reach the port can read
+the site profile, the projects store and the session log, and start QA
+analyses. That is safe only because, by default, nothing but this machine can
+reach it: `uv run seestar-dashboard` binds `127.0.0.1`.
+
+`--host` changes that. `--host 0.0.0.0` (or a LAN address) makes the server
+reachable from every machine on the network, still with no authentication.
+The launcher prints a warning and the sidecar logs one whenever the bind
+address is not loopback. Do it only on a network you trust.
+
+### The Host check (DNS rebinding)
+
+Every request must carry a `Host` header naming this server, or it gets
+`400 {"ok": false, "error": "invalid Host header"}`. That is the defence
+against DNS rebinding: a web page on `attacker.example` can re-point its own
+DNS record at `127.0.0.1` after it loads, and the browser then treats this
+server as same-origin with that page, so CORS stops protecting you. The Host
+header still says `attacker.example`, so the request is refused.
+
+Allowed hosts are, in order:
+
+- **Always:** `127.0.0.1`, `localhost`, `[::1]`. The default setup, and the
+  Vite dev server's proxy, need nothing else.
+- **`--host <address>`:** that address too.
+- **`--host 0.0.0.0` (or `::`):** this machine's own hostname,
+  `<hostname>.local`, and its IP addresses, looked up at startup.
+- **`SEESTAR_ALLOWED_HOSTS`:** a comma-separated list of any other names you
+  reach the console by, e.g. a DNS name on your LAN. No ports, no scheme.
+
+If you open the console by a name that isn't on this list, you'll get the
+`invalid Host header` error. Add that name to `SEESTAR_ALLOWED_HOSTS`.
+
+| OS | Example |
+|---|---|
+| Windows (PowerShell) | `$env:SEESTAR_ALLOWED_HOSTS = "console.lan"` |
+| macOS / Linux | `export SEESTAR_ALLOWED_HOSTS=console.lan` |
+
+`SEESTAR_BIND_HOST` is set by the launcher from `--host`, because uvicorn
+calls the app factory with no arguments. You don't set it yourself unless you
+start the app with bare `uvicorn ... --factory --host <address>`, which
+bypasses the launcher. In that case, set it to the same address. If you
+don't, the server treats itself as loopback-only and refuses LAN clients.
+
+### Starting an analysis: Origin
+
+`POST /api/qa_analysis_start` also requires the `x-seestar-client` header and
+refuses an `Origin` that isn't one of the allowed hosts above. It also
+refuses `Origin: null`, which comes from a sandboxed frame or a `file://`
+page. A POST with **no** Origin is allowed on purpose. Every browser sends
+Origin on every POST, so a missing one means a non-browser client (curl, a
+script). The check exists to stop a third-party web page, and a local
+process can already do anything this API offers.
+
 ## SEESTAR_REPLAY
 
 Set to `1` to serve recorded fixtures (`fixtures/*.json`) instead of
@@ -289,7 +344,9 @@ set. `record.py` is what (re-)generates the fixtures from a real, running
 
 ## SEESTAR_CLIENT_ID
 
-**The one variable on this page the sidecar sets rather than reads.** It is
+**The one variable on this page the sidecar sets for another program rather
+than reads.** (`SEESTAR_BIND_HOST`, above, is set by the launcher for the
+sidecar's own app.) It is
 `seestar-mcp`'s own variable (documented in their `config.py`), and the
 sidecar passes it down to the `seestar_mcp.server` subprocess it spawns, in
 `sidecar/seestar_sidecar/mcp_proxy.py`.

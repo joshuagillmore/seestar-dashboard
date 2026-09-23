@@ -18,14 +18,16 @@ Each one forces the dashboard to choose between an absent state and parsing Engl
 convention — *if a tool names a quantity in prose, return it as a field too* — would be worth more
 than three separate fixes.
 
-Line references were taken against `joshuagillmore/SeeStar-AI` @ `main` as of 2026-07-30.
+Line references were taken against `OrangeAgente/SeeStar-AI` (now `joshuagillmore/SeeStar-AI`)
+@ `main` as of 2026-07-30.
 
-> **The repository has since moved (2026-07-31).** The public repo is now
-> **`github.com/joshuagillmore/seestar-mcp`**; the old `joshuagillmore/SeeStar-AI` is **private** and
-> will 404. History was rewritten to remove personal data — site coordinates, a LAN address, local
-> paths — and although all 106 commits are preserved, **every SHA changed**. Any pinned commit will
-> not resolve; re-clone rather than fetch. Line numbers cited below may have drifted; treat them as
-> a pointer to the right function, not an address.
+> **The repository has since moved (2026-07-31).** The public repo became
+> **`github.com/OrangeAgente/seestar-mcp`** (now `joshuagillmore/seestar-mcp`); the old
+> `OrangeAgente/SeeStar-AI` is **private** and will 404. History was rewritten to remove personal
+> data — site coordinates, a LAN address, local paths — and although all 106 commits are
+> preserved, **every SHA changed**. Any pinned commit will not resolve; re-clone rather than
+> fetch. Line numbers cited below may have drifted; treat them as a pointer to the right function,
+> not an address.
 
 ---
 
@@ -1236,6 +1238,146 @@ every one of those 951 calls was the agent's.
 
 ---
 
+## 29. `qa_tier2` computes each sub's reject causes, then drops them
+
+**Found 2026-09-23**, in a review of the dashboard. Line references for items 29–33 are against
+`joshuagillmore/seestar-mcp` `main` @ `faea725`. The same code is on the open
+`fix/review-2026-09-22` branch, at shifted line numbers.
+
+**Affects:** the Review & QA screen: the "rejections by cause" panel, and which metric cell a
+row highlights.
+
+`_score_sub` (`qa_tier2.py:476`) builds `reject_causes` (`:498`) alongside the prose `reasons`.
+It is a list of category labels: `fwhm`, `eccentricity`, `snr`, `star_count`,
+`scattered_light`, `error`. It returns both (`:621`), but the only thing that reads the causes
+is the `dominant_reject_cause` tally. `SubVerdict` has no field for them, so the per-sub
+categories never leave the server. MARGINAL has no categories at all. `_score_sub` keeps a
+bare `marginal = True` flag (`:499`) and the metric survives only in prose.
+
+That leaves the dashboard reading English to answer "which metric failed this sub?", and it
+has already got that wrong twice:
+
+- The server writes `star_count 12 < … floor`. The client matched `star count` / `stars`, so
+  every star-count REJECT went unattributed. Star count is the cloud signal, so a cloudy
+  night's main cause went uncounted.
+- The client joined all of a sub's reasons before matching. A sub that REJECTs for FWHM and is
+  MARGINAL for eccentricity was counted as an eccentricity reject.
+
+A per-reason parser on our side fixes both. It is still a parser over f-strings, though, and
+the next reworded message breaks it without an error.
+
+**Asked for:** return the categories per sub, as `reject_causes: list[str]` and
+`marginal_causes: list[str]` on each `subs[]` entry, using the existing `CAUSE_*` labels.
+`reject_causes` already exists. `marginal_causes` needs one `append` beside each
+`marginal = True`. This is the "if a tool names a quantity in prose, return it as a field too"
+pattern from the top of this file. It is additive, so a MINOR contract change.
+
+---
+
+## 30. `qa_tier2` scores synchronously inside an async tool, blocking the server for the whole run
+
+**Affects:** everything else on the same MCP session while a QA run is in progress.
+
+The controller's `async def qa_tier2` (`server.py:638`) calls `analyze_session(...)` directly
+(`:650`), and `qa_session_report` does the same (`:686`). `analyze_session` is synchronous
+photutils work with no `await` inside it. It takes minutes of CPU over a few hundred subs
+(slice-4 spec §1c, and measured on our side while analysing the archive). So for the whole run
+the server's event loop does nothing else. That includes other tool calls, MCP pings and
+`notifications/cancelled`. A client cannot cancel a mistaken twenty-minute run, and an agent
+cannot check `get_status` or the guardrails during one.
+
+A caveat on our side: the sidecar serialises every call behind one lock on one session
+(`mcp_proxy.McpConnection`), so today a QA run queues our other calls regardless. That is ours
+to fix, but it isn't worth fixing while the server cannot answer concurrently anyway.
+
+**Asked for:** `report = await asyncio.to_thread(analyze_session, ...)` in both methods.
+`analyze_session` appends a provenance record, and for `qa_session_report` it also adds
+manifest entries. Those writers would then run on a worker thread, so check they tolerate that.
+A lock around the append would do.
+
+---
+
+## 31. `plan_targets` calls the Double Cluster `C14`; the projects store calls it `C14_DoubleCluster`
+
+**Affects:** the Tonight screen. The Double Cluster's ranked card shows no progress and no QA,
+because the join misses.
+
+`plan_targets` takes its ids from the catalogue: `planning/data/dso_catalog.json:117` is
+`"id": "C14"`. The projects store keys the same object as `C14_DoubleCluster` (as `list_projects`
+returns it, and as recorded in our `fixtures/list_projects.json`). `Project.target_id` is
+documented as a catalogue id (`planning/projects.py:47`, `# catalog id, e.g. "M31"`), and this
+one is not.
+
+How it got in: `set_project_goal` (`server.py:1314`) and `log_session_result` (`:1339`) both
+call `find_target(target)`, but only use the result for the display name. The key is stored as
+whatever string the caller passed. When the lookup fails, that string becomes the name too, which
+is why this project's `target_name` is also `C14_DoubleCluster`.
+
+Tonight joins the ranked targets to project progress by id (`TonightScreen.tsx`,
+`progressById.get(target.id)`), so `C14` never finds its project. Matching them in the client
+would mean the dashboard keeping its own alias table over your catalogue.
+
+**Asked for:** store a catalogue id on write. Both tools already hold `find_target`'s result, so
+key the project on `t.id` when the lookup succeeds, and say so in the response when it does
+not. Then migrate the existing `C14_DoubleCluster` entry to `C14`. If free-form keys must stay,
+return a `catalog_id` on every project alongside them.
+
+---
+
+## 32. `log_session_result` dates a session by when it was logged, not when it was observed
+
+**Affects:** the Projects screen's session history, and anything that groups sessions by night.
+
+`SessionRecord.date_utc` is documented as the "session wind-down time" (`planning/projects.py:35`),
+but `log_session_result` sets it to `now_utc` (`:175`). The tool layer fills `now_utc` with
+`datetime.now(timezone.utc)` at the moment of the call (`server.py:1374`), and the tool takes no
+date argument. So the field is the log time, with no way to say otherwise. A session logged the
+next morning, or backfilled for an earlier night, is dated to when the call was made.
+
+An instant does not name an observing night on its own anyway, because a night spans two
+calendar dates. Our sidecar maps one to a night by subtracting 12 hours
+(`archive.observing_night()`). That is right for a record written during or soon after the
+session. It is wrong for one written after 12:00 UTC the next day, which lands on the
+following night.
+
+**Asked for:** a session-start field such as `started_utc`, taken from the run record where one
+exists (the start `get_run_state` already reports; item 20), with an optional argument for
+backfills. Ideally also an explicit `observing_night`: the local date the night began on,
+resolved at the site. Keep `date_utc`, but document it as the log time it actually is.
+
+---
+
+## 33. Please tell the consumer when a contract-visible change ships, even if it was announced
+
+**Affects:** the Projects screen's header recommendation, which renders its absent state because
+`recommend_projects` no longer parses.
+
+`fffa8b6` gave `recommend_projects` a `detail` parameter defaulting to `"summary"`. Before it,
+the tool returned `dataclasses.asdict(p)`: full projects, `sessions` included. Now a call with
+no arguments omits `sessions`. Our sidecar route passes only `limit`, and
+`RecommendProjectsSchema` is `ListProjectsSchema`, which requires `sessions`, so every response
+fails to parse. We established that by reading both sides, not with a live call. Our
+`fixtures/recommend_projects.json` was recorded before the change and still carries `sessions`,
+so our own suite stayed green the whole time.
+
+Our side of the fix is small: pass `detail="full"` on that route, as `27aecc2` already does for
+`list_projects`. And this was not a surprise in principle. Your 2026-07-31 coordination note
+announced the summary default for both tools. Our round-4 note predicted this exact break and
+asked for "the parameter, not just the default", and you shipped exactly that.
+
+What was missing was notice at the point it landed. CONTRACT.md v1.0.0 was cut under two hours
+*after* `fffa8b6`, and it lists the default as a standing fact rather than a change. No
+changelog line or coordination note said that `recommend_projects`' no-argument output had
+changed shape. The only record was the commit message on your side.
+
+**Asked for:** when a change alters what an existing call returns on a covered tool, tell the
+consumer when it lands, with a CONTRACT.md changelog entry and a line in the next coordination
+note, even if it was announced in principle earlier. That includes a key appearing or
+disappearing behind a new default. To a caller that passes no arguments, "the default flipped"
+is the same event as "a key was removed".
+
+---
+
 ## Impact summary
 
 | # | Item | Blocks | Already computed server-side? |
@@ -1266,6 +1408,13 @@ every one of those 951 calls was the agent's.
 | 24 | No read-only getter for a written QA report | Forces the Review screen's on-demand client cache (Option A) instead of reading back a real report | No — `qa_session_report` writes reports today, but nothing reads them back |
 | 25 | `_resolve_paths` is non-recursive | `qa_tier2(target=...)` cannot see the real, nested archive layout | No — needs a recursive glob or a documented sub-dir convention |
 | 26 | ~~`qa_tier2`'s controller-method docstring is stale~~ — **✅ landed** | Nothing on screen — documentation only | N/A — was a one-line docstring fix |
+| 27 | A failing meteoblue key removes all weather, with no fallback to Open-Meteo | Every weather field on Tonight, and the verdict (reads UNKNOWN) | Yes — `OpenMeteoSource` exists and needs no key |
+| 28 | `check_night_guardrails` re-fetches weather on every call, uncached | Nothing on screen — it spent the credits behind item 27 | N/A — a caching change |
+| 29 | `qa_tier2` drops each sub's reject causes, and never categorises marginal ones | Rejections-by-cause panel and the per-row metric highlight, both parsed from prose today | Yes — `_score_sub` returns `reject_causes`; only the dominant-cause tally reads it |
+| 30 | `qa_tier2` / `qa_session_report` block the event loop for the whole scoring run | Every other call on the session during a QA run, cancellation included | N/A — `asyncio.to_thread` around an existing call |
+| 31 | The Double Cluster is `C14` in `plan_targets` but `C14_DoubleCluster` in the projects store | Tonight's progress and QA join for that target | Yes — `find_target` is already called on write; its id is discarded |
+| 32 | `SessionRecord.date_utc` is the log time, not the session's | Session history, and anything grouped by night | Partly — the run record has a start; nothing copies it into the session |
+| 33 | `recommend_projects`' default flipped to summary with no notice when it landed | The Projects header recommendation (the payload no longer parses) | N/A — a process ask; our half is a one-line route change |
 
 **Five have landed: 1, 7, 10, 20 and 26.** Nothing on this list blocks a screen from being
 started any more — item 1 did, and the Review & QA screen shipped once it landed; item 10 did, and
@@ -1279,3 +1428,7 @@ dashboard — the ranker's blind spot is the user's most-imaged object. Item 16 
 rather than blocks: the dashboard now states the zone it *can* name honestly instead of the
 ambiguous "local", it just cannot yet name the site's. Items 21 and 23 are the two the user has
 asked for directly — the shape of the night's weather, and the picture the vendor app shows.
+
+Items 29–33 were added 2026-09-23. Three of them (29, 31 and 33) are wrong on screen today,
+not merely absent: causes attributed by parsing prose, a join that misses, and a
+recommendation that no longer parses. Item 33's fix is partly on the dashboard side.

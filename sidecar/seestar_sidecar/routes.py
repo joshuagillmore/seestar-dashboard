@@ -3,6 +3,7 @@ views (see allowlist.SIDECAR_ROUTES) that compose tool calls with local
 read-only computation. Routes are literal — an unlisted tool 404s because no
 handler exists for it, not because a guard rejected it.
 """
+import asyncio
 import os
 from dataclasses import asdict
 from datetime import timezone
@@ -15,6 +16,7 @@ from seestar_sidecar.allowlist import ALLOWED_TOOLS
 from seestar_sidecar.archive import (
     DEFAULT_ARCHIVE_DIR,
     SUB_THUMBNAIL_SUFFIX,
+    ArchiveScan,
     scan_archive,
     scan_stacked_images,
 )
@@ -32,6 +34,7 @@ from seestar_sidecar.imagery import (
     MIN_IMAGE_SIZE_PX,
     fetch_survey_cutout,
     is_plausible_target_id,
+    snap_image_size,
     resolve_image_pointer,
 )
 from seestar_sidecar.last_stack import (
@@ -46,6 +49,7 @@ from seestar_sidecar.live_preview import (
     REASON_NO_FRAME,
     REASON_NOT_CONFIGURED,
     REASON_SHARE_UNREACHABLE,
+    SHARE_SCAN_TIMEOUT_SECONDS,
     LiveFrame,
     ShareUnreachableError,
     discover_frame_within_timeout,
@@ -53,8 +57,11 @@ from seestar_sidecar.live_preview import (
     extract_target_name,
     is_frame_stale,
 )
-from seestar_sidecar.mcp_proxy import ProxyTransportError, effective_client_id
+from seestar_sidecar.mcp_proxy import LONG_RUNNING_TOOLS, ProxyTransportError, effective_client_id
+from seestar_sidecar.host_check import LOOPBACK_HOSTS, normalise_host
+from seestar_sidecar.json_safety import replace_non_finite
 from seestar_sidecar.redaction import redact_payload, redact_secrets
+from seestar_sidecar.share_io import run_share_io
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar import qa_analysis
 from seestar_sidecar.qa_analysis import DEFAULT_QA_CACHE_DIR, QaJobRegistry
@@ -79,25 +86,33 @@ router = APIRouter(prefix="/api")
 #: and it requires a custom header, which a cross-origin request cannot set
 #: without a preflight this server never answers. The Origin check below is
 #: the belt to those braces.
-_LOCAL_ORIGIN_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+#:
+#: An Origin must name a host this server answers to — the same set the Host
+#: check uses (app.state.allowed_hosts; see host_check.py): loopback, plus a
+#: deliberately configured LAN bind or SEESTAR_ALLOWED_HOSTS name.
 
 #: A header no cross-origin *simple* request can set. Its presence is what
 #: distinguishes "our own fetch()" from "a page that happens to be open".
 CLIENT_HEADER = "x-seestar-client"
 
 
-def _is_local_origin(origin: str | None) -> bool:
+def _is_allowed_origin(origin: str | None, allowed: frozenset[str]) -> bool:
     if not origin:
-        # Same-origin fetch() sends no Origin for same-site GETs, but POST
-        # always carries one in every browser we target. Absent means it did
-        # not come from a browser page at all (curl, a test client) — which is
-        # allowed: this guard exists to stop a THIRD-PARTY PAGE, not to
-        # authenticate a local operator who already has shell access.
+        # Deliberately allowed. Every browser we target sends Origin on every
+        # POST, same-origin included, so an absent one means the request did
+        # not come from a browser page at all (curl, a script, a test client).
+        # This guard exists to stop a THIRD-PARTY PAGE, not to authenticate a
+        # local process, which can already do anything this API offers.
+        # `Origin: null` is different — a sandboxed frame or file:// page, a
+        # browser page we cannot place — and falls through to be refused.
         return True
     from urllib.parse import urlparse
 
+    # hostname strips IPv6 brackets and lower-cases, matching how
+    # allowed_hosts stores names. The old literal list spelled loopback as
+    # "[::1]", which hostname never returns, so an IPv6 origin was refused.
     host = urlparse(origin).hostname
-    return host in _LOCAL_ORIGIN_HOSTS
+    return host is not None and normalise_host(host) in allowed
 
 
 def _reject_untrusted_caller(request: Request) -> JSONResponse | None:
@@ -106,7 +121,8 @@ def _reject_untrusted_caller(request: Request) -> JSONResponse | None:
         return JSONResponse(
             {"ok": False, "error": f"missing {CLIENT_HEADER} header"}, status_code=403
         )
-    if not _is_local_origin(request.headers.get("origin")):
+    allowed = getattr(request.app.state, "allowed_hosts", LOOPBACK_HOSTS)
+    if not _is_allowed_origin(request.headers.get("origin"), allowed):
         return JSONResponse(
             {"ok": False, "error": "cross-origin analysis requests are refused"},
             status_code=403,
@@ -172,8 +188,9 @@ async def _call_tool_on_app(app, tool: str, arguments: dict) -> dict:
     future handler that got that wrong internally (e.g. called
     qa_session_report) would sail past both the FORBIDDEN_TOOLS
     route-absence test and the route-set invariant, since neither inspects
-    what a route's handler body calls. This is the one place left that can
-    still say no.
+    what a route's handler body calls. This can still say no — and so can
+    McpConnection.call itself, which refuses anything outside the set it was
+    built with, for any caller that reaches a connection some other way.
 
     Deliberately a `raise`, not an `assert`: assert statements are compiled
     out entirely under `python -O` / `PYTHONOPTIMIZE=1`, so a defence-in-
@@ -185,7 +202,11 @@ async def _call_tool_on_app(app, tool: str, arguments: dict) -> dict:
     """
     if tool not in ALLOWED_TOOLS:
         raise ProxyTransportError(f"call_tool invoked for a non-allowlisted tool: {tool!r}")
-    connection = getattr(app.state, "connection", None)
+    # qa_tier2 runs on its own server process so a minutes-long analysis
+    # cannot hold the connection every live poll shares — see
+    # mcp_proxy.LONG_RUNNING_TOOLS and main.lifespan.
+    state_key = "qa_connection" if tool in LONG_RUNNING_TOOLS else "connection"
+    connection = getattr(app.state, state_key, None)
     if connection is None:
         # Two distinct reasons land here with the same symptom: the lifespan
         # simply never ran (a bare TestClient(create_app())), or it ran but
@@ -194,7 +215,34 @@ async def _call_tool_on_app(app, tool: str, arguments: dict) -> dict:
         # an internal bug either way.
         reason = getattr(app.state, "connection_unavailable_reason", None)
         raise ProxyTransportError(reason or "MCP connection not started")
-    return await connection.call(tool, arguments)
+    try:
+        payload = await connection.call(tool, arguments)
+    except ProxyTransportError as exc:
+        raise ProxyTransportError(redact_secrets(str(exc))) from None
+    except Exception as exc:  # noqa: BLE001 — e.g. an unparseable payload: a 502, not a bare 500
+        raise ProxyTransportError(
+            redact_secrets(f"call to {tool!r} failed: {type(exc).__name__}: {exc}")
+        ) from None
+    return _clean_payload(payload)
+
+
+def _clean_payload(payload: dict) -> dict:
+    """The one place every tool payload passes on its way to a route — see
+    _call_tool_on_app and _fetch's replay branch, the only two sources.
+
+    - `error` is redacted. An upstream exception string is untrusted input:
+      httpx embeds the full request URL in HTTPStatusError, and a meteoblue
+      API key reached the DOM that way (see redaction.py). This used to be
+      each route's job, and plan_targets, projects_combined and the QA job
+      errors each forgot; done here, a new route cannot.
+    - Non-finite numbers become null, so no route can 500 rendering one
+      (see json_safety.py).
+
+    Transport failures are redacted alongside, in _call_tool_on_app, and
+    re-raised `from None`: chaining the original would carry the unredacted
+    message into any traceback that logs it.
+    """
+    return redact_payload(replace_non_finite(payload))
 
 
 async def call_tool(request: Request, tool: str, arguments: dict) -> dict:
@@ -226,7 +274,7 @@ async def _fetch(request: Request, tool: str, arguments: dict) -> dict:
     duplicating the replay/live branch.
     """
     if replay_enabled():
-        return load_fixture(tool)
+        return _clean_payload(load_fixture(tool))
     return await call_tool(request, tool, arguments)
 
 
@@ -333,8 +381,8 @@ async def get_site_profile(request: Request) -> JSONResponse:
     return await _serve(request, "get_site_profile", {})
 
 
-#: `list_projects` and `recommend_projects` default to `detail="summary"`
-#: server-side as of seestar-mcp a66f2d3, which OMITS each project's
+#: `list_projects` (since seestar-mcp a66f2d3) and `recommend_projects`
+#: (since fffa8b6) default to `detail="summary"` server-side, which OMITS each project's
 #: `sessions` history (replacing it with `sessions_count` /
 #: `last_session_utc`). Omitting the key rather than emptying it was our own
 #: request — an empty list renders as "no sessions logged", which is a real
@@ -357,7 +405,10 @@ async def list_projects(request: Request) -> JSONResponse:
 async def recommend_projects(
     request: Request, limit: int | None = Query(default=None, ge=1, le=50)
 ) -> JSONResponse:
-    return await _serve(request, "recommend_projects", {"limit": limit})
+    # detail="full" for the same reason as list_projects above: since
+    # seestar-mcp fffa8b6 this tool has the same parameter and the same
+    # "summary" default, which drops `sessions`.
+    return await _serve(request, "recommend_projects", {"limit": limit, **_FULL_DETAIL})
 
 
 # --- slice 3 (Live session screen) — plain passthroughs, same _serve pattern
@@ -538,6 +589,8 @@ async def target_image(
             {"ok": False, "error": f"not a recognised target id: {target_id!r}"},
             status_code=404,
         )
+    # Bounds the disk cache: see imagery.IMAGE_SIZES_PX.
+    size = snap_image_size(size)
 
     archive_dir, local_tz = _archive_dir_and_tz(request)
     stacked_images = scan_stacked_images(archive_dir, local_tz=local_tz)
@@ -667,6 +720,17 @@ async def live_preview(request: Request) -> JSONResponse:
         return JSONResponse(_live_preview_absent(REASON_NOT_CONFIGURED))
 
     cache: LiveFrame | None = getattr(request.app.state, "live_preview_cache", None)
+    # The last known frame is only a fallback for the object the scope is on
+    # NOW. It used to be served whatever it showed, so after a slew a share
+    # hiccup put the previous target's frame up, marked merely "stale" — the
+    # wrong-target mistake the scoped scan above exists to prevent. With no
+    # active target the scan itself was unscoped, so there is nothing to
+    # mismatch and the old degrade holds.
+    if cache is not None and active_target is not None and cache.target != active_target:
+        # Cleared, not just skipped: /api/live_preview/image serves whatever
+        # is cached, and must not go on serving the old target's bytes.
+        request.app.state.live_preview_cache = None
+        cache = None
     try:
         frame = await discover_frame_within_timeout(share_dir, target=active_target)
     except ShareUnreachableError:
@@ -694,11 +758,41 @@ async def live_preview_image(request: Request) -> Response:
     as target_image's absent states.
     """
     cache: LiveFrame | None = getattr(request.app.state, "live_preview_cache", None)
-    if cache is None or not cache.path.is_file():
+    if cache is None:
         return JSONResponse(
             {"ok": False, "error": "no live preview frame available yet"}, status_code=404
         )
-    return _image_response(cache.path)
+    return await _share_image_response(
+        cache.path, missing="no live preview frame available yet"
+    )
+
+
+#: The image routes' answer when the share did not answer in time. 503 rather
+#: than 404: "could not tell" is not "there is nothing", the same distinction
+#: live_preview.ShareUnreachableError draws for the metadata routes.
+_SHARE_UNREACHABLE_BODY = {"ok": False, "error": "live share unreachable"}
+
+
+async def _share_image_response(path: Path, *, missing: str) -> Response:
+    """Serve a file from the scope's SMB share, or say why not.
+
+    The existence check used to be a bare `path.is_file()` on the event loop,
+    and a stat on an SMB share that has gone quiet can hang for as long as
+    Windows' SMB client cares to wait — with every other route and poll
+    frozen behind it. Bounded exactly as discover_frame_within_timeout bounds
+    the metadata routes' scans: off the loop on the share's own bounded
+    threads (share_io.py — a full pool raises an OSError, answered 503 here
+    at once), under the same ceiling.
+    """
+    try:
+        exists = await asyncio.wait_for(
+            run_share_io(path.is_file), timeout=SHARE_SCAN_TIMEOUT_SECONDS
+        )
+    except (asyncio.TimeoutError, OSError):
+        return JSONResponse(_SHARE_UNREACHABLE_BODY, status_code=503)
+    if not exists:
+        return JSONResponse({"ok": False, "error": missing}, status_code=404)
+    return _image_response(path)
 
 
 # --- last completed stack (slice 3 follow-up) ------------------------------
@@ -805,11 +899,11 @@ async def last_stack_image(request: Request) -> Response:
     404, same shape as live_preview_image's and target_image's absent states.
     """
     cache: LastStack | None = getattr(request.app.state, "last_stack_cache", None)
-    if cache is None or not cache.path.is_file():
+    if cache is None:
         return JSONResponse(
             {"ok": False, "error": "no last stack available yet"}, status_code=404
         )
-    return _image_response(cache.path)
+    return await _share_image_response(cache.path, missing="no last stack available yet")
 
 
 # --- session activity (operator panel) --------------------------------------
@@ -883,6 +977,32 @@ def _qa_cache_dir(request: Request) -> Path:
     if cache_dir is _QA_CACHE_DIR_UNSET:
         cache_dir = DEFAULT_QA_CACHE_DIR
     return Path(cache_dir)
+
+
+def _refuse_unknown_target(target: str, scan: ArchiveScan) -> JSONResponse | None:
+    """`None` when `target` is an id the archive scan produced or is shaped
+    like a target id, else the 404 to return.
+
+    Both QA routes below hand `target` to qa_analysis, which builds its cache
+    file path from it. Unchecked, `?target=../x` read a file outside the
+    cache, and `?target=//host/share/x` made Windows open an SMB session to
+    an attacker's host (leaking the user's NTLM hash) — reachable from a bare
+    `<img>` on any page the user had open, since qa_analysis_status is a GET.
+    qa_analysis refuses such paths itself as well (see its `_contained`);
+    this is the first layer.
+
+    The shape check alone is a character whitelist, and real archive
+    directories use others: "Thor's Helmet_sub" normalises to
+    "Thor'sHelmet", which qa_targets listed and neither route would take. A
+    key of `scan.targets` came from a directory name on the user's own disk,
+    never from the request, so it is accepted as it is; its cache file name
+    is still checked lexically by `_contained`.
+    """
+    if target in scan.targets or is_plausible_target_id(target):
+        return None
+    return JSONResponse(
+        {"ok": False, "error": f"not a recognised target id: {target!r}"}, status_code=404
+    )
 
 
 def _qa_job_registry(request: Request) -> QaJobRegistry:
@@ -972,20 +1092,19 @@ async def sub_image(request: Request, target_id: str, sub_name: str) -> Response
     itself rather than trusting a filename from the URL.
 
     **Neither path component is ever used to build a filesystem path.**
-    `target_id` goes through `is_plausible_target_id()` exactly as
-    `target_image` does, and the sub is then resolved by matching `sub_name`
-    against the STEMS of files the archive scan itself discovered. A `..` or
-    an absolute path matches no stem and 404s, because nothing here
-    concatenates user input onto a directory.
+    `target_id` goes through `_refuse_unknown_target()` as the QA routes'
+    does — so the Review & QA table can show subs of a target like
+    "Thor'sHelmet" that it can analyse — and is then only a key into the
+    archive scan. The sub is resolved by matching `sub_name` against the
+    STEMS of files the archive scan itself discovered. A `..` or an absolute
+    path matches no stem and 404s, because nothing here concatenates user
+    input onto a directory.
     """
-    if not is_plausible_target_id(target_id):
-        return JSONResponse(
-            {"ok": False, "error": f"not a recognised target id: {target_id!r}"},
-            status_code=404,
-        )
-
     archive_dir, local_tz = _archive_dir_and_tz(request)
     scan = scan_archive(archive_dir, local_tz=local_tz)
+    refusal = _refuse_unknown_target(target_id, scan)
+    if refusal is not None:
+        return refusal
     target = scan.targets.get(target_id)
     if target is None:
         return JSONResponse(
@@ -1025,6 +1144,11 @@ async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
     A target the archive scan has never heard of, or one with no subs on
     disk (an archive target directory that exists but is currently empty),
     is an honest 404 — there is nothing to analyse, not a transport failure.
+
+    At qa_analysis.MAX_CONCURRENT_ANALYSES a new job is refused with HTTP 429
+    `{"ok": false, "error": ...}` — a refusal, not a job state. A start
+    answered from a finished analysis of the current sub set carries its
+    `report`, the same shape qa_analysis_status returns.
     """
     refusal = _reject_untrusted_caller(request)
     if refusal is not None:
@@ -1032,10 +1156,21 @@ async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
 
     archive_dir, local_tz = _archive_dir_and_tz(request)
     scan = scan_archive(archive_dir, local_tz=local_tz)
+    refusal = _refuse_unknown_target(target, scan)
+    if refusal is not None:
+        return refusal
     archive_target = scan.targets.get(target)
     if archive_target is None or not archive_target.sub_paths:
         return JSONResponse(
             {"ok": False, "error": f"no subs found on disk for {target!r}"}, status_code=404
+        )
+    if not qa_analysis.can_cache(target):
+        # Only an archive on a file system Windows cannot mirror gets here
+        # (see qa_analysis._contained). Refused before minutes of analysis
+        # whose report could never be saved.
+        return JSONResponse(
+            {"ok": False, "error": f"{target!r} cannot be analysed: its name cannot be a file name"},
+            status_code=404,
         )
 
     cache_dir = _qa_cache_dir(request)
@@ -1047,9 +1182,18 @@ async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
     async def call_qa_tier2(paths: list[str]) -> dict:
         return await _call_tool_on_app(app, "qa_tier2", {"paths": paths})
 
-    status = qa_analysis.start_analysis(
-        registry, cache_dir, target, archive_target.sub_paths, call_qa_tier2, include_report=False
-    )
+    try:
+        # include_report=True: when start short-circuits on a finished
+        # analysis of the current sub set (in memory or on disk), the answer
+        # carries that report exactly as qa_analysis_status would. A running
+        # job never has one, so a fresh start is unaffected.
+        status = qa_analysis.start_analysis(
+            registry, cache_dir, target, archive_target.sub_paths, call_qa_tier2, include_report=True
+        )
+    except qa_analysis.TooManyAnalyses as refusal:
+        # A refusal, not a job state: nothing was started, and whatever the
+        # client already shows for this target (a stale report, say) stands.
+        return JSONResponse({"ok": False, "error": str(refusal)}, status_code=429)
     # `sub_count` included so this matches qa_analysis_status exactly. It used
     # to be omitted here and present there, which meant one client schema
     # could not describe both — the browser rejected every start response and
@@ -1079,9 +1223,17 @@ async def qa_analysis_status(request: Request, target: str) -> JSONResponse:
     ordinarily "not_analysed") rather than a 404: unlike qa_analysis_start,
     polling status is not an action that needs subs to exist on disk right
     now to make sense of.
+
+    A `target` the archive does not hold and that is not even shaped like a
+    target id is a 404 before anything reads the cache — see
+    _refuse_unknown_target.
     """
     archive_dir, local_tz = _archive_dir_and_tz(request)
     scan = scan_archive(archive_dir, local_tz=local_tz)
+    refusal = _refuse_unknown_target(target, scan)
+    if refusal is not None:
+        return refusal
+
     archive_target = scan.targets.get(target)
     sub_paths = archive_target.sub_paths if archive_target is not None else []
 

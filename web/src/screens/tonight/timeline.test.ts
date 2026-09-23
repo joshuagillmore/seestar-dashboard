@@ -1,16 +1,45 @@
-import { describe, expect, it } from 'vitest'
-import { buildScale, formatUtcOffset, minutesBetween, parse, spanToPercent, zoneLabel } from './timeline'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import {
+  buildScale,
+  formatUtcOffset,
+  localHhMm,
+  minutesBetween,
+  parse,
+  spanToPercent,
+  zoneLabel,
+} from './timeline'
+
+/**
+ * Run a block under a fixed IANA zone. Node re-reads `process.env.TZ` on
+ * assignment, so this pins the zone the Date APIs see — which is the only way
+ * to test clock output without depending on wherever the runner happens to
+ * be. Restored after each test, since a forked worker can be reused.
+ */
+function inZone(tz: string) {
+  let saved: string | undefined
+  beforeEach(() => {
+    saved = process.env.TZ
+    process.env.TZ = tz
+  })
+  afterEach(() => {
+    if (saved === undefined) delete process.env.TZ
+    else process.env.TZ = saved
+  })
+}
 
 describe('timeline scale', () => {
-  const scale = buildScale(['2026-09-24T19:48:37.257', '2026-09-25T03:53:37.257'])
+  // Pinned: the axis now aligns to LOCAL hours, so these UTC expectations are
+  // only exact in a whole-hour zone. UTC is the simplest one.
+  inZone('UTC')
+  const scale = () => buildScale(['2026-09-24T19:48:37.257', '2026-09-25T03:53:37.257'])
 
   it('pads an hour each side and rounds outward to the hour', () => {
-    expect(scale.startMs).toBe(Date.parse('2026-09-24T18:00:00Z'))
-    expect(scale.endMs).toBe(Date.parse('2026-09-25T05:00:00Z'))
+    expect(scale().startMs).toBe(Date.parse('2026-09-24T18:00:00Z'))
+    expect(scale().endMs).toBe(Date.parse('2026-09-25T05:00:00Z'))
   })
 
   it('places the dark window inside the padded axis', () => {
-    const { left, width } = spanToPercent(scale, [
+    const { left, width } = spanToPercent(scale(), [
       '2026-09-24T19:48:37.257',
       '2026-09-25T03:53:37.257',
     ])
@@ -19,7 +48,7 @@ describe('timeline scale', () => {
   })
 
   it('clamps a span that runs past the axis', () => {
-    const { left, width } = spanToPercent(scale, [
+    const { left, width } = spanToPercent(scale(), [
       '2026-09-24T12:00:00.000',
       '2026-09-25T12:00:00.000',
     ])
@@ -28,16 +57,16 @@ describe('timeline scale', () => {
   })
 
   it('produces one hourly tick per hour of the axis', () => {
-    expect(scale.ticks).toHaveLength(12) // 18:00 through 05:00 inclusive, across midnight
+    expect(scale().ticks).toHaveLength(12) // 18:00 through 05:00 inclusive, across midnight
   })
 
   it('collapses a span entirely outside the axis rather than going negative', () => {
-    const before = spanToPercent(scale, [
+    const before = spanToPercent(scale(), [
       '2026-09-24T14:00:00.000',
       '2026-09-24T16:00:00.000',
     ])
     expect(before).toEqual({ left: 0, width: 0 })
-    const after = spanToPercent(scale, [
+    const after = spanToPercent(scale(), [
       '2026-09-25T06:00:00.000',
       '2026-09-25T08:00:00.000',
     ])
@@ -84,17 +113,70 @@ describe('formatUtcOffset', () => {
   })
 })
 
-describe('zoneLabel', () => {
-  it('names the zone the machine running the test is actually in, in the same shape formatUtcOffset produces', () => {
-    // Cannot pin an exact value without depending on the runner's own system
-    // zone (exactly the trap localHhMm's own untested-output gap warned
-    // about) — so this asserts the real Date-based wiring holds by checking
-    // it agrees with formatUtcOffset called on that same instant's real
-    // offset, and that the shape is well-formed either way.
-    const ms = Date.parse('2026-07-30T12:00:00Z')
-    expect(zoneLabel(ms)).toBe(formatUtcOffset(-new Date(ms).getTimezoneOffset()))
-    expect(zoneLabel(ms)).toMatch(/^UTC([+-]\d{1,2}(:\d{2})?)?$/)
+describe('zoneLabel — against fixed zones, not a re-run of its own formula', () => {
+  // This used to assert zoneLabel(ms) === formatUtcOffset(-getTimezoneOffset())
+  // — the implementation restated — so on a UTC runner a dropped minus sign
+  // or a lost ":30" passed. Each case below pins a real zone and the literal
+  // label it must produce.
+  const JAN = Date.parse('2026-01-15T12:00:00Z')
+  const SEP = Date.parse('2026-09-26T12:00:00Z')
+
+  describe('UTC', () => {
+    inZone('UTC')
+    it('is bare UTC', () => expect(zoneLabel(SEP)).toBe('UTC'))
   })
+
+  describe('a whole-hour zone west of Greenwich', () => {
+    inZone('America/Denver')
+    it('keeps its minus sign', () => expect(zoneLabel(JAN)).toBe('UTC-7'))
+  })
+
+  describe('a half-hour zone east (India)', () => {
+    inZone('Asia/Kolkata')
+    it('keeps its minutes', () => expect(zoneLabel(SEP)).toBe('UTC+5:30'))
+  })
+
+  describe('a half-hour zone east (Northern Territory)', () => {
+    inZone('Australia/Darwin')
+    it('keeps its minutes', () => expect(zoneLabel(SEP)).toBe('UTC+9:30'))
+  })
+
+  describe('a half-hour zone west (Newfoundland), both sides of DST', () => {
+    inZone('America/St_Johns')
+    it('winter', () => expect(zoneLabel(JAN)).toBe('UTC-3:30'))
+    it('summer', () => expect(zoneLabel(SEP)).toBe('UTC-2:30'))
+  })
+})
+
+describe('the hour axis in a half-hour zone', () => {
+  // Ticks used to fall on UTC hours and be labelled by slicing the hour off
+  // local HH:MM. In a :30 zone every UTC hour is HH:30 locally, so every label
+  // was 30 minutes off. The ticks must sit on LOCAL hour boundaries.
+  const DARK: [string, string] = ['2026-09-26T19:43:20.878', '2026-09-27T03:58:20.878']
+
+  for (const tz of ['Asia/Kolkata', 'Australia/Darwin', 'America/St_Johns']) {
+    describe(tz, () => {
+      inZone(tz)
+
+      it('puts every tick on a local hour', () => {
+        const { ticks } = buildScale(DARK)
+        for (const tick of ticks) expect(localHhMm(tick)).toMatch(/:00$/)
+      })
+
+      it('still pads the dark window by at least an hour each side', () => {
+        const { startMs, endMs } = buildScale(DARK)
+        expect(startMs).toBeLessThanOrEqual(parse(DARK[0]) - 3_600_000)
+        expect(endMs).toBeGreaterThanOrEqual(parse(DARK[1]) + 3_600_000)
+      })
+
+      it('keeps ticks an hour apart, from the axis start to its end', () => {
+        const { startMs, endMs, ticks } = buildScale(DARK)
+        expect(ticks[0]).toBe(startMs)
+        expect(ticks[ticks.length - 1]).toBe(endMs)
+        for (let i = 1; i < ticks.length; i += 1) expect(ticks[i]! - ticks[i - 1]!).toBe(3_600_000)
+      })
+    })
+  }
 })
 
 describe('parse — zone handling', () => {

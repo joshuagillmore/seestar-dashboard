@@ -1,5 +1,10 @@
 import type { FocuserPosition, StackState, Tier1 } from '../../api/schemas'
-import { deriveTelemetryValues, formatAnnotateState, formatStageHistory } from './telemetryFormatting'
+import {
+  deriveTelemetryValues,
+  formatAnnotateState,
+  formatExposure,
+  formatStageHistory,
+} from './telemetryFormatting'
 import styles from './TelemetryGrid.module.css'
 
 export interface TelemetryGridProps {
@@ -34,10 +39,11 @@ const signed = (n: number): string => `${n >= 0 ? '+' : ''}${n}`
  * already computes "delta since the previous poll"; this client used to
  * recompute that itself before the real shape was confirmed) and fall back
  * to `get_view_state`'s raw `Stack` counts, with no delta, if `qa_tier1`
- * itself failed this poll. INTEGRATION renders an honest absent state
- * rather than a fabricated minutes-kept figure: that needs the sub exposure
- * length actually running this session, which nothing this client has
- * confirmed any tool returns. DROPPED shows the plain percentage of frames
+ * itself failed this poll. INTEGRATION is kept frames × the sub exposure the
+ * scope reports running (`View.Stack.Exposure.exp_ms`). That field was on
+ * the real payload all along; this cell used to say "exposure length not yet
+ * returned by any tool" because the schema dropped it. A poll without it
+ * renders an honest dash, never an assumed 10 s. DROPPED shows the plain percentage of frames
  * but not the design's "rotation trailing" cause — this client has no field
  * naming *why* frames dropped, and guessing one would be exactly the
  * derived-assessment problem this project avoids elsewhere (VerdictBanner's
@@ -45,8 +51,16 @@ const signed = (n: number): string => `${n >= 0 ? '+' : ''}${n}`
  */
 export function TelemetryGrid({ stack, tier1, focuser, stage, stageHistory }: TelemetryGridProps) {
   const trends = tier1?.trends
-  const { stackedValue, droppedValue, droppedPctValue: pct, focusValue, annotateState, solveTone } =
-    deriveTelemetryValues(stack, tier1, focuser)
+  const {
+    stackedValue,
+    droppedValue,
+    droppedPctValue: pct,
+    focusValue,
+    annotateState,
+    solveTone,
+    exposureMs,
+    integrationMin,
+  } = deriveTelemetryValues(stack, tier1, focuser)
 
   const cells: Cell[] = [
     {
@@ -61,8 +75,13 @@ export function TelemetryGrid({ stack, tier1, focuser, stage, stageHistory }: Te
     },
     {
       label: 'INTEGRATION',
-      value: '—',
-      sub: 'exposure length not yet returned by any tool',
+      value: integrationMin !== null ? `${integrationMin.toFixed(1)} min` : '—',
+      sub:
+        exposureMs === null
+          ? 'sub exposure not reported this poll'
+          : stackedValue != null
+            ? `${stackedValue} × ${formatExposure(exposureMs)} subs`
+            : `${formatExposure(exposureMs)} subs`,
     },
     {
       label: 'PLATE SOLVE',

@@ -27,7 +27,11 @@ dependencies = [
 seestar-dashboard = "seestar_sidecar.launcher:main"
 
 [dependency-groups]
-dev = ["pytest==9.0.3", "pytest-asyncio==1.3.0"]
+dev = [
+    "pytest==9.0.3",
+    "pytest-asyncio==1.3.0",
+    "ruff>=0.14",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -38,3 +42,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["seestar_sidecar"]
+
+[tool.ruff.lint]
+# Correctness only: pyflakes, syntax errors, bugbear and async-blocking. Style is
+# not gated, so the rule set stays one every existing line already meets.
+select = ["F", "E9", "B", "ASYNC"]

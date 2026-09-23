@@ -12,7 +12,6 @@ when it isn't given an explicit http_get.
 """
 import json
 from datetime import timedelta, timezone
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -251,7 +250,63 @@ def test_different_sizes_are_different_cache_entries(client, monkeypatch, cache_
     large = client.get(f"/api/target_image/M42?size={imagery.MAX_IMAGE_SIZE_PX}")
 
     assert small.content != large.content
-    assert calls == [imagery.MIN_IMAGE_SIZE_PX, imagery.MAX_IMAGE_SIZE_PX]
+    # The minimum snaps up to the default; see the snapping tests below.
+    assert calls == [imagery.DEFAULT_IMAGE_SIZE_PX, imagery.MAX_IMAGE_SIZE_PX]
+
+
+def test_any_requested_size_snaps_to_one_of_a_few_cached_sizes(client, monkeypatch, cache_dir):
+    """Every size from 64 to 1024 used to be its own cache file, so any page
+    the user had open could fill the disk with `<img>` tags: 961 sizes times
+    12,517 catalogue objects. The web only ever requests the default (the
+    `url` resolve_image_pointer hands it has no size), so requests snap UP to
+    the nearest of IMAGE_SIZES_PX and at most that many files exist per
+    target."""
+    widths = []
+
+    async def fake_get(url, params):
+        widths.append(params["width"])
+        return f"bytes-{params['width']}".encode()
+
+    monkeypatch.setattr(imagery, "_live_get", fake_get)
+
+    for size in range(imagery.MIN_IMAGE_SIZE_PX, imagery.MAX_IMAGE_SIZE_PX + 1, 37):
+        assert client.get(f"/api/target_image/M42?size={size}").status_code == 200
+
+    assert set(widths) <= set(imagery.IMAGE_SIZES_PX)
+    assert len(list(cache_dir.iterdir())) <= len(imagery.IMAGE_SIZES_PX)
+
+
+def test_the_default_size_is_one_of_the_cached_sizes():
+    assert imagery.DEFAULT_IMAGE_SIZE_PX in imagery.IMAGE_SIZES_PX
+    assert max(imagery.IMAGE_SIZES_PX) == imagery.MAX_IMAGE_SIZE_PX
+
+
+@pytest.mark.parametrize(
+    "requested, served",
+    [(64, 480), (300, 480), (480, 480), (481, 1024), (1024, 1024)],
+)
+def test_snap_image_size(requested, served):
+    assert imagery.snap_image_size(requested) == served
+
+
+# --- target id validation ---------------------------------------------------
+
+
+@pytest.mark.parametrize("target_id", ["M31\n", "M31\r\n", "M31\n../x", "\nM31"])
+def test_a_trailing_newline_is_not_a_plausible_target_id(target_id):
+    """`^...$` lets `$` match just before a final newline, so "M31\\n" passed
+    — and went on into cache file names. fullmatch has no such exception."""
+    assert not imagery.is_plausible_target_id(target_id)
+
+
+def test_a_newline_target_id_is_refused_by_the_route(client, monkeypatch):
+    async def must_not_fetch(url, params):
+        raise AssertionError("an implausible id must not reach the survey fetch")
+
+    monkeypatch.setattr(imagery, "_live_get", must_not_fetch)
+    response = client.get("/api/target_image/M42%0A")
+
+    assert response.status_code == 404
 
 
 # --- degrades honestly when the archive directory itself is absent --------

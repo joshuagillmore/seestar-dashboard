@@ -76,20 +76,6 @@ describe('Tier2Schema against the real recorded payload', () => {
     ])
   })
 
-  it('the thresholds are session-relative, not config constants', () => {
-    // snr_floor is half this session's median SNR. Pinning the RELATIONSHIP
-    // rather than the number is the point: a test asserting 25.6896 would
-    // pass for the wrong reason and would break on any other recording.
-    const s = real().summary
-
-    expect(s.thresholds!.snr_floor).toBeLessThan(s.medians.snr!)
-    expect(s.thresholds!.star_count_floor).toBeLessThan(s.medians.star_count!)
-    // Eccentricity is the exception and it matters: its cutoffs are absolute
-    // policy constants (the canonical PixInsight line), not session-derived,
-    // so this one does NOT track the session median.
-    expect(s.thresholds!.eccentricity_reject).toBeGreaterThan(s.medians.eccentricity!)
-  })
-
   it('summary.target is null, because we always call with paths', () => {
     // Observed, not assumed. qa_tier2 only sets `target` when invoked with
     // target=; qa_analysis.py always invokes it with paths=. So the screen
@@ -286,26 +272,54 @@ describe('QaAnalysisStatusSchema discriminates on status', () => {
   })
 })
 
-describe('contract v1.1.1 threshold guarantees', () => {
-  const t = () => Tier2Schema.parse(fixture('qa_tier2.subs.json')).summary.thresholds!
+/**
+ * What the schema does with a threshold the real server has not sent but
+ * could. These are crafted payloads, on purpose. Asserting properties of the
+ * recorded fixture proves nothing about code: a JSON file cannot hold NaN, and
+ * one recording's line ordering says nothing about the next.
+ *
+ * Contract v1.1.1 guarantees the eccentricity pair is finite and ordered
+ * (marginal <= reject). seestar-mcp enforces that in its own build, in
+ * `test_eccentricity_cutoff_lines_never_cross`. The schema deliberately does
+ * not re-check the ORDER: that would be the UI adjudicating the server's
+ * policy. MetricChart draws the server's lines as sent and visibly flags an
+ * inverted pair (a report cached before 1.1.1 can still carry one) rather
+ * than reordering or rejecting it.
+ */
+describe('Tier2Schema on crafted threshold values', () => {
+  const withThresholds = (overrides: Record<string, unknown>) => {
+    const payload = fixture('qa_tier2.subs.json')
+    payload.summary.thresholds = { ...payload.summary.thresholds, ...overrides }
+    return payload
+  }
 
-  it('the marginal line never sits above the reject line', () => {
-    // Guaranteed as of contract v1.1.1, previously only incidentally true.
-    // Their adversarial review found the derived line could exceed the reject
-    // cutoff on a session whose median sits near it — making MARGINAL
-    // unreachable on exactly the poor night where it matters. MetricChart
-    // draws both, so an inverted pair would render a chart that reads
-    // backwards.
-    expect(t().eccentricity_marginal!).toBeLessThanOrEqual(t().eccentricity_reject!)
+  it('keeps a null threshold null rather than turning it into a number', () => {
+    // Null means the server could not compute that cutoff. A coercing schema
+    // (z.coerce.number() reads null as 0) would hand MetricChart a line at
+    // zero: a cutoff the server explicitly declined to state.
+    const parsed = Tier2Schema.parse(withThresholds({ fwhm_reject: null }))
+
+    expect(parsed.summary.thresholds!.fwhm_reject).toBeNull()
   })
 
-  it('every threshold is a finite number, never NaN', () => {
-    // A NaN cutoff silently disabled the rule server-side (`x >= NaN` is
-    // always false). Arriving here it would position a chart line at NaN%,
-    // which renders as no line at all — a disabled rule and an absent line,
-    // neither of them announced.
-    for (const [key, value] of Object.entries(t())) {
-      if (value != null) expect(Number.isFinite(value), `${key} is not finite`).toBe(true)
-    }
+  it('rejects a threshold that JSON.parse reads as Infinity', () => {
+    // JSON has no NaN or Infinity literal, but an out-of-range number gets
+    // through: JSON.parse reads 1e999 as Infinity, and client.ts passes
+    // response.json() straight to the schema. Arriving as a number, it would
+    // make MetricChart's domain infinite and draw every bar at zero height.
+    // It has to fail here, at the boundary.
+    const overflow = JSON.parse('{"eccentricity_reject": 1e999}')
+    expect(overflow.eccentricity_reject).toBe(Infinity)
+
+    expect(() => Tier2Schema.parse(withThresholds(overflow))).toThrow()
+  })
+
+  it('parses a report cached before thresholds existed, with none', () => {
+    // Reports written before seestar-mcp d555c4b have no `thresholds` key.
+    // They must still parse, and yield no cutoffs rather than invented ones.
+    const payload = fixture('qa_tier2.subs.json')
+    delete payload.summary.thresholds
+
+    expect(Tier2Schema.parse(payload).summary.thresholds).toBeUndefined()
   })
 })

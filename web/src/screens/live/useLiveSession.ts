@@ -10,19 +10,22 @@ import {
   fetchTargetObservability,
   fetchTier1,
   fetchViewState,
+  NoAnswerError,
+  SchemaError,
 } from '../../api/client'
 import type {
   FocuserPosition,
   Guardrails,
   LastStack,
   LivePreview,
+  RunState,
   SessionActivity,
   TargetObservability,
   Tier1,
   ViewState,
 } from '../../api/schemas'
 import { appendTelemetryEntry, type TelemetryEntry } from './telemetryLog'
-import { shouldFetchLastStack } from './lastStack'
+import { lastStackIsSettled, shouldFetchLastStack } from './lastStack'
 
 /**
  * How often the screen re-checks scope/session state and re-polls the
@@ -68,12 +71,139 @@ export function shouldCheckDevice(
  * unbounded list. */
 export const SESSION_ACTIVITY_LIMIT = 30
 
+/**
+ * How many polls in a row must get an explicit "no View" answer before the
+ * session is forgotten. One is not enough: a single `result: {}` mid-session
+ * would otherwise wipe the log and restart the guardrail clock. See
+ * `endSession` in the hook below for the full list of what ends a session.
+ */
+export const IDLE_ANSWERS_TO_END = 2
+
+/**
+ * K: how many polls in a row may fail before a failed read stops being
+ * treated as a blip. Three things turn on it (see endSession and poll in the
+ * hook below):
+ *
+ * - a run of idle-looking polls that includes a relayed get_view_state
+ *   failure (get_status answered; the documented idle signature) ends the
+ *   session at K, where a run of explicit no-View answers alone ends it at
+ *   IDLE_ANSWERS_TO_END;
+ * - after K failed polls of any kind, the screen shows that failure rather
+ *   than the held session marked "Not current". A failure that is not an
+ *   idle sign (bridge down, an unreadable answer, a request that got no
+ *   answer) still does not end the session: it resumes, with its true start,
+ *   if the scope comes back;
+ * - the device check is forced every poll only while a session is open AND
+ *   fewer than K polls have failed. After that the ordinary back-off applies.
+ *
+ * At POLL_INTERVAL_MS that is five minutes of failures.
+ */
+export const FAILED_POLLS_LIMIT = 5
+
+/**
+ * A session with no View seen for this long is over, whatever the polls in
+ * between said. Failed polls never end a session on their own, so without
+ * this a tab left open while the scope was off all day (every poll
+ * bridge-down) would carry yesterday's start into tonight's session on the
+ * same target: the false `park_and_stop — Session duration 24.3h` the
+ * end-of-session reset exists to prevent.
+ *
+ * Long enough that no in-session outage plausibly reaches it (a laptop that
+ * slept, a sidecar restarted, a bridge that dropped for an hour), and short
+ * enough that the day between two nights always does. Getting it wrong on
+ * the short side understates elapsed time on a guardrail that governs a hard
+ * stop, so it errs long.
+ */
+export const SESSION_GAP_MS = 6 * 60 * 60 * 1000
+
+/**
+ * How a `get_view_state` request failed, while `get_status` answered.
+ *
+ * - `relayed`: the sidecar answered with the tool's own failure (on this
+ *   scope, usually its device timeout: the documented idle signature). The
+ *   bridge answered; `detail` is the tool's message, verbatim.
+ * - `no-answer`: the request got no answer from the sidecar at all (this
+ *   client's timeout, or it never connected). That is not the scope
+ *   reporting anything. `detail` is the client's `brief`, without the
+ *   "make sure the sidecar is running" advice, which get_status answering
+ *   has just disproved.
+ */
+export interface ViewFailure {
+  kind: 'relayed' | 'no-answer'
+  detail: string
+}
+
+export function viewFailure(cause: unknown): ViewFailure {
+  if (cause instanceof NoAnswerError) return { kind: 'no-answer', detail: cause.brief }
+  return { kind: 'relayed', detail: errorMessage(cause) }
+}
+
+/** The failure as a clause, worded true to its cause: "get_view_state
+ * reported a failure (…)" or "get_view_state got no answer (…)". */
+export function describeViewFailure(failure: ViewFailure): string {
+  return failure.kind === 'relayed'
+    ? `get_view_state reported a failure (${failure.detail})`
+    : `get_view_state got no answer (${failure.detail})`
+}
+
 export type LiveSessionState =
   | { phase: 'loading' }
-  | { phase: 'bridge-down'; error: string; sessionActivity: SessionActivity | null }
-  | { phase: 'idle'; sessionActivity: SessionActivity | null }
+  | {
+      phase: 'bridge-down'
+      error: string
+      /** Whether `get_run_state` — a file read on the server, which can
+       * still answer while the scope link is down — reports an active run,
+       * and on what. The screen must not contradict it, and without it
+       * cannot say whether any session is running at all. */
+      runActive: boolean
+      runTarget: string | null
+      sessionActivity: SessionActivity | null
+    }
+  | {
+      phase: 'idle'
+      /** How the scope said so. `null`: `get_view_state` answered and
+       * reported no view session (`result: {}`, the commonest real idle).
+       * Otherwise `get_view_state` failed while `get_status` still answered;
+       * see ViewFailure for the two ways, which the screen must word
+       * differently. */
+      viewError: ViewFailure | null
+      sessionActivity: SessionActivity | null
+    }
+  | {
+      /** `get_view_state` answered, but in a shape the schema rejects. The
+       * scope is talking; this client cannot read it, so it cannot say
+       * whether a session is running — and must not guess "idle", which is
+       * exactly the misreport this used to produce on hardware. */
+      phase: 'unrecognised'
+      /** The parse failure, verbatim, so the mismatch is diagnosable from
+       * the screen. */
+      detail: string
+      sessionActivity: SessionActivity | null
+    }
+  | {
+      /** `get_run_state` says a skill-driven run is active, but the scope
+       * reports no view session (or `get_view_state` failed). Between
+       * targets, or a view that stopped: either way not "idle", which is
+       * the confident wrong answer run_state exists to prevent. */
+      phase: 'run-without-view'
+      /** `run.target` from run_state — the string passed to goto_target. */
+      runTarget: string | null
+      /** As on `idle`: `null` for "answered, no View", else the failure. */
+      viewError: ViewFailure | null
+      sessionActivity: SessionActivity | null
+    }
   | {
       phase: 'active'
+      /** `null` for a reading taken on this poll. Otherwise this poll could
+       * not read the scope (a failed or unreadable `get_view_state`, or the
+       * bridge down), and every field below is the last good reading, held
+       * rather than thrown away: one bad poll does not end a session.
+       * `reason` says what went wrong this poll; `failedPolls` is how many
+       * polls in a row have failed, always below FAILED_POLLS_LIMIT (past
+       * that the failure is shown instead). */
+      stale: { reason: string; failedPolls: number } | null
+      /** When the reading below was taken, by this client's clock (ISO). */
+      readAt: string
       viewState: ViewState
       /** Each is `null` independently on its own fetch failure — a session
        * being active is anchored on `viewState` alone, so a guardrails or
@@ -106,6 +236,12 @@ export type LiveSessionState =
        * independent of everything else here. See SessionActivityCard. */
       sessionActivity: SessionActivity | null
       log: TelemetryEntry[]
+      /** The scope's real session start — `get_run_state`'s
+       * `run.session_start_utc` — and ONLY while that run is `active`.
+       * `null` otherwise, including when the guardrail check is running on
+       * the "since this tab first looked" fallback: that is not a start and
+       * must not be displayed as one (see TargetHeader). */
+      sessionStartUtc: string | null
       /** Every distinct `stage` value observed this mount, in order,
        * de-duplicating only consecutive repeats — "3PPA → AutoGoto → Stack"
        * (design README.md:460). A recorded history of what the server
@@ -164,10 +300,29 @@ export type LiveSessionState =
  *
  * Inverted:
  *
- *   view_state OK                  → active. Bridge proved up; get_status
+ *   view_state OK, View present    → active. Bridge proved up; get_status
  *                                    never called.        1 request
+ *   view_state OK, no View         → idle. Same proof;    1 request
+ *                                    get_status skipped
+ *   view_state unparseable         → unrecognised. The    1 request
+ *                                    sidecar answered;
+ *                                    never read as idle
  *   view_state fails, status OK    → idle                 6 requests
  *   view_state fails, status fails → bridge-down          6 requests
+ *
+ * Both "idle" rows become `run-without-view` instead when get_run_state says
+ * a run is active: never "Scope idle" over a run that is on.
+ *
+ * And while a session is open and on screen, a failed row (unparseable,
+ * view_state fails, bridge-down) keeps it there instead, as `active` with
+ * `stale` set, for up to FAILED_POLLS_LIMIT - 1 failures in a row: one failed
+ * read is not evidence the session ended. Only the "no View" row and a
+ * relayed view_state failure count towards ending one — see endSession for
+ * the full list.
+ *
+ * "Answered" is not "observing": a connected scope with no view session
+ * returns `result: {}`, which parses. Treating any successful fetch as
+ * active once put a green live dot over a parked scope.
  *
  * An active tick drops from 6 device requests to 1. The idle path is
  * unchanged in cost and already behind the back-off below, so it pays the
@@ -219,7 +374,11 @@ export type LiveSessionState =
  *                     as free; the writer may have died mid-run)
  *   state 'idle'    → device check on the FIRST poll, then every
  *                     IDLE_DEVICE_CHECK_EVERY-th, so a hand-driven session is
- *                     still noticed within a few minutes
+ *                     still noticed within a few minutes — and every poll
+ *                     while a session is open (from the first View until
+ *                     the session ends, or FAILED_POLLS_LIMIT failures in a
+ *                     row), since `idle` cannot see a hand-driven session
+ *                     at all
  *   run_state fails → device check every poll (fail open — never let a
  *                     missing optimisation hide a live session)
  *
@@ -248,7 +407,8 @@ export function useLiveSession(): LiveSessionState {
   const currentTargetRef = useRef<string | null>(null)
   const sessionStartedAtRef = useRef<string | null>(null)
   // Consecutive polls reporting idle, counting the current one. Reset by any
-  // non-idle answer so a session start restores full cadence immediately.
+  // non-idle run_state answer AND by any poll where the device reports a
+  // View, so a session (skill-driven or by hand) gets full cadence.
   const idleTicksRef = useRef(0)
   // Carries the last_stack result forward across polls where the target
   // hasn't changed, alongside which target it was actually fetched for —
@@ -256,35 +416,206 @@ export function useLiveSession(): LiveSessionState {
   // target changing, not the poll interval.
   const lastStackRef = useRef<LastStack | null>(null)
   const lastStackTargetRef = useRef<string | null>(null)
+  // What decides when a session ends — see endSession below.
+  // The current run of idle-looking polls: explicit "no View" answers and
+  // relayed get_view_state failures, and whether every one was explicit.
+  // Other failures carry no answer either way, so they neither count nor
+  // break the run; a View resets it.
+  const idleRunRef = useRef({ length: 0, explicitOnly: true })
+  // Consecutive polls that failed to read the scope, of any kind. Reset by
+  // any answer from the device (a View, or an explicit no-View).
+  const failStreakRef = useRef(0)
+  // The last state get_run_state actually reported (a failed fetch is not
+  // an answer), and whether it has gone from active to idle/unknown since
+  // the device last showed a View.
+  const lastRunStateRef = useRef<RunState['state'] | null>(null)
+  const runEndedRef = useRef(false)
+  // The target_name the session's own Views have reported. Only the View's
+  // name, never the preview's: the share lags and can name a previous
+  // session's object, which would reset a target that never changed.
+  const sessionViewTargetRef = useRef<string | null>(null)
+  // Date.now() of the last poll that saw a View; see SESSION_GAP_MS.
+  const lastViewAtRef = useRef<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // Aborted on cleanup, so every request this effect started is cancelled
+    // with it (see the cleanup below).
+    const controller = new AbortController()
+    const opts = { signal: controller.signal }
+
+    /**
+     * Forget everything this hook remembers about "the session". These refs
+     * are sticky within a session on purpose; left uncleared, a tab open
+     * into the next night measured check_night_guardrails' elapsed time from
+     * yesterday's start (a false `park_and_stop — Session duration 24.3h`),
+     * and carried yesterday's target, stage breadcrumb, telemetry log and
+     * last-stack panel into tonight's session.
+     *
+     * But clearing them too eagerly is the worse error. This used to run on
+     * the first poll that saw no View and on every bridge-down, so one
+     * transient get_view_state failure restarted the guardrail clock from
+     * "now" mid-session — understating elapsed time on a guardrail that
+     * governs a hard stop. So a session ends only on evidence that it has:
+     *
+     *   - a run of idle-looking polls (while no skill-driven run is active):
+     *     IDLE_ANSWERS_TO_END explicit "no View" answers, or
+     *     FAILED_POLLS_LIMIT polls once any of them was a relayed
+     *     get_view_state failure, the documented idle signature (see
+     *     countIdleSign);
+     *   - get_run_state going from active to idle/unknown, followed by an
+     *     explicit no-View answer;
+     *   - no View at all for SESSION_GAP_MS, whatever the polls said.
+     *
+     * Any other failed poll (the bridge down, a SchemaError, a request that
+     * got no answer) never ends it by count: it is held and shown as stale,
+     * and after FAILED_POLLS_LIMIT of them the failure itself is shown while
+     * the session is still remembered, in case the scope comes back.
+     *
+     * A goto to another target does not end it either (see
+     * resetTargetState): the night's clock carries on.
+     */
+    function endSession() {
+      sessionStartedAtRef.current = null
+      resetTargetState()
+      idleRunRef.current = { length: 0, explicitOnly: true }
+      runEndedRef.current = false
+      sessionViewTargetRef.current = null
+      lastViewAtRef.current = null
+    }
+
+    /**
+     * Forget what belongs to the target being imaged, and nothing else. A
+     * View naming a different target is a goto within the session, not a new
+     * one: ending the session there restarted the guardrail's elapsed clock
+     * at every goto of a hand-driven multi-target night, where no run_state
+     * start exists to recover it — understating elapsed time on a guardrail
+     * that governs a hard stop. So sessionStartedAtRef stays.
+     *
+     * The telemetry log goes with the target: its lines are one stack's
+     * running counts and its elapsed column is measured from its first line,
+     * so two targets run together read as one stack collapsing to zero.
+     */
+    function resetTargetState() {
+      currentTargetRef.current = null
+      stageHistoryRef.current = []
+      logRef.current = []
+      lastStackRef.current = null
+      lastStackTargetRef.current = null
+    }
+
+    /** A session is open from the first View until endSession. */
+    const sessionOpen = () => sessionStartedAtRef.current !== null
+
+    /**
+     * Whether the open session is still being held through failed reads:
+     * shown as stale, with the device asked every poll. Only for the first
+     * FAILED_POLLS_LIMIT - 1 failures in a row; past that, a failure is not
+     * a blip, and holding it would keep a finished session on screen and the
+     * back-off off for as long as the failures last.
+     */
+    const holdingSession = () => sessionOpen() && failStreakRef.current < FAILED_POLLS_LIMIT
+
+    /**
+     * This poll looked idle: an explicit no-View answer (`explicit`), or a
+     * get_view_state failure relayed while get_status answered. One run
+     * counts both, and ends the session at IDLE_ANSWERS_TO_END if every
+     * poll in it was explicit, or at FAILED_POLLS_LIMIT once any was
+     * relayed: a relayed failure is the documented idle signature, but also
+     * what a bad moment on the device looks like, so it needs a longer run.
+     * A run_state that has just gone from active to idle/unknown ends it on
+     * the first explicit answer.
+     */
+    function countIdleSign(explicit: boolean) {
+      const run = idleRunRef.current
+      run.length += 1
+      if (!explicit) run.explicitOnly = false
+      const limit = run.explicitOnly ? IDLE_ANSWERS_TO_END : FAILED_POLLS_LIMIT
+      if (run.length >= limit || (explicit && runEndedRef.current)) endSession()
+    }
+
+    /**
+     * This poll could not read the scope. While the open session is being
+     * held (see holdingSession) and on screen, keep showing it — marked
+     * stale, with why — rather than a failure card that implies the session
+     * is gone. Otherwise (no session, the screen already moved off it on an
+     * idle answer, or too many failures in a row) show `fallback`. What
+     * the session remembers is kept either way, until endSession.
+     */
+    function settleFailure(fallback: LiveSessionState, reason: string, sessionActivity: SessionActivity | null) {
+      const hold = holdingSession()
+      const stale = { reason, failedPolls: failStreakRef.current }
+      setState((prev) => (hold && prev.phase === 'active' ? { ...prev, stale, sessionActivity } : fallback))
+    }
+
+    /**
+     * The bridge is up and the scope is not showing a view session. That is
+     * idle — unless `get_run_state` says a skill-driven run is active, in
+     * which case "Scope idle — not observing" would be the confident wrong
+     * answer: the run may be between targets, or its view may have stopped.
+     */
+    function withoutView(
+      runState: RunState | null,
+      viewError: ViewFailure | null,
+      sessionActivity: SessionActivity | null,
+    ): LiveSessionState {
+      if (runState?.state === 'active') {
+        return {
+          phase: 'run-without-view',
+          runTarget: runState.run?.target ?? null,
+          viewError,
+          sessionActivity,
+        }
+      }
+      return { phase: 'idle', viewError, sessionActivity }
+    }
 
     async function poll() {
       // Kicked off immediately, independent of everything below — see this
       // hook's own doc comment.
-      const sessionActivityPromise = fetchSessionActivity(SESSION_ACTIVITY_LIMIT).catch(() => null)
+      const sessionActivityPromise = fetchSessionActivity(SESSION_ACTIVITY_LIMIT, opts).catch(() => null)
 
       // Free — a file read server-side, no Alpaca call — so this runs every
       // poll regardless of phase and is what gates the expensive ones below.
       // Failure is not fatal and must not suppress the device check: a
       // missing optimisation is better than a hidden session.
-      const runState = await fetchRunState().catch(() => null)
+      const runState = await fetchRunState(opts).catch(() => null)
+      // After EVERY await, before any ref is touched: a poll whose effect
+      // was cleaned up must leave no trace. StrictMode (main.tsx) mounts,
+      // cleans up and re-mounts in dev, and the orphaned first poll used to
+      // count its idle answer too — the real poll then saw idleTicks 2,
+      // skipped the device, and the screen sat on its skeleton for ~5
+      // minutes. The same orphan could stamp sessionStartedAtRef and
+      // lastStackTargetRef for the live poll that follows.
+      if (cancelled) return
       if (runState?.state === 'idle') {
         idleTicksRef.current += 1
       } else {
         idleTicksRef.current = 0
       }
-      if (!shouldCheckDevice(runState?.state ?? null, idleTicksRef.current)) {
+      if (runState) {
+        if (lastRunStateRef.current === 'active' && runState.state !== 'active') runEndedRef.current = true
+        if (runState.state === 'active') runEndedRef.current = false
+        lastRunStateRef.current = runState.state
+      }
+      if (lastViewAtRef.current !== null && Date.now() - lastViewAtRef.current > SESSION_GAP_MS) {
+        endSession()
+      }
+      // While a session is being held the device is asked every poll,
+      // whatever run_state says: a hand-driven session reads `idle` there
+      // throughout, and the back-off would otherwise hold a stale reading, or
+      // the answer that confirms the end, for up to five minutes. Once
+      // FAILED_POLLS_LIMIT polls in a row have failed, the ordinary back-off
+      // applies again (see holdingSession).
+      if (!holdingSession() && !shouldCheckDevice(runState?.state ?? null, idleTicksRef.current)) {
         const sessionActivity = await sessionActivityPromise
         // Deliberately keeps the previous phase rather than asserting 'idle':
         // this branch did not ask the scope anything, so it has learned
         // nothing new about it. Claiming idle here would be inventing an
         // observation we skipped making.
         if (!cancelled && sessionActivity) {
-          setState((prev) =>
-            prev.phase === 'idle' ? { phase: 'idle', sessionActivity } : prev,
-          )
+          setState((prev) => (prev.phase === 'idle' ? { ...prev, sessionActivity } : prev))
         }
         return
       }
@@ -295,28 +626,110 @@ export function useLiveSession(): LiveSessionState {
       // exactly the ticks where the control link is busiest.
       let viewState: ViewState
       try {
-        viewState = await fetchViewState()
-      } catch {
-        // No session. Now — and only now — spend the 5 requests to tell
+        viewState = await fetchViewState(opts)
+      } catch (viewCause) {
+        if (cancelled) return
+        // Every branch below is a failed read. Only a relayed get_view_state
+        // failure counts towards ending the session (see countIdleSign); an
+        // open one is otherwise held and shown as stale, for a while.
+        failStreakRef.current += 1
+        //
+        // Answered, unreadably. Not a session we can see, not an idle scope
+        // we can vouch for, and not a bridge problem — the sidecar just
+        // answered, so get_status would prove nothing. Say what happened.
+        if (viewCause instanceof SchemaError) {
+          const sessionActivity = await sessionActivityPromise
+          if (cancelled) return
+          settleFailure(
+            { phase: 'unrecognised', detail: viewCause.message, sessionActivity },
+            `get_view_state answered in a shape this dashboard doesn't understand (${viewCause.message})`,
+            sessionActivity,
+          )
+          return
+        }
+        // No View read. Now — and only now — spend the 5 requests to tell
         // "idle" from "the bridge is gone", which is the one question
         // get_status is actually here to answer.
         try {
-          await fetchStatus()
+          await fetchStatus(opts)
         } catch (cause) {
           const sessionActivity = await sessionActivityPromise
-          if (!cancelled) {
-            setState({
+          if (cancelled) return
+          const runActive = runState?.state === 'active'
+          settleFailure(
+            {
               phase: 'bridge-down',
-              error: cause instanceof Error ? cause.message : String(cause),
+              error: errorMessage(cause),
+              runActive,
+              runTarget: runActive ? (runState?.run?.target ?? null) : null,
               sessionActivity,
-            })
-          }
+            },
+            `the bridge did not answer (${errorMessage(cause)})`,
+            sessionActivity,
+          )
           return
         }
         const sessionActivity = await sessionActivityPromise
-        if (!cancelled) setState({ phase: 'idle', sessionActivity })
+        if (cancelled) return
+        const failure = viewFailure(viewCause)
+        // The tool itself said get_view_state failed while get_status
+        // answered: the documented idle signature, so it counts towards
+        // ending the session — as an explicit answer does, and likewise not
+        // while a skill-driven run is active. A request that got no answer
+        // at all says nothing about the scope, and does not count.
+        if (failure.kind === 'relayed' && runState?.state !== 'active') countIdleSign(false)
+        settleFailure(withoutView(runState, failure, sessionActivity), describeViewFailure(failure), sessionActivity)
         return
       }
+
+      // Answering is not observing. A connected scope with no view session
+      // returns `result: {}` — it parses, and it used to count as "active":
+      // a green live dot, "Stacking", a column of dashes and a guardrails
+      // fetch for a session that did not exist, while the sidecar's
+      // live_preview, given no View to scope by, scanned the whole share and
+      // named an old target. No View is idle (unless a run is active — see
+      // withoutView). The bridge has just answered, so get_status would
+      // only re-prove it: skipped.
+      const view = viewState.view_state?.result?.View
+      if (view == null) {
+        const sessionActivity = await sessionActivityPromise
+        if (cancelled) return
+        // The device answered, so no failure streak; and an explicit answer
+        // counts towards ending the session — but not while a skill-driven
+        // run is active: that run is still the session, between targets or
+        // not.
+        failStreakRef.current = 0
+        if (runState?.state !== 'active') countIdleSign(true)
+        setState(withoutView(runState, null, sessionActivity))
+        return
+      }
+      if (cancelled) return
+
+      // A View, so no idle run and no failure streak, and a run that ended
+      // while the device still showed one has been outlived by the session:
+      // from here the ordinary idle-run rule applies. A View naming a
+      // different target is a goto within the session: the target's own
+      // state resets, the session's clock does not.
+      idleRunRef.current = { length: 0, explicitOnly: true }
+      failStreakRef.current = 0
+      runEndedRef.current = false
+      if (view.target_name) {
+        if (sessionViewTargetRef.current !== null && view.target_name !== sessionViewTargetRef.current) {
+          resetTargetState()
+        }
+        sessionViewTargetRef.current = view.target_name
+      }
+      lastViewAtRef.current = Date.now()
+
+      // The device itself says it is observing, which outranks run_state's
+      // `idle`: that only means "no skill-driven run", and a session started
+      // by hand from the phone app reads idle on every poll. Counting those
+      // answers put polls 2-5 of a live hand-driven session behind the
+      // back-off: stack count, preview, guardrails and log froze for ~4
+      // minutes, and the session's end went unnoticed for up to 5. Full
+      // cadence for as long as the session is open; the back-off resumes
+      // once it has ended.
+      idleTicksRef.current = 0
 
       // The scope's own start when the server can tell us, and only then the
       // "since I started watching" fallback. Handback item 20: the guardrail
@@ -343,42 +756,49 @@ export function useLiveSession(): LiveSessionState {
       const sessionStart = sessionStartedAtRef.current ?? new Date().toISOString()
 
       const [guardrails, tier1, focuser, preview, sessionActivity] = await Promise.all([
-        fetchGuardrails(sessionStart).catch(() => null),
-        fetchTier1().catch(() => null),
-        fetchFocuserPosition().catch(() => null),
-        fetchLivePreview().catch(() => null),
+        fetchGuardrails(sessionStart, opts).catch(() => null),
+        fetchTier1(opts).catch(() => null),
+        fetchFocuserPosition(opts).catch(() => null),
+        fetchLivePreview(opts).catch(() => null),
         sessionActivityPromise,
       ])
+      if (cancelled) return
 
       // The scope's own answer first, the share's second. See currentTarget's
       // doc comment: reading the preview alone meant an unreachable share
       // erased the target name from a session that was visibly still running.
       // Held sticky across a poll where both are momentarily absent, rather
       // than blanking the sweet-band card.
-      const namedTarget = viewState?.view_state?.result?.View?.target_name ?? preview?.target
+      const namedTarget = view.target_name ?? preview?.target
       if (namedTarget) currentTargetRef.current = namedTarget
-      const observability = currentTargetRef.current
-        ? await fetchTargetObservability(currentTargetRef.current).catch(() => null)
+      const target = currentTargetRef.current
+      const observability = target
+        ? await fetchTargetObservability(target, opts).catch(() => null)
         : null
+      if (cancelled) return
 
       // Target-gated, not poll-gated — see shouldFetchLastStack's own doc
       // comment. A poll where the target hasn't changed reuses whatever is
       // already in lastStackRef rather than re-requesting a ~730 KB image.
-      if (shouldFetchLastStack(currentTargetRef.current, lastStackTargetRef.current)) {
-        lastStackTargetRef.current = currentTargetRef.current
-        lastStackRef.current = currentTargetRef.current
-          ? await fetchLastStack(currentTargetRef.current).catch(() => null)
-          : null
+      // The target is recorded as done only once the answer settles it (see
+      // lastStackIsSettled); a transient failure is shown this poll and
+      // asked again the next.
+      if (target !== null && shouldFetchLastStack(target, lastStackTargetRef.current)) {
+        const lastStack = await fetchLastStack(target, opts).catch(() => null)
+        if (cancelled) return
+        lastStackRef.current = lastStack
+        if (lastStackIsSettled(lastStack)) lastStackTargetRef.current = target
       }
 
-      if (cancelled) return
       if (tier1) logRef.current = appendTelemetryEntry(logRef.current, tier1)
-      const stage = viewState.view_state?.result?.View?.stage
+      const stage = view.stage
       if (stage && stageHistoryRef.current[stageHistoryRef.current.length - 1] !== stage) {
         stageHistoryRef.current = [...stageHistoryRef.current, stage]
       }
       setState({
         phase: 'active',
+        stale: null,
+        readAt: new Date().toISOString(),
         viewState,
         guardrails,
         tier1,
@@ -388,18 +808,41 @@ export function useLiveSession(): LiveSessionState {
         lastStack: lastStackRef.current,
         sessionActivity,
         log: logRef.current,
+        sessionStartUtc: realStart,
         stageHistory: stageHistoryRef.current,
         currentTarget: currentTargetRef.current,
       })
     }
 
-    poll()
-    const id = setInterval(poll, POLL_INTERVAL_MS)
+    // The next poll is scheduled one interval after this one SETTLES, not
+    // on a fixed setInterval. setInterval fired whether or not the previous
+    // poll had finished, and the sidecar serialises MCP calls, so slow polls
+    // stacked up behind each other and interleaved their writes to the same
+    // refs. Every request is bounded by the client's REQUEST_TIMEOUT_MS, so
+    // a poll always settles.
+    async function loop() {
+      try {
+        await poll()
+      } catch {
+        // poll() soft-fails every fetch itself; this only guards the loop
+        // against an unexpected throw ending the polling for the tab's life.
+      }
+      if (!cancelled) timer = setTimeout(loop, POLL_INTERVAL_MS)
+    }
+
+    loop()
     return () => {
       cancelled = true
-      clearInterval(id)
+      clearTimeout(timer)
+      // In-flight requests are abandoned, not merely ignored: the sidecar
+      // should not keep queueing work for a screen nobody is looking at.
+      controller.abort()
     }
   }, [])
 
   return state
+}
+
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause)
 }

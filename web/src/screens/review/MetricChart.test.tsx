@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { Tier2Schema, type QaSubVerdict } from '../../api/schemas'
 import { MetricChart } from './MetricChart'
 import { thresholdLinesFor } from './qa'
+import { makeSub, serverReason } from './testReasons'
 
 const report = Tier2Schema.parse(
   JSON.parse(
@@ -150,5 +151,149 @@ describe('MetricChart geometry', () => {
     render(<MetricChart eyebrow="ecc" subs={[]} metric="eccentricity" totalSubs={0} />)
 
     expect(screen.getByText('no subs to plot')).toBeInTheDocument()
+  })
+})
+
+/**
+ * A report cached before seestar-mcp contract 1.1.1 can carry a marginal
+ * line above the reject line. The chart must say so rather than draw the
+ * pair silently inverted — and must not "fix" it by reordering or inventing.
+ */
+describe('MetricChart with cutoffs that arrived out of order', () => {
+  const subs = report.summary.subs
+  // Synthetic values, inverted on purpose.
+  const inverted = thresholdLinesFor('eccentricity', {
+    eccentricity_marginal: 0.95,
+    eccentricity_reject: 0.9,
+  })
+
+  it('says visibly that the marginal line is not below the reject line', () => {
+    render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={inverted} />,
+    )
+
+    expect(screen.getByRole('note')).toHaveTextContent(/out of order/i)
+  })
+
+  it('makes no promise about what a fresh analysis would send', () => {
+    // It used to add "a fresh analysis will not". Whether the server's
+    // guarantee holds is the server's to keep; the UI cannot know it.
+    render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={inverted} />,
+    )
+
+    expect(screen.getByRole('note')).not.toHaveTextContent(/fresh analysis/i)
+    expect(screen.getByRole('note')).toHaveTextContent(/drawn as the report sent them/)
+  })
+
+  it('still draws both lines exactly where the payload put them', () => {
+    const { container } = render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={inverted} />,
+    )
+
+    const [marginal, reject] = lines(container).map((l) => pct(l, 'bottom'))
+    // Not reordered: the marginal line really is drawn above.
+    expect(marginal!).toBeGreaterThan(reject!)
+    expect(screen.getByText('marginal 0.95')).toBeInTheDocument()
+    expect(screen.getByText('reject 0.9')).toBeInTheDocument()
+  })
+
+  it('says nothing for a correctly ordered pair, or an equal one', () => {
+    // Equal is allowed: 1.1.1 clamps the marginal line to at most the
+    // reject line, so the two can coincide on a legitimate report.
+    const ordered = thresholdLinesFor('eccentricity', {
+      eccentricity_marginal: 0.7,
+      eccentricity_reject: 0.9,
+    })
+    const equal = thresholdLinesFor('eccentricity', {
+      eccentricity_marginal: 0.9,
+      eccentricity_reject: 0.9,
+    })
+    const a = render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={ordered} />,
+    )
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+    a.unmount()
+    render(
+      <MetricChart eyebrow="ecc" subs={subs} metric="eccentricity" totalSubs={25} thresholds={equal} />,
+    )
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * A real session is hundreds of subs, so bucketing (above 60 on desktop, 40
+ * on mobile) is the ORDINARY path, not an edge case. These run there.
+ */
+describe('MetricChart on a bucketed session', () => {
+  // Synthetic cutoffs — deliberately not the policy numbers.
+  const SYN = { eccentricity_reject: 0.9, eccentricity_marginal: 0.7 }
+  const eccLines = thresholdLinesFor('eccentricity', SYN)
+
+  const session = (): QaSubVerdict[] =>
+    Array.from({ length: 120 }, (_, i) => {
+      const name = `Light_T_10.0s_LP_${String(i).padStart(4, '0')}`
+      if (i === 57) {
+        return makeSub(name, 'REJECT', [serverReason.eccReject(0.95, 0.9)], {
+          eccentricity: 0.95,
+        })
+      }
+      if (i === 90) {
+        // Rejected, but for FWHM — its eccentricity is ordinary.
+        return makeSub(name, 'REJECT', [serverReason.fwhmReject(2.8, 2.74, 2.61)], {
+          eccentricity: 0.4,
+          fwhm: 2.8,
+        })
+      }
+      return makeSub(name, 'PASS', [serverReason.pass], { eccentricity: 0.38 + (i % 5) * 0.01 })
+    })
+
+  const draw = () =>
+    render(
+      <MetricChart
+        eyebrow="ecc"
+        subs={session()}
+        metric="eccentricity"
+        totalSubs={120}
+        thresholds={eccLines}
+      />,
+    )
+
+  it('draws a single outlier ABOVE the reject line it crossed', () => {
+    const { container } = draw()
+
+    // 120 subs into 60 bars: it really is bucketed.
+    expect(bars(container)).toHaveLength(60)
+    const rejectLine = lines(container).map((l) => pct(l, 'bottom'))[1]!
+    const tallest = Math.max(...bars(container).map((b) => pct(b, 'height')))
+
+    // Averaged with its bucket-mate it would sit below the line.
+    expect(tallest).toBeGreaterThan(rejectLine)
+  })
+
+  it('paints no bar red that is below the marginal line', () => {
+    // Sub 90 was rejected for FWHM. On the eccentricity chart its bar is an
+    // ordinary eccentricity and must not be red on the passing side.
+    const { container } = draw()
+    const marginalLine = lines(container).map((l) => pct(l, 'bottom'))[0]!
+
+    const redBelow = bars(container).filter(
+      (b) => /reject/.test(b.className) && pct(b, 'height') < marginalLine,
+    )
+    expect(redBelow).toEqual([])
+  })
+
+  it('names each bar’s verdict and the server’s reason, not just its colour', () => {
+    const { container } = draw()
+
+    const red = bars(container).filter((b) => /reject/.test(b.className))
+    expect(red).toHaveLength(1)
+    const label = red[0]!.getAttribute('aria-label') ?? ''
+    expect(label).toContain(serverReason.eccReject(0.95, 0.9))
+    expect(red[0]!.getAttribute('title')).toBe(label)
+
+    // A clean bar says so in words too.
+    const clean = bars(container).find((b) => !/reject|marginal/.test(b.className))!
+    expect(clean.getAttribute('aria-label')).toMatch(/PASS/)
   })
 })

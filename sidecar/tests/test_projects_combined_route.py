@@ -383,6 +383,13 @@ def test_local_tz_override_is_genuinely_used_not_just_accepted(monkeypatch, tmp_
     only excluded (correct) if UTC+9 was genuinely used; a silent fallback
     to this machine's Eastern zone reads 2025-01-01 instead, misses the
     collision, and double-counts.
+
+    The session is logged at 11:30Z, half an hour after the frame (11:00Z
+    under UTC+9). It used to be logged at 20:00Z the day BEFORE the frame,
+    which no real session can be: projects_union._claimed_nights refuses a
+    night whose frames were all captured after the log. Under any fallback
+    zone at or west of UTC the frame is later still, so the mutation stays
+    caught.
     """
     from seestar_sidecar import routes
 
@@ -396,7 +403,7 @@ def test_local_tz_override_is_genuinely_used_not_just_accepted(monkeypatch, tmp_
                     "collected_minutes": 10.0,
                     "sessions": [
                         {
-                            "date_utc": "2024-12-31T20:00:00+00:00",
+                            "date_utc": "2025-01-01T11:30:00+00:00",
                             "integration_minutes": 10.0,
                             "subs_total": 1,
                             "subs_kept": 1,

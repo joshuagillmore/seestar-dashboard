@@ -36,8 +36,9 @@ import { z } from 'zod'
  * 1.1.1 guarantees that field is finite and never above
  * `eccentricity_reject`. No shape change, and re-recording confirmed
  * byte-identical thresholds and verdicts on our own payload — but the
- * GUARANTEE is new, and MetricChart draws both lines, so their ordering is
- * now something we may rely on rather than something that happened to hold.
+ * GUARANTEE is new. MetricChart still draws both lines as sent and visibly
+ * flags an inverted pair (qa.ts's cutoffsInverted), since a report cached
+ * before 1.1.1 can carry one.
  */
 export const SEESTAR_MCP_CONTRACT_VERSION = '1.1.1'
 
@@ -320,6 +321,20 @@ export const AnnotateSchema = z.object({
     .nullish(),
 })
 
+/** The sub currently being exposed. Captured on hardware (firmware 7.75,
+ * `fixtures/get_view_state.json`):
+ * `{"state":"complete","lapse_ms":11378,"exp_ms":10000.0,"port":4700}`.
+ * `exp_ms` is the sub exposure the session is running — the figure the
+ * INTEGRATION cell and the "single N s sub" captions need. It was on the
+ * payload all along and this schema dropped it, so the screen said "exposure
+ * length not yet returned by any tool". Absent means no value, never a
+ * default. */
+export const ExposureSchema = z.object({
+  state: z.string().nullish(),
+  lapse_ms: z.number().nullish(),
+  exp_ms: z.number().nullish(),
+})
+
 export const StackStateSchema = z.object({
   stacked_frame: z.number(),
   dropped_frame: z.number(),
@@ -327,6 +342,7 @@ export const StackStateSchema = z.object({
    * fixture. Optional so neither source fails the other. */
   frame_errcode: z.number().nullish(),
   can_annotate: z.boolean().nullish(),
+  Exposure: ExposureSchema.nullish(),
   Annotate: AnnotateSchema.nullable().optional(),
 })
 

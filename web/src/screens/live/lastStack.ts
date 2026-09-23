@@ -1,5 +1,7 @@
 import type { LastStack } from '../../api/schemas'
 import { parse } from '../tonight/timeline'
+import { shareReasonLabel } from './shareReasons'
+import { MONTH_ABBR } from './timestamps'
 
 /**
  * Whether `/api/last_stack` should be (re-)fetched this poll. Target changes
@@ -12,20 +14,32 @@ import { parse } from '../tonight/timeline'
  *
  * `target: null` means nothing has resolved a current target yet, so there
  * is nothing to fetch for. `fetchedFor` is the target the caller already has
- * a result for (or attempted); a `null` current target never overwrites it.
+ * a SETTLED result for (see `lastStackIsSettled` — a failed attempt does not
+ * count); a `null` current target never overwrites it.
  */
 export function shouldFetchLastStack(target: string | null, fetchedFor: string | null): boolean {
   return target !== null && target !== fetchedFor
 }
 
-/** Jan/Feb/… — spelled out rather than reached for via `Intl` so the render
- * path and its test don't depend on the runner's default locale deciding
- * "day month" vs "month day" ordering (see timeline.test.ts's own
- * `formatUtcOffset`/`zoneLabel` tests for the same trap, avoided the same
- * way there). */
-export const MONTH_ABBR = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-]
+/**
+ * Whether a `/api/last_stack` answer settles the question for its target, so
+ * the caller may stop asking until the target changes. Only two answers do:
+ * a stack was found, or the share was read and holds none (`no_stack`).
+ *
+ * Everything else — a rejected fetch (`null`), `share_unreachable`,
+ * `bridge_down`, `idle` (the sidecar's own view check racing ours) — is a
+ * transient failure to find out. The target used to be recorded before the
+ * fetch, so one such hiccup was never retried for that target and the panel
+ * said "unreachable" for the rest of the night.
+ */
+export function lastStackIsSettled(lastStack: LastStack | null): boolean {
+  if (lastStack === null) return false
+  return lastStack.target !== null || lastStack.reason === 'no_stack'
+}
+
+// Shared with timestamps.ts's formatWhen; re-exported so existing imports
+// keep working.
+export { MONTH_ABBR }
 
 /**
  * `captured_at` as `"12 Jul"` — day-of-month then short month, in the
@@ -77,18 +91,10 @@ export function lastStackImageSrc(lastStack: LastStack | null): string | undefin
  * far still running) — worded as such, not as a fault. The other four are
  * infra hiccups this card degrades from independently, same soft-fail
  * register `GuardrailsCard`/`PreviewCard`'s own empty states use elsewhere on
- * this screen. An unrecognised future code falls back to itself rather than
- * disappearing silently — loud, not blank.
+ * this screen. The words live in shareReasons.ts, shared with the live
+ * preview, whose route emits the same tokens.
  */
-const LAST_STACK_REASON_LABELS: Record<string, string> = {
-  no_stack: 'No completed stack yet for this target.',
-  idle: 'Scope not observing right now.',
-  bridge_down: 'Bridge unreachable — the same connection the rest of this screen depends on.',
-  not_configured: 'Live share not configured on the sidecar.',
-  share_unreachable: 'Live share unreachable right now.',
-}
-
 export function lastStackReasonLabel(reason: string | null | undefined): string {
   if (!reason) return 'No completed stack available yet.'
-  return LAST_STACK_REASON_LABELS[reason] ?? reason
+  return shareReasonLabel(reason)
 }

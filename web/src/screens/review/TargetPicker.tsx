@@ -18,17 +18,22 @@ export interface TargetPickerProps {
  * analysed row read as a good result: a target that scored 90% REJECT still
  * showed green. It is `ready` now, and toned by brightness rather than hue —
  * bright means a report exists, faint means it does not, and neither claims
- * anything about what the report says. */
+ * anything about what the report says.
+ *
+ * `stale` and `failed` made the same mistake in amber and red — the MARGINAL
+ * and REJECT colours — for states that are equally silent about quality. A
+ * failed JOB says nothing about the subs. They are styled by outline now
+ * (see TargetPicker.module.css), and their words carry the meaning. */
 function statusLabel(target: QaTarget): { text: string; tone: string } {
   switch (target.status) {
     case 'complete':
       return { text: 'analysed', tone: 'ready' }
     case 'stale':
-      return { text: 'stale', tone: 'marginal' }
+      return { text: 'stale', tone: 'stale' }
     case 'running':
       return { text: 'running…', tone: 'running' }
     case 'failed':
-      return { text: 'failed', tone: 'reject' }
+      return { text: 'failed', tone: 'failed' }
     default:
       return { text: 'not analysed', tone: 'idle' }
   }
