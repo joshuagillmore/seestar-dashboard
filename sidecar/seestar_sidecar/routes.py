@@ -53,7 +53,7 @@ from seestar_sidecar.live_preview import (
     extract_target_name,
     is_frame_stale,
 )
-from seestar_sidecar.mcp_proxy import ProxyTransportError, effective_client_id
+from seestar_sidecar.mcp_proxy import LONG_RUNNING_TOOLS, ProxyTransportError, effective_client_id
 from seestar_sidecar.redaction import redact_payload, redact_secrets
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
 from seestar_sidecar import qa_analysis
@@ -185,7 +185,11 @@ async def _call_tool_on_app(app, tool: str, arguments: dict) -> dict:
     """
     if tool not in ALLOWED_TOOLS:
         raise ProxyTransportError(f"call_tool invoked for a non-allowlisted tool: {tool!r}")
-    connection = getattr(app.state, "connection", None)
+    # qa_tier2 runs on its own server process so a minutes-long analysis
+    # cannot hold the connection every live poll shares — see
+    # mcp_proxy.LONG_RUNNING_TOOLS and main.lifespan.
+    state_key = "qa_connection" if tool in LONG_RUNNING_TOOLS else "connection"
+    connection = getattr(app.state, state_key, None)
     if connection is None:
         # Two distinct reasons land here with the same symptom: the lifespan
         # simply never ran (a bare TestClient(create_app())), or it ran but
