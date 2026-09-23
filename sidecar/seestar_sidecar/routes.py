@@ -33,6 +33,7 @@ from seestar_sidecar.imagery import (
     MIN_IMAGE_SIZE_PX,
     fetch_survey_cutout,
     is_plausible_target_id,
+    snap_image_size,
     resolve_image_pointer,
 )
 from seestar_sidecar.last_stack import (
@@ -585,6 +586,8 @@ async def target_image(
             {"ok": False, "error": f"not a recognised target id: {target_id!r}"},
             status_code=404,
         )
+    # Bounds the disk cache: see imagery.IMAGE_SIZES_PX.
+    size = snap_image_size(size)
 
     archive_dir, local_tz = _archive_dir_and_tz(request)
     stacked_images = scan_stacked_images(archive_dir, local_tz=local_tz)
