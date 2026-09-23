@@ -139,6 +139,12 @@ export type LiveSessionState =
        * independent of everything else here. See SessionActivityCard. */
       sessionActivity: SessionActivity | null
       log: TelemetryEntry[]
+      /** The scope's real session start — `get_run_state`'s
+       * `run.session_start_utc` — and ONLY while that run is `active`.
+       * `null` otherwise, including when the guardrail check is running on
+       * the "since this tab first looked" fallback: that is not a start and
+       * must not be displayed as one (see TargetHeader). */
+      sessionStartUtc: string | null
       /** Every distinct `stage` value observed this mount, in order,
        * de-duplicating only consecutive repeats — "3PPA → AutoGoto → Stack"
        * (design README.md:460). A recorded history of what the server
@@ -530,6 +536,7 @@ export function useLiveSession(): LiveSessionState {
         lastStack: lastStackRef.current,
         sessionActivity,
         log: logRef.current,
+        sessionStartUtc: realStart,
         stageHistory: stageHistoryRef.current,
         currentTarget: currentTargetRef.current,
       })

@@ -1,3 +1,5 @@
+import { parse } from '../tonight/timeline'
+import { formatDuration, formatWhen } from './timestamps'
 import styles from './TargetHeader.module.css'
 
 export interface TargetHeaderProps {
@@ -20,6 +22,12 @@ export interface TargetHeaderProps {
    * that doesn't send it, or before `get_view_state` has answered at all)
    * renders no chip — an unknown filter state must not read as "off". */
   lpFilter?: boolean | null
+  /** The run's real start: `get_run_state`'s `run.session_start_utc`, and
+   * only while that run is `active` (useLiveSession's `sessionStartUtc`).
+   * Never the "since this tab first looked" fallback the guardrail check
+   * uses — that is not a start, and must not be shown as one. `null` or
+   * absent renders no start at all. */
+  sessionStartUtc?: string | null
 }
 
 /**
@@ -36,16 +44,18 @@ export interface TargetHeaderProps {
  * See `lpFilter`'s own doc comment for why `true`/`false`/absent are three
  * distinct renders, not two.
  *
- * "started HH:MM · elapsed …" is also absent: it needs a session-start time
- * this client has no source for (get_view_state does not confirm one — the
- * client-observed timestamp `useLiveSession` tracks for `check_night_
- * guardrails` is honestly "since I've been watching", not the scope's real
- * start, so it is not shown as if it were one), and fabricating one from
- * "whenever this screen happened to be opened" would be a fake measurement,
- * not a real one — see PreviewCard's `captured_at` for the contrast (a real
- * timestamp the server actually returns).
+ * "started HH:MM · elapsed …" renders from `get_run_state`'s
+ * `run.session_start_utc` (handback item 20, fetched every poll) while the
+ * run is active. This comment used to say no source existed. There is still
+ * none for a session started by hand from the phone app, which writes no
+ * run_state; then nothing is shown. The client-observed "since I've been
+ * watching" time useLiveSession falls back to for `check_night_guardrails`
+ * is never shown here: presenting when a tab happened to open as the
+ * session's start would be a fake measurement.
  */
-export function TargetHeader({ targetName, stage, lpFilter }: TargetHeaderProps) {
+export function TargetHeader({ targetName, stage, lpFilter, sessionStartUtc = null }: TargetHeaderProps) {
+  const started = formatWhen(sessionStartUtc)
+  const startMs = sessionStartUtc ? parse(sessionStartUtc) : Number.NaN
   return (
     <section className={styles.card}>
       <div className={styles.row}>
@@ -60,7 +70,15 @@ export function TargetHeader({ targetName, stage, lpFilter }: TargetHeaderProps)
           </span>
         )}
       </div>
-      <div className={styles.meta}>get_view_state · stage {stage ?? '—'}</div>
+      <div className={styles.meta}>
+        get_view_state · stage {stage ?? '—'}
+        {started !== null && (
+          <span data-testid="session-started">
+            {' '}· started {started}
+            {startMs <= Date.now() && ` · elapsed ${formatDuration(Date.now() - startMs)}`}
+          </span>
+        )}
+      </div>
     </section>
   )
 }

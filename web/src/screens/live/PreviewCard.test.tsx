@@ -107,6 +107,25 @@ describe('PreviewCard with a frame', () => {
     expect(screen.getByTestId('preview-source-sub')).toBeInTheDocument()
   })
 
+  it('takes the sub length from the running exposure rather than assuming 10 s', () => {
+    const preview = LivePreviewSchema.parse(livePreviewSub())
+
+    render(<PreviewCard preview={preview} annotate={null} exposureMs={5_000} />)
+
+    expect(screen.getByTestId('preview-source-sub')).toHaveTextContent('single 5 s sub — not the accumulating stack')
+  })
+
+  it('names no length it was not told — no exposure, or a stale frame from an earlier session', () => {
+    const { unmount } = render(
+      <PreviewCard preview={LivePreviewSchema.parse(livePreviewSub())} annotate={null} exposureMs={null} />,
+    )
+    expect(screen.getByTestId('preview-source-sub')).toHaveTextContent('single sub — not the accumulating stack')
+    unmount()
+
+    render(<PreviewCard preview={LivePreviewSchema.parse(livePreviewStale())} annotate={null} exposureMs={10_000} />)
+    expect(screen.getByTestId('preview-source-sub')).not.toHaveTextContent(/\d s sub/)
+  })
+
   it('renders a stacked frame without the single-sub caveat', () => {
     const preview = LivePreviewSchema.parse(livePreviewStacked())
 

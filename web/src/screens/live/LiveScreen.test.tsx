@@ -634,6 +634,18 @@ describe('get_run_state', () => {
 })
 
 describe('run state is only trusted when active', () => {
+  it('shows the run\'s real start in the target header while the run is active', async () => {
+    stubApi({ '/api/get_run_state': runStateActiveFixture() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    expect(await screen.findByTestId('session-started')).toHaveTextContent('started')
+  })
+
+  it('shows no start when the run is not active — the fallback is when this tab looked, not a start', async () => {
+    stubApi({ '/api/get_run_state': runState('unknown', '2026-07-30T02:00:00.000000+00:00') })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
+    expect(screen.queryByTestId('session-started')).not.toBeInTheDocument()
+  })
 
   it('ignores session_start_utc from an unknown (stale) run record', async () => {
     // `unknown` retains the previous run's fields by design — a stamp too old

@@ -241,7 +241,11 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
         return (
           <div className={styles.columns}>
             <div className={styles.previewColumn}>
-              <PreviewCard preview={state.preview} annotate={liveView?.Stack?.Annotate ?? null} />
+              <PreviewCard
+                preview={state.preview}
+                annotate={liveView?.Stack?.Annotate ?? null}
+                exposureMs={liveView?.Stack?.Exposure?.exp_ms ?? null}
+              />
               <LastStackCard lastStack={state.lastStack} />
             </div>
 
@@ -250,6 +254,7 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
                 targetName={targetName}
                 stage={liveView?.stage ?? null}
                 lpFilter={liveView?.lp_filter}
+                sessionStartUtc={state.sessionStartUtc}
               />
 
               <TelemetryGrid

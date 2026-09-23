@@ -3,6 +3,7 @@ import type { Annotate, LivePreview } from '../../api/schemas'
 import { Dot } from '../../ui/Dot'
 import { computeFraming, FRAME_HEIGHT_PX, FRAME_WIDTH_PX } from './framing'
 import { livePreviewImageSrc } from './livePreviewImage'
+import { singleSubLabel } from './telemetryFormatting'
 import { formatWhen } from './timestamps'
 import styles from './PreviewCard.module.css'
 
@@ -14,6 +15,9 @@ export interface PreviewCardProps {
   /** From `get_view_state`'s `result.View.Stack.Annotate` — `null` while no
    * solve has run this poll (pre-stack stages, or Stack itself absent). */
   annotate: Annotate | null
+  /** The running sub exposure, `View.Stack.Exposure.exp_ms`. Names the
+   * length in the single-sub caption; absent, the caption names none. */
+  exposureMs?: number | null
 }
 
 /**
@@ -26,14 +30,15 @@ export interface PreviewCardProps {
  *    stays visible as TEXT regardless of the toggle, because it is
  *    information (this unit's own ~20–30′ frame-left characteristic), not
  *    decoration.
- * 2. `source: "sub"` is a single noisy 10 s frame, not the accumulating
- *    stack the vendor app shows — said out loud, not left for a grainy
- *    image to imply a bad result on its own.
+ * 2. `source: "sub"` is a single noisy frame (its length from the scope's
+ *    running exposure), not the accumulating stack the vendor app shows —
+ *    said out loud, not left for a grainy image to imply a bad result on
+ *    its own.
  * 3. `stale: true` is shown, with when the frame is actually from — a stale
  *    image presented as current is exactly the dishonesty this project
  *    avoids everywhere else.
  */
-export function PreviewCard({ preview, annotate }: PreviewCardProps) {
+export function PreviewCard({ preview, annotate, exposureMs = null }: PreviewCardProps) {
   const [overlayOn, setOverlayOn] = useState(false)
 
   // The solve lives in `Annotate.result.annotations[]`, not flat on `Annotate`
@@ -107,7 +112,7 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
             <div className={styles.badges}>
               {preview.source === 'sub' && (
                 <span className={styles.badge} data-testid="preview-source-sub">
-                  single 10 s sub — not the accumulating stack
+                  {singleSubLabel(exposureMs, preview.stale)} — not the accumulating stack
                 </span>
               )}
               {preview.stale && (

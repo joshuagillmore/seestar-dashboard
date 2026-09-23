@@ -9,6 +9,15 @@ export const MONTH_ABBR = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
+/** A non-negative span as `1h 27m`, or `27m` under an hour. Whole minutes,
+ * rounded down: an elapsed counter should never run ahead of the clock. */
+export function formatDuration(ms: number): string {
+  const totalMinutes = Math.floor(Math.max(0, ms) / 60_000)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+}
+
 /**
  * When a piece of Live-screen data is from, in the browser's local zone
  * (this app's convention; see timeline.ts's `localHhMm` for the caveat).
