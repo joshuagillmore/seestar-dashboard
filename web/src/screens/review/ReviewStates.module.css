@@ -1,0 +1,55 @@
+/* Shared by desktop and mobile — see ReviewStates.tsx. Each layout supplies
+   its own surrounding box; these are the contents. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.text {
+  margin: 0;
+  max-width: 60ch;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-dimmer);
+}
+
+/* The only control on this screen that starts work. Deliberately explicit
+   about scale in its label ("Analyse 842 subs") — see TargetPicker. */
+.action {
+  padding: 8px 14px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-control);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) { background: var(--accent-hover-bg); }
+.action:disabled { opacity: 0.6; cursor: default; }
+
+/* Sits between a stale report's header and its charts: the numbers below are
+   real but describe an older sub set, and there has to be a way out. */
+.staleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px solid var(--marginal-callout-border);
+  border-radius: var(--radius-card);
+  background: var(--marginal-callout-bg);
+}
+
+.errorNote {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  color: var(--reject);
+}

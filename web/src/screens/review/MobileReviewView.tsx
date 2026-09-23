@@ -8,6 +8,8 @@ import {
   thresholdLinesFor,
   toneFor,
 } from './qa'
+import { ErrorNote } from './ReviewStates'
+import { analysedLabel } from './statusHelpers'
 import styles from './MobileReviewView.module.css'
 
 /** Fewer than the desktop table's twelve. The charts still carry the whole
@@ -21,10 +23,22 @@ export interface MobileReviewViewProps {
   onSelect: (targetId: string) => void
   summary: QaSummary | null
   displayName: string | null
-  /** Rendered instead of a report — "not analysed", "running", "failed".
-   * Passed as a node so the screen keeps ownership of the copy and the
-   * Analyse button rather than this view re-deriving either. */
+  /** Rendered instead of a report — loading, unreadable, not analysed,
+   * running, failed. The screen builds it from the same AnalysisState the
+   * desktop layout uses (ReviewStates.tsx), so the two cannot drift again;
+   * this view only decides where it goes. */
   state: React.ReactNode
+  /** When the report was computed, and whether the subs on disk have
+   * changed since. A stale report is a usable result with a caveat, and the
+   * caveat must be as visible here as on desktop. */
+  analysedAt?: string | null
+  stale?: boolean
+  /** The way out of a stale report (a Re-analyse button), shared with
+   * desktop. */
+  staleNotice?: React.ReactNode
+  /** The screen's error, when it is not already the state's own message —
+   * e.g. a start the sidecar refused. */
+  errorNote?: string | null
 }
 
 /**
@@ -62,6 +76,10 @@ export function MobileReviewView({
   summary,
   displayName,
   state,
+  analysedAt = null,
+  stale = false,
+  staleNotice = null,
+  errorNote = null,
 }: MobileReviewViewProps) {
   return (
     <div className={styles.root}>
@@ -92,7 +110,22 @@ export function MobileReviewView({
         <div className={styles.state}>{state}</div>
       ) : (
         <>
-          <h1 className={styles.heading}>{displayName ?? selected}</h1>
+          <div className={styles.titleRow}>
+            <h1 className={styles.heading}>{displayName ?? selected}</h1>
+            {stale && (
+              <span
+                className={styles.staleTag}
+                title="The subs on disk have changed since this ran"
+              >
+                STALE
+              </span>
+            )}
+          </div>
+          <div className={styles.meta}>
+            {analysedLabel(analysedAt)} · {summary.total} subs
+          </div>
+
+          {staleNotice}
 
           <div className={styles.tiles}>
             <Tile label="KEPT" value={String(summary.kept)} sub={keptPercent(summary)} tone="pass" />
@@ -129,6 +162,8 @@ export function MobileReviewView({
           </div>
         </>
       )}
+
+      {errorNote && <ErrorNote text={errorNote} />}
     </div>
   )
 }

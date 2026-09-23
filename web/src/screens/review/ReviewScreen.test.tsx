@@ -7,6 +7,8 @@ import { ReviewScreen } from './ReviewScreen'
 import { SiteProfileSchema, type Health } from '../../api/schemas'
 import { stubMatchMedia } from '../../test/matchMedia'
 import { recordedSite } from '../../test/fixtures'
+import { setPendingReviewTarget } from './pendingTarget'
+import { serverReason } from './testReasons'
 
 const site = SiteProfileSchema.parse(recordedSite())
 const notReplaying: Health = { ok: true, replay: false }
@@ -543,5 +545,330 @@ describe('adversarial-review regressions', () => {
     await waitFor(() =>
       expect(screen.queryByTestId('sub-image-card')).not.toBeInTheDocument(),
     )
+  })
+})
+
+/* --- state handling -------------------------------------------------------
+ *
+ * These drive the screen through a fetch stub that can hold a response open,
+ * so a test can act while a request is in flight — the timing the bugs below
+ * lived in.
+ */
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status })
+
+type Route = (url: string) => Promise<Response> | Response | undefined
+
+/** `route` answers first; anything it declines falls through to the same
+ * defaults `stubFetch` uses. */
+function stubRoutes(route: Route) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      calls.push(url)
+      const answered = await route(url)
+      if (answered) return answered
+      if (url.includes('/api/qa_targets')) return json(TARGETS)
+      if (url.includes('/api/qa_analysis_status')) {
+        return json({ ok: true, target_id: 'M81', sub_count: 587, status: 'not_analysed' })
+      }
+      return json({ ok: true })
+    }),
+  )
+}
+
+/** A promise the test resolves by hand. */
+function held<T>() {
+  let release!: (value: T) => void
+  const promise = new Promise<T>((resolve) => {
+    release = resolve
+  })
+  return { promise, release }
+}
+
+const staleM81 = (report: unknown = realReport) => ({
+  ok: true,
+  target_id: 'M81',
+  sub_count: 25,
+  status: 'stale',
+  analysed_at: '2026-08-01T22:00:00+00:00',
+  report,
+})
+
+const completeM81 = (report: unknown = realReport) => ({
+  ok: true,
+  target_id: 'M81',
+  sub_count: 25,
+  status: 'complete',
+  analysed_at: '2026-08-02T01:15:00+00:00',
+  report,
+})
+
+/** What the sidecar sends when it will not start another job (HTTP 429). */
+const REFUSAL = {
+  ok: false,
+  error: 'analysis capacity reached — a job is already running; try again when it finishes',
+}
+
+const renderMobile = () => {
+  stubMatchMedia(true)
+  return render_()
+}
+
+const pickMobile = async (targetId: string) => {
+  fireEvent.change(await screen.findByRole('combobox'), { target: { value: targetId } })
+}
+
+describe('Analyse is never stranded on "Starting…"', () => {
+  it('a start in flight for one target does not disable Analyse on the next', async () => {
+    const start = held<Response>()
+    stubRoutes((url) => {
+      if (url.includes('qa_analysis_start')) return start.promise
+      if (url.includes('qa_analysis_status') && url.includes('M42')) {
+        return json({ ok: true, target_id: 'M42', sub_count: 1204, status: 'not_analysed' })
+      }
+      return undefined
+    })
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Analyse 587 subs/ }))
+    expect(await screen.findByRole('button', { name: /Starting/ })).toBeDisabled()
+
+    // Move on while M81's POST is still out.
+    fireEvent.click(screen.getByRole('button', { name: /^M 42/ }))
+    expect(await screen.findByRole('button', { name: /Analyse 1204 subs/ })).toBeEnabled()
+
+    // M81's answer arriving late must not re-disable anything.
+    start.release(
+      json({
+        ok: true,
+        target_id: 'M81',
+        sub_count: 587,
+        status: 'running',
+        started_at: null,
+        elapsed_seconds: 0,
+      }),
+    )
+    await waitFor(() => expect(calls.filter((u) => u.includes('M42')).length).toBeGreaterThan(0))
+    expect(screen.getByRole('button', { name: /Analyse 1204 subs/ })).toBeEnabled()
+  })
+})
+
+describe('a start answered from the cache', () => {
+  it('renders the report the start response carries', async () => {
+    stubRoutes((url) => {
+      if (url.includes('qa_analysis_start')) return json(completeM81())
+      return undefined
+    })
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Analyse 587 subs/ }))
+
+    expect(await screen.findByText(/of 25 subs · 76.0%/)).toBeInTheDocument()
+  })
+
+  it('fetches the report when the response has none, rather than going blank', async () => {
+    // complete WITHOUT `report`: desktop had no branch for it and rendered
+    // nothing at all.
+    let statusCalls = 0
+    stubRoutes((url) => {
+      if (url.includes('qa_analysis_start')) {
+        const { report: _omit, ...bare } = completeM81()
+        return json(bare)
+      }
+      if (url.includes('qa_analysis_status')) {
+        statusCalls += 1
+        return statusCalls === 1
+          ? json({ ok: true, target_id: 'M81', sub_count: 587, status: 'not_analysed' })
+          : json(completeM81())
+      }
+      return undefined
+    })
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Analyse 587 subs/ }))
+
+    expect(await screen.findByText(/of 25 subs · 76.0%/)).toBeInTheDocument()
+    expect(statusCalls).toBe(2)
+  })
+
+  it('on mobile too, instead of "No analysis yet" and an Analyse button that loops', async () => {
+    let statusCalls = 0
+    stubRoutes((url) => {
+      if (url.includes('qa_analysis_start')) {
+        const { report: _omit, ...bare } = staleM81()
+        return json(bare)
+      }
+      if (url.includes('qa_analysis_status')) {
+        statusCalls += 1
+        return statusCalls === 1
+          ? json({ ok: true, target_id: 'M81', sub_count: 587, status: 'not_analysed' })
+          : json(staleM81())
+      }
+      return undefined
+    })
+    renderMobile()
+
+    await pickMobile('M81')
+    fireEvent.click(await screen.findByRole('button', { name: /Analyse 587 subs/ }))
+
+    expect(await screen.findByText('STALE')).toBeInTheDocument()
+    expect(screen.queryByText(/No analysis yet/)).not.toBeInTheDocument()
+  })
+})
+
+describe('a start the sidecar refuses (HTTP 429)', () => {
+  const refuse = () =>
+    stubRoutes((url) => {
+      if (url.includes('qa_analysis_start')) return json(REFUSAL, 429)
+      if (url.includes('qa_analysis_status')) return json(staleM81())
+      return undefined
+    })
+
+  it('keeps the stale report and its row, and says why', async () => {
+    refuse()
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Re-analyse 587 subs/ }))
+
+    expect(await screen.findByText(REFUSAL.error)).toBeInTheDocument()
+    expect(screen.getByText('STALE')).toBeInTheDocument()
+    expect(screen.getByText(/of 25 subs · 76.0%/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^M 81/ })).toHaveTextContent('stale')
+    expect(screen.getByRole('button', { name: /Re-analyse 587 subs/ })).toBeEnabled()
+  })
+
+  it('says why on mobile as well', async () => {
+    refuse()
+    renderMobile()
+
+    await pickMobile('M81')
+    fireEvent.click(await screen.findByRole('button', { name: /Re-analyse 587 subs/ }))
+
+    expect(await screen.findByText(REFUSAL.error)).toBeInTheDocument()
+    expect(screen.getByText('STALE')).toBeInTheDocument()
+  })
+})
+
+describe('mobile keeps step with desktop', () => {
+  it('shows a loading state while the status is being read, not "No analysis yet"', async () => {
+    const status = held<Response>()
+    stubRoutes((url) => (url.includes('qa_analysis_status') ? status.promise : undefined))
+    renderMobile()
+
+    await pickMobile('M81')
+
+    expect(await screen.findByText(/Reading this target/)).toBeInTheDocument()
+    expect(screen.queryByText(/No analysis yet/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Analyse/ })).not.toBeInTheDocument()
+    status.release(json({ ok: true, target_id: 'M81', sub_count: 587, status: 'not_analysed' }))
+    expect(await screen.findByText(/No analysis yet/)).toBeInTheDocument()
+  })
+
+  it('says the status read failed, and offers to try again — not "Analyse"', async () => {
+    stubRoutes((url) =>
+      url.includes('qa_analysis_status') ? json({ ok: false, error: 'status route down' }, 500) : undefined,
+    )
+    renderMobile()
+
+    await pickMobile('M81')
+
+    expect(await screen.findByText(/status route down/)).toBeInTheDocument()
+    expect(screen.queryByText(/No analysis yet/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Analyse/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument()
+  })
+
+  it('marks a stale report as stale, with its date and a way to re-analyse', async () => {
+    stubRoutes((url) => (url.includes('qa_analysis_status') ? json(staleM81()) : undefined))
+    renderMobile()
+
+    await pickMobile('M81')
+
+    expect(await screen.findByText('STALE')).toBeInTheDocument()
+    expect(screen.getByText(/2026-08-01 22:00/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Re-analyse 587 subs/ })).toBeInTheDocument()
+  })
+
+  it('desktop shows the same loading state', async () => {
+    const status = held<Response>()
+    stubRoutes((url) => (url.includes('qa_analysis_status') ? status.promise : undefined))
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+
+    expect(await screen.findByText(/Reading this target/)).toBeInTheDocument()
+    status.release(json({ ok: true, target_id: 'M81', sub_count: 587, status: 'not_analysed' }))
+  })
+})
+
+describe('the detail card follows the current report', () => {
+  it('shows the re-analysed verdict, not the one it was opened on', async () => {
+    const first = realReport.summary.subs[0]
+    const reanalysed = structuredClone(realReport)
+    reanalysed.summary.subs[0] = { ...first, verdict: 'PASS', reasons: [serverReason.pass] }
+    stubRoutes((url) => {
+      if (url.includes('qa_analysis_start')) return json(completeM81(reanalysed))
+      if (url.includes('qa_analysis_status')) return json(staleM81())
+      return undefined
+    })
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    await screen.findByText(/of 25 subs/)
+    fireEvent.click(screen.getByTitle(first.name))
+    const card = await screen.findByTestId('sub-image-card')
+    expect(card).toHaveTextContent('REJECT')
+
+    fireEvent.click(screen.getByRole('button', { name: /Re-analyse 587 subs/ }))
+
+    await waitFor(() => expect(screen.queryByText('STALE')).not.toBeInTheDocument())
+    const after = screen.getByTestId('sub-image-card')
+    expect(after).toHaveTextContent('PASS')
+    expect(after).not.toHaveTextContent('REJECT')
+  })
+})
+
+describe('an empty table says why it is empty', () => {
+  it('distinguishes "every row filtered out" from an empty report', async () => {
+    stubFetch(completeReport())
+    render_()
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    await screen.findByText(/of 25 subs/)
+
+    for (const label of ['REJECT', 'MARGINAL', 'PASS']) {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${label}`) }))
+    }
+
+    expect(screen.getByText(/no subs match these filters/)).toBeInTheDocument()
+    expect(screen.queryByText(/no subs in this report/)).not.toBeInTheDocument()
+  })
+})
+
+describe('the Projects → Review handoff', () => {
+  beforeEach(() => window.sessionStorage.clear())
+
+  it('is consumed even when the listing fails, so it cannot reopen a target later', async () => {
+    setPendingReviewTarget('M81')
+    stubRoutes((url) =>
+      url.includes('/api/qa_targets') ? json({ ok: false, error: 'archive offline' }, 500) : undefined,
+    )
+    const first = render_()
+    expect(await screen.findByText(/Could not read the archive listing/)).toBeInTheDocument()
+    first.unmount()
+
+    calls = []
+    stubFetch()
+    render_()
+    await screen.findByText(/Targets/)
+
+    // A later, ordinary visit must open on the empty state.
+    expect(calls.some((u) => u.includes('qa_analysis_status'))).toBe(false)
   })
 })

@@ -1,5 +1,6 @@
 import type { QaSummary } from '../../api/schemas'
 import { formatMetric, keptPercent, METRIC_LABELS } from './qa'
+import { analysedLabel } from './statusHelpers'
 import styles from './ReportHeader.module.css'
 
 export interface ReportHeaderProps {
@@ -48,7 +49,7 @@ export function ReportHeader({
           <div className={styles.titleRow}>
             <h2 className={styles.title}>{displayName || targetId}</h2>
             <span className={styles.meta}>
-              {analysedAt ? `analysed ${analysedAt.slice(0, 16).replace('T', ' ')} UTC` : 'analysed'}
+              {analysedLabel(analysedAt)}
               {' · '}
               {summary.total} subs
             </span>

@@ -40,13 +40,15 @@
 
 /* "The subs on disk changed since this ran." A first-class state: showing it
    as current would date-stamp stale numbers as fresh, and hiding it would
-   throw away a usable result. */
+   throw away a usable result. It is a statement about the JOB, not the subs,
+   so it does not wear the MARGINAL amber — same dashed outline as the
+   picker's stale chip (TargetPicker.module.css). */
 .staleTag {
   flex: 0 0 auto;
   padding: 2px 6px;
+  border: 1px dashed var(--border-control-hover);
   border-radius: var(--radius-chip);
-  background: var(--marginal-bg);
-  color: var(--marginal);
+  color: var(--text-secondary);
   font-family: var(--font-mono);
   font-weight: 500;
   font-size: 9.5px;
