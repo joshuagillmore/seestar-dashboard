@@ -306,6 +306,14 @@ export function useLiveSession(): LiveSessionState {
       // Failure is not fatal and must not suppress the device check: a
       // missing optimisation is better than a hidden session.
       const runState = await fetchRunState().catch(() => null)
+      // After EVERY await, before any ref is touched: a poll whose effect
+      // was cleaned up must leave no trace. StrictMode (main.tsx) mounts,
+      // cleans up and re-mounts in dev, and the orphaned first poll used to
+      // count its idle answer too — the real poll then saw idleTicks 2,
+      // skipped the device, and the screen sat on its skeleton for ~5
+      // minutes. The same orphan could stamp sessionStartedAtRef and
+      // lastStackTargetRef for the live poll that follows.
+      if (cancelled) return
       if (runState?.state === 'idle') {
         idleTicksRef.current += 1
       } else {
@@ -408,6 +416,7 @@ export function useLiveSession(): LiveSessionState {
         fetchLivePreview().catch(() => null),
         sessionActivityPromise,
       ])
+      if (cancelled) return
 
       // The scope's own answer first, the share's second. See currentTarget's
       // doc comment: reading the preview alone meant an unreachable share
@@ -416,21 +425,22 @@ export function useLiveSession(): LiveSessionState {
       // than blanking the sweet-band card.
       const namedTarget = view.target_name ?? preview?.target
       if (namedTarget) currentTargetRef.current = namedTarget
-      const observability = currentTargetRef.current
-        ? await fetchTargetObservability(currentTargetRef.current).catch(() => null)
+      const target = currentTargetRef.current
+      const observability = target
+        ? await fetchTargetObservability(target).catch(() => null)
         : null
+      if (cancelled) return
 
       // Target-gated, not poll-gated — see shouldFetchLastStack's own doc
       // comment. A poll where the target hasn't changed reuses whatever is
       // already in lastStackRef rather than re-requesting a ~730 KB image.
-      if (shouldFetchLastStack(currentTargetRef.current, lastStackTargetRef.current)) {
-        lastStackTargetRef.current = currentTargetRef.current
-        lastStackRef.current = currentTargetRef.current
-          ? await fetchLastStack(currentTargetRef.current).catch(() => null)
-          : null
+      if (target !== null && shouldFetchLastStack(target, lastStackTargetRef.current)) {
+        const lastStack = await fetchLastStack(target).catch(() => null)
+        if (cancelled) return
+        lastStackTargetRef.current = target
+        lastStackRef.current = lastStack
       }
 
-      if (cancelled) return
       if (tier1) logRef.current = appendTelemetryEntry(logRef.current, tier1)
       const stage = view.stage
       if (stage && stageHistoryRef.current[stageHistoryRef.current.length - 1] !== stage) {

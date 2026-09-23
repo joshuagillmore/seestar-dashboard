@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -643,6 +644,22 @@ describe('run state is only trusted when active', () => {
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
 
     expect(decodeURIComponent(await waitForFetch('check_night_guardrails'))).toContain(REAL)
+  })
+})
+
+describe('under StrictMode (as main.tsx renders it in dev)', () => {
+  it('reaches the live session on the first poll, not after the idle back-off', async () => {
+    // StrictMode mounts, cleans up and re-mounts the effect. The cancelled
+    // first poll still counted its idle run_state answer, so the real poll
+    // saw idleTicks 2, skipped the device, and `npm run dev` sat on the
+    // skeleton for ~5 minutes against a scope that was stacking.
+    stubApi({ '/api/get_run_state': runStateIdle() })
+    render(
+      <StrictMode>
+        <LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />
+      </StrictMode>,
+    )
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
   })
 })
 
