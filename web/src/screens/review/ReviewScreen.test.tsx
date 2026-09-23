@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -251,7 +251,114 @@ describe('ReviewScreen states', () => {
     fireEvent.click(await screen.findByRole('button', { name: /M 81/ }))
 
     expect(await screen.findByText(/of 25 subs · 76.0%/)).toBeInTheDocument()
-    expect(screen.queryByText(/^reject 0\./)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^reject /)).not.toBeInTheDocument()
+    // The marginal line too — not only reject. A client that fell back to a
+    // remembered marginal cutoff would draw exactly this one.
+    expect(screen.queryByText(/^marginal /)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^floor /)).not.toBeInTheDocument()
+    expect(
+      [...document.querySelectorAll('div')].filter((d) => d.style.bottom.endsWith('%')),
+    ).toHaveLength(0)
+  })
+})
+
+/* --- the verdict-ownership guards -----------------------------------------
+ *
+ * CLAUDE.md: the UI renders verdicts and cutoffs from the payload; it never
+ * computes, re-derives or hardcodes them. The recorded fixture's reject
+ * threshold happens to equal the policy constant, so a component with that
+ * constant baked in would pass every test that uses it. These use SYNTHETIC
+ * values that no policy has, so only reading the payload can pass.
+ */
+
+const SYNTHETIC_THRESHOLDS = {
+  eccentricity_reject: 0.9,
+  eccentricity_marginal: 0.7,
+  fwhm_reject: 9.1,
+  fwhm_marginal: 8.2,
+  snr_floor: 3.3,
+  star_count_floor: 7,
+  scattered_light_reject: 0.5,
+  scattered_light_marginal: 0.4,
+}
+
+const withSummary = (over: Record<string, unknown>) => {
+  const r = structuredClone(realReport)
+  r.summary = { ...r.summary, ...over }
+  return r
+}
+
+describe('cutoff lines come from the payload, never from a constant', () => {
+  it('draws and labels whatever cutoffs the report carries', async () => {
+    stubRoutes((url) =>
+      url.includes('qa_analysis_status')
+        ? json(completeM81(withSummary({ thresholds: SYNTHETIC_THRESHOLDS })))
+        : undefined,
+    )
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+
+    expect(await screen.findByText('reject 0.9')).toBeInTheDocument()
+    expect(screen.getByText('marginal 0.7')).toBeInTheDocument()
+    expect(screen.getByText('floor 7')).toBeInTheDocument()
+    // Eccentricity's two lines plus star count's floor.
+    expect(
+      [...document.querySelectorAll('div')].filter((d) => d.style.bottom.endsWith('%')),
+    ).toHaveLength(3)
+  })
+})
+
+describe('the UI never re-derives a verdict from the numbers', () => {
+  // A sub the server PASSED whose eccentricity is above this report's own
+  // reject cutoff. Contradictory on purpose: if any component compared the
+  // value to the threshold it would turn red, and nothing else would catch
+  // that.
+  const contrarian = {
+    ...realReport.summary.subs[20],
+    name: 'Light_contrarian_0001',
+    verdict: 'PASS',
+    reasons: [serverReason.pass],
+    metrics: { ...realReport.summary.subs[20].metrics, eccentricity: 0.95 },
+  }
+  const report = () => {
+    const r = withSummary({ thresholds: SYNTHETIC_THRESHOLDS })
+    r.summary.subs = [contrarian, ...r.summary.subs.slice(1)]
+    return r
+  }
+  const eccBar = () =>
+    screen
+      .getAllByRole('img')
+      .find((b) => (b.getAttribute('aria-label') ?? '').startsWith('sub 0 ·'))!
+
+  it('desktop: PASS badge, no reject tone, no blamed cell', async () => {
+    stubRoutes((url) =>
+      url.includes('qa_analysis_status') ? json(completeM81(report())) : undefined,
+    )
+    render_()
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    await screen.findByText('reject 0.9')
+
+    const row = screen.getByTitle(contrarian.name).parentElement!
+    expect(within(row).getByText('PASS')).toBeInTheDocument()
+    const cells = [...row.children].slice(1, 6)
+    expect(cells[1]).toHaveTextContent('0.95')
+    for (const cell of cells) expect(cell.className).not.toMatch(/reject|marginal/)
+    expect(eccBar().className).not.toMatch(/reject|marginal/)
+  })
+
+  it('mobile: PASS badge and no reject tone on its bar', async () => {
+    stubRoutes((url) =>
+      url.includes('qa_analysis_status') ? json(completeM81(report())) : undefined,
+    )
+    renderMobile()
+    await pickMobile('M81')
+    await screen.findByText('reject 0.9')
+
+    const card = screen.getByTitle(contrarian.name).parentElement!.parentElement!
+    expect(within(card).getByText('PASS')).toBeInTheDocument()
+    expect(within(card).getByText(/ECC 0.95/)).toBeInTheDocument()
+    expect(eccBar().className).not.toMatch(/reject|marginal/)
   })
 })
 
