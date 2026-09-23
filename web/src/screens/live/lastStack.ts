@@ -1,5 +1,6 @@
 import type { LastStack } from '../../api/schemas'
 import { parse } from '../tonight/timeline'
+import { shareReasonLabel } from './shareReasons'
 import { MONTH_ABBR } from './timestamps'
 
 /**
@@ -90,18 +91,10 @@ export function lastStackImageSrc(lastStack: LastStack | null): string | undefin
  * far still running) — worded as such, not as a fault. The other four are
  * infra hiccups this card degrades from independently, same soft-fail
  * register `GuardrailsCard`/`PreviewCard`'s own empty states use elsewhere on
- * this screen. An unrecognised future code falls back to itself rather than
- * disappearing silently — loud, not blank.
+ * this screen. The words live in shareReasons.ts, shared with the live
+ * preview, whose route emits the same tokens.
  */
-const LAST_STACK_REASON_LABELS: Record<string, string> = {
-  no_stack: 'No completed stack yet for this target.',
-  idle: 'Scope not observing right now.',
-  bridge_down: 'Bridge unreachable — the same connection the rest of this screen depends on.',
-  not_configured: 'Live share not configured on the sidecar.',
-  share_unreachable: 'Live share unreachable right now.',
-}
-
 export function lastStackReasonLabel(reason: string | null | undefined): string {
   if (!reason) return 'No completed stack available yet.'
-  return LAST_STACK_REASON_LABELS[reason] ?? reason
+  return shareReasonLabel(reason)
 }

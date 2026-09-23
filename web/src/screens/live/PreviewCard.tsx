@@ -3,6 +3,7 @@ import type { Annotate, LivePreview } from '../../api/schemas'
 import { Dot } from '../../ui/Dot'
 import { projectOntoCover, resolveSolve, type ImageSize, type SolveResult } from './framing'
 import { livePreviewImageSrc } from './livePreviewImage'
+import { shareReasonLabel } from './shareReasons'
 import { singleSubLabel } from './telemetryFormatting'
 import { formatWhen } from './timestamps'
 import styles from './PreviewCard.module.css'
@@ -140,7 +141,7 @@ export function PreviewCard({ preview, annotate, exposureMs = null, targetName =
           </>
         ) : (
           <div className={styles.empty} data-testid="preview-empty">
-            {preview?.reason ?? 'No preview available'}
+            {preview?.reason ? shareReasonLabel(preview.reason) : 'No preview available'}
           </div>
         )}
       </div>

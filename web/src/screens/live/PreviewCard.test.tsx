@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LivePreviewSchema, ViewStateSchema } from '../../api/schemas'
 import { PreviewCard } from './PreviewCard'
+import { shareReasonLabel } from './shareReasons'
 import { MONTH_ABBR } from './timestamps'
 import {
   livePreviewNone,
@@ -58,8 +59,22 @@ describe('PreviewCard absent state', () => {
     render(<PreviewCard preview={preview} annotate={null} />)
 
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
-    expect(screen.getByText('share_unreachable')).toBeInTheDocument()
+    // Translated, never the wire token — the sidecar's own rule ("the
+    // wording a user reads is the UI's job"). This used to assert the raw
+    // code was shown.
+    expect(screen.getByTestId('preview-empty')).toHaveTextContent(shareReasonLabel('share_unreachable'))
+    expect(screen.queryByText('share_unreachable')).not.toBeInTheDocument()
   })
+
+  it.each(['idle', 'bridge_down', 'not_configured', 'share_unreachable', 'no_frame'])(
+    'renders the live_preview reason %s as prose, not as the wire code',
+    (reason) => {
+      const preview = LivePreviewSchema.parse({ ...(livePreviewNone() as object), reason })
+      render(<PreviewCard preview={preview} annotate={null} />)
+      expect(screen.getByTestId('preview-empty')).not.toHaveTextContent(reason)
+      expect(screen.getByTestId('preview-empty')).toHaveTextContent(shareReasonLabel(reason))
+    },
+  )
 
   it('renders nothing-available text when the fetch itself failed', () => {
     render(<PreviewCard preview={null} annotate={null} />)

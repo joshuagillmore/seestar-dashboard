@@ -15,6 +15,7 @@ import {
   recordedTier1,
 } from '../../test/fixtures'
 import { MobileLiveView } from './MobileLiveView'
+import { shareReasonLabel } from './shareReasons'
 import { appendTelemetryEntry } from './telemetryLog'
 
 const view = StackStateSchema.parse({
@@ -214,6 +215,23 @@ describe('MobileLiveView', () => {
       />,
     )
     expect(screen.getByTestId('mobile-preview-stale')).toBeInTheDocument()
+  })
+
+  it('renders a live_preview reason as prose, not as the wire code', () => {
+    const unreachable = LivePreviewSchema.parse({ ...(livePreviewNone() as object), reason: 'share_unreachable' })
+    render(
+      <MobileLiveView
+        targetId="M27"
+        targetName="Dumbbell Nebula"
+        stack={view}
+        tier1={tier1}
+        focuser={focuser}
+        preview={unreachable}
+        log={[]}
+      />,
+    )
+    expect(screen.getByTestId('mobile-preview-empty')).toHaveTextContent(shareReasonLabel('share_unreachable'))
+    expect(screen.queryByText('share_unreachable')).not.toBeInTheDocument()
   })
 
   it('renders the honest empty-preview state, not a broken image, when there is no frame yet', () => {

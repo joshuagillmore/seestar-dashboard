@@ -1,6 +1,7 @@
 import type { FocuserPosition, LivePreview, StackState, Tier1 } from '../../api/schemas'
 import { Dot } from '../../ui/Dot'
 import { livePreviewImageSrc } from './livePreviewImage'
+import { shareReasonLabel } from './shareReasons'
 import { deriveTelemetryValues, formatAnnotateState, singleSubLabel } from './telemetryFormatting'
 import { TelemetryLogCard } from './TelemetryLogCard'
 import type { TelemetryEntry } from './telemetryLog'
@@ -126,7 +127,7 @@ export function MobileLiveView({ targetId, targetName, stack, tier1, focuser, pr
           </>
         ) : (
           <div className={styles.previewEmpty} data-testid="mobile-preview-empty">
-            {preview?.reason ?? 'No preview available'}
+            {preview?.reason ? shareReasonLabel(preview.reason) : 'No preview available'}
           </div>
         )}
       </div>
