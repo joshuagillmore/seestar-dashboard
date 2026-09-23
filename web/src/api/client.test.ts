@@ -11,6 +11,7 @@ import {
   fetchTargetObservability,
   fetchTier1,
   fetchViewState,
+  REQUEST_TIMEOUT_MS,
   SchemaError,
 } from './client'
 import {
@@ -79,7 +80,55 @@ describe('api client', () => {
     })
     vi.stubGlobal('fetch', spy)
     await fetchPlan(3)
-    expect(spy).toHaveBeenCalledWith('/api/plan_targets?limit=3')
+    expect(spy.mock.calls[0][0]).toBe('/api/plan_targets?limit=3')
+  })
+
+  describe('timeouts and cancellation', () => {
+    afterEach(() => vi.useRealTimers())
+
+    it('gives up on a request the sidecar never answers, instead of hanging the caller', async () => {
+      // No timeout used to exist. The sidecar serialises MCP calls, so one
+      // slow call held every later one, and the Live screen's polls piled up
+      // behind it.
+      vi.useFakeTimers()
+      vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+      const pending = fetchViewState()
+      const settled = expect(pending).rejects.toThrow(/did not answer .*get_view_state/)
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+      await settled
+      await expect(pending).rejects.toBeInstanceOf(ApiError)
+      await expect(pending).rejects.not.toBeInstanceOf(SchemaError)
+    })
+
+    it('hands fetch a signal, and aborts it when the timeout fires', async () => {
+      vi.useFakeTimers()
+      const spy = vi.fn((_url: string, _init?: RequestInit) => new Promise(() => {}))
+      vi.stubGlobal('fetch', spy)
+      const pending = fetchStatus().catch(() => null)
+      const signal = spy.mock.calls[0][1]?.signal
+      expect(signal).toBeInstanceOf(AbortSignal)
+      expect(signal?.aborted).toBe(false)
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+      await pending
+      expect(signal?.aborted).toBe(true)
+    })
+
+    it('cancels when the caller aborts, without waiting for the timeout', async () => {
+      const spy = vi.fn((_url: string, _init?: RequestInit) => new Promise(() => {}))
+      vi.stubGlobal('fetch', spy)
+      const caller = new AbortController()
+      const pending = fetchViewState({ signal: caller.signal })
+      caller.abort()
+      await expect(pending).rejects.toBeInstanceOf(ApiError)
+      expect(spy.mock.calls[0][1]?.signal?.aborted).toBe(true)
+    })
+
+    it('leaves no timer behind once the response has arrived', async () => {
+      vi.useFakeTimers()
+      mockFetch(recordedStatus())
+      await fetchStatus()
+      expect(vi.getTimerCount()).toBe(0)
+    })
   })
 
   it('raises ApiError when the sidecar cannot be reached at all', async () => {
@@ -129,7 +178,7 @@ describe('api client', () => {
       const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => recordedGuardrails() })
       vi.stubGlobal('fetch', spy)
       await fetchGuardrails('2026-07-30T03:00:00.000Z')
-      expect(spy).toHaveBeenCalledWith(
+      expect(spy.mock.calls[0][0]).toBe(
         '/api/check_night_guardrails?session_start_utc=2026-07-30T03%3A00%3A00.000Z',
       )
     })
@@ -153,7 +202,7 @@ describe('api client', () => {
       const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => recordedObservability() })
       vi.stubGlobal('fetch', spy)
       await fetchTargetObservability('M27')
-      expect(spy).toHaveBeenCalledWith('/api/get_target_observability?target=M27')
+      expect(spy.mock.calls[0][0]).toBe('/api/get_target_observability?target=M27')
     })
 
     it('parses get_target_observability', async () => {
@@ -170,7 +219,7 @@ describe('api client', () => {
       const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => sessionActivity() })
       vi.stubGlobal('fetch', spy)
       await fetchSessionActivity(30)
-      expect(spy).toHaveBeenCalledWith('/api/session_activity?limit=30')
+      expect(spy.mock.calls[0][0]).toBe('/api/session_activity?limit=30')
     })
 
     it('parses session_activity, including a fully-null unknown record', async () => {

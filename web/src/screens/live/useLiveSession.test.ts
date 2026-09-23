@@ -12,6 +12,7 @@ import {
   runStateIdle,
   sessionActivity,
 } from '../../test/fixtures'
+import { REQUEST_TIMEOUT_MS } from '../../api/client'
 import { POLL_INTERVAL_MS, useLiveSession } from './useLiveSession'
 
 /**
@@ -46,7 +47,7 @@ function stubRoutes(routes: Record<string, Route>) {
   vi.stubGlobal('fetch', mock)
   return {
     routes,
-    mock,
+    fetch: mock,
     urls: (fragment: string) => mock.mock.calls.map(([u]) => u).filter((u) => u.includes(fragment)),
   }
 }
@@ -83,6 +84,61 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+})
+
+describe('polls never overlap, and stop cleanly', () => {
+  // setInterval fired whether or not the previous poll had finished. The
+  // sidecar serialises MCP calls, so slow polls stacked up behind each other
+  // and interleaved their writes to the same refs.
+  it('does not start the next poll while the current one is still waiting', async () => {
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_view_state': 'hang' })
+    renderHook(() => useLiveSession())
+    await tick()
+    await tick(POLL_INTERVAL_MS)
+
+    expect(api.urls('get_view_state')).toHaveLength(1)
+  })
+
+  it('schedules the next poll one interval after the previous one settled', async () => {
+    // The hung request is abandoned at REQUEST_TIMEOUT_MS; that poll then
+    // settles (bridge up, so idle) and the next one follows a full interval
+    // later.
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_view_state': 'hang' })
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+    await tick(REQUEST_TIMEOUT_MS)
+    expect(result.current.phase).toBe('idle')
+
+    api.routes['/api/get_view_state'] = ok(recordedViewState())
+    await tick(POLL_INTERVAL_MS - 1)
+    expect(api.urls('get_view_state')).toHaveLength(1)
+    await tick(1)
+    expect(api.urls('get_view_state')).toHaveLength(2)
+    expect(result.current.phase).toBe('active')
+  })
+
+  it('aborts its in-flight requests when the screen unmounts', async () => {
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_view_state': 'hang' })
+    const { unmount } = renderHook(() => useLiveSession())
+    await tick()
+    const signal = api.fetch.mock.calls.find(([u]) => u.includes('get_view_state'))?.[1]?.signal
+    expect(signal?.aborted).toBe(false)
+
+    unmount()
+
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it('requests nothing more after unmount', async () => {
+    const api = stubRoutes(activeRoutes())
+    const { unmount } = renderHook(() => useLiveSession())
+    await tick()
+    unmount()
+    const before = api.fetch.mock.calls.length
+    await tick(POLL_INTERVAL_MS * 3)
+
+    expect(api.fetch.mock.calls.length).toBe(before)
+  })
 })
 
 describe('the idle back-off and a session driven by hand', () => {

@@ -307,6 +307,11 @@ export function useLiveSession(): LiveSessionState {
 
   useEffect(() => {
     let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // Aborted on cleanup, so every request this effect started is cancelled
+    // with it (see the cleanup below).
+    const controller = new AbortController()
+    const opts = { signal: controller.signal }
 
     /**
      * Forget everything this hook remembers about "the session". Called on
@@ -355,13 +360,13 @@ export function useLiveSession(): LiveSessionState {
     async function poll() {
       // Kicked off immediately, independent of everything below — see this
       // hook's own doc comment.
-      const sessionActivityPromise = fetchSessionActivity(SESSION_ACTIVITY_LIMIT).catch(() => null)
+      const sessionActivityPromise = fetchSessionActivity(SESSION_ACTIVITY_LIMIT, opts).catch(() => null)
 
       // Free — a file read server-side, no Alpaca call — so this runs every
       // poll regardless of phase and is what gates the expensive ones below.
       // Failure is not fatal and must not suppress the device check: a
       // missing optimisation is better than a hidden session.
-      const runState = await fetchRunState().catch(() => null)
+      const runState = await fetchRunState(opts).catch(() => null)
       // After EVERY await, before any ref is touched: a poll whose effect
       // was cleaned up must leave no trace. StrictMode (main.tsx) mounts,
       // cleans up and re-mounts in dev, and the orphaned first poll used to
@@ -393,7 +398,7 @@ export function useLiveSession(): LiveSessionState {
       // exactly the ticks where the control link is busiest.
       let viewState: ViewState
       try {
-        viewState = await fetchViewState()
+        viewState = await fetchViewState(opts)
       } catch (viewCause) {
         if (cancelled) return
         // Answered, unreadably. Not a session we can see, not an idle scope
@@ -409,7 +414,7 @@ export function useLiveSession(): LiveSessionState {
         // "idle" from "the bridge is gone", which is the one question
         // get_status is actually here to answer.
         try {
-          await fetchStatus()
+          await fetchStatus(opts)
         } catch (cause) {
           const sessionActivity = await sessionActivityPromise
           if (cancelled) return
@@ -475,10 +480,10 @@ export function useLiveSession(): LiveSessionState {
       const sessionStart = sessionStartedAtRef.current ?? new Date().toISOString()
 
       const [guardrails, tier1, focuser, preview, sessionActivity] = await Promise.all([
-        fetchGuardrails(sessionStart).catch(() => null),
-        fetchTier1().catch(() => null),
-        fetchFocuserPosition().catch(() => null),
-        fetchLivePreview().catch(() => null),
+        fetchGuardrails(sessionStart, opts).catch(() => null),
+        fetchTier1(opts).catch(() => null),
+        fetchFocuserPosition(opts).catch(() => null),
+        fetchLivePreview(opts).catch(() => null),
         sessionActivityPromise,
       ])
       if (cancelled) return
@@ -492,7 +497,7 @@ export function useLiveSession(): LiveSessionState {
       if (namedTarget) currentTargetRef.current = namedTarget
       const target = currentTargetRef.current
       const observability = target
-        ? await fetchTargetObservability(target).catch(() => null)
+        ? await fetchTargetObservability(target, opts).catch(() => null)
         : null
       if (cancelled) return
 
@@ -503,7 +508,7 @@ export function useLiveSession(): LiveSessionState {
       // lastStackIsSettled); a transient failure is shown this poll and
       // asked again the next.
       if (target !== null && shouldFetchLastStack(target, lastStackTargetRef.current)) {
-        const lastStack = await fetchLastStack(target).catch(() => null)
+        const lastStack = await fetchLastStack(target, opts).catch(() => null)
         if (cancelled) return
         lastStackRef.current = lastStack
         if (lastStackIsSettled(lastStack)) lastStackTargetRef.current = target
@@ -530,11 +535,29 @@ export function useLiveSession(): LiveSessionState {
       })
     }
 
-    poll()
-    const id = setInterval(poll, POLL_INTERVAL_MS)
+    // The next poll is scheduled one interval after this one SETTLES, not
+    // on a fixed setInterval. setInterval fired whether or not the previous
+    // poll had finished, and the sidecar serialises MCP calls, so slow polls
+    // stacked up behind each other and interleaved their writes to the same
+    // refs. Every request is bounded by the client's REQUEST_TIMEOUT_MS, so
+    // a poll always settles.
+    async function loop() {
+      try {
+        await poll()
+      } catch {
+        // poll() soft-fails every fetch itself; this only guards the loop
+        // against an unexpected throw ending the polling for the tab's life.
+      }
+      if (!cancelled) timer = setTimeout(loop, POLL_INTERVAL_MS)
+    }
+
+    loop()
     return () => {
       cancelled = true
-      clearInterval(id)
+      clearTimeout(timer)
+      // In-flight requests are abandoned, not merely ignored: the sidecar
+      // should not keep queueing work for a screen nobody is looking at.
+      controller.abort()
     }
   }, [])
 
