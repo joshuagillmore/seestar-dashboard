@@ -104,9 +104,19 @@ export function AnalysisState({
         </div>
       )
     case 'failed':
+      // `error` here is the screen's, not the job's: "Try again" itself
+      // failed (refused at capacity with a 429, or timed out). The job's
+      // failure stays above it, since that is still what the status says;
+      // without this line a refused retry flashed "Starting…" and changed
+      // nothing, and errorNoteText leaves a failed status to this branch.
       return (
         <div className={styles.stack}>
           <p className={styles.text}>The analysis failed.{status.error ? ` ${status.error}` : ''}</p>
+          {error && (
+            <p className={styles.text} role="alert">
+              Could not start it again: {error}
+            </p>
+          )}
           {analyseButton('Try again')}
         </div>
       )

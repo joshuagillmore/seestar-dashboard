@@ -19,9 +19,10 @@ export function hasReport(status: QaAnalysisResponse | null): boolean {
 /**
  * The screen's error, when it is not already the subject of AnalysisState: a
  * refused start (HTTP 429), or a report that could not be fetched after a
- * cached start. A failed JOB shows its own error in AnalysisState, and a
- * status that could not be read is AnalysisState's whole message — neither
- * is repeated.
+ * cached start. A status that could not be read is AnalysisState's whole
+ * message, and on a failed status AnalysisState shows both the job's error
+ * and this one (a refused or timed-out "Try again") beside its button —
+ * neither is repeated here.
  */
 export function errorNoteText(
   error: string | null,

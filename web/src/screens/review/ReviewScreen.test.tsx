@@ -862,6 +862,44 @@ describe('a start the sidecar refuses (HTTP 429)', () => {
     expect(await screen.findByText(REFUSAL.error)).toBeInTheDocument()
     expect(screen.getByText('STALE')).toBeInTheDocument()
   })
+
+  // After a failed job the button reads "Try again". Refused, it used to
+  // flash "Starting…" and change nothing else: the failed branch never
+  // rendered `error`, and errorNoteText returns null for a failed status, so
+  // "job crashed" stayed on screen as if the retry had not happened.
+  const refuseAfterFailure = () =>
+    stubRoutes((url) => {
+      if (url.includes('qa_analysis_start')) return json(REFUSAL, 429)
+      if (url.includes('qa_analysis_status')) {
+        return json({ ok: true, target_id: 'M81', sub_count: 587, status: 'failed', error: 'job crashed' })
+      }
+      return undefined
+    })
+
+  it('says why when "Try again" after a failed job is refused', async () => {
+    refuseAfterFailure()
+    render_()
+
+    fireEvent.click(await screen.findByRole('button', { name: /^M 81/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText(new RegExp(REFUSAL.error))).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(REFUSAL.error)
+    // The job's own failure is still what the status says, and still shown.
+    expect(screen.getByText(/job crashed/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
+  })
+
+  it('says why on mobile when "Try again" is refused', async () => {
+    refuseAfterFailure()
+    renderMobile()
+
+    await pickMobile('M81')
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText(new RegExp(REFUSAL.error))).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(REFUSAL.error)
+  })
 })
 
 describe('mobile keeps step with desktop', () => {
