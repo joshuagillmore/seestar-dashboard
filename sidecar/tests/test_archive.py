@@ -496,3 +496,33 @@ def test_single_token_names_are_unchanged():
     assert normalize_target_id("Unknown") == "Unknown"
     assert normalize_target_id("M31") == "M31"
     assert normalize_target_id("") == ""
+
+
+# --- two sub directories for one target -------------------------------------
+
+
+def test_sub_directories_that_normalise_to_one_target_are_merged(tmp_path):
+    """`M 31-sub` and `M 31_sub` both normalise to M31 (the archive has held
+    both suffix spellings). The scan assigned targets[target_id] per
+    directory, so the second one found silently replaced the first: 2 of
+    these 3 subs vanished from every total and from QA's path list.
+    last_stack.discover_last_stack already scans every directory that
+    normalises to its target; this does the same."""
+    first = tmp_path / "M 31-sub"
+    second = tmp_path / "M 31_sub"
+    first.mkdir()
+    second.mkdir()
+    (first / "Light_M 31_10.0s_IRCUT_20240102-220000.fit").write_text("fit", encoding="utf-8")
+    (first / "Light_M 31_10.0s_IRCUT_20240103-220000.fit").write_text("fit", encoding="utf-8")
+    (second / "Light_M 31_10.0s_IRCUT_20240102-221000.fit").write_text("fit", encoding="utf-8")
+
+    scan = scan_archive(tmp_path, local_tz=EDT)
+
+    assert list(scan.targets) == ["M31"]
+    target = scan.targets["M31"]
+    assert len(target.sub_paths) == 3
+    assert {p.parent.name for p in target.sub_paths} == {"M 31-sub", "M 31_sub"}
+    assert [(n.night, n.subs) for n in target.nights] == [("2024-01-02", 2), ("2024-01-03", 1)]
+    assert target.minutes == round(3 * EXPOSURE_SECONDS / 60, 4)
+    assert target.display_name == "M 31"
+    assert scan.status.target_count == 1

@@ -301,8 +301,17 @@ def scan_archive(root: Path | None, local_tz: timezone | None = None) -> Archive
             status=ArchiveStatus(configured=True, path=str(root), exists=False, target_count=0),
         )
 
-    targets: dict[str, ArchiveTarget] = {}
     warnings: list[str] = []
+    # Accumulated per TARGET, not per directory: two directories can
+    # normalise to one id (`M 31-sub` and `M 31_sub` — the archive has held
+    # both suffix spellings), and assigning per directory let the second
+    # silently replace the first, dropping its subs from every total and from
+    # QA's path list. Same rule as last_stack.discover_last_stack, which scans
+    # every directory that normalises to its target.
+    display_names: dict[str, str] = {}
+    nights_by_target: dict[str, dict[str, int]] = {}
+    spans_by_target: dict[str, dict[str, tuple[datetime, datetime]]] = {}
+    sub_paths_by_target: dict[str, list[Path]] = {}
 
     for entry in sorted(root.iterdir()):
         if not entry.is_dir():
@@ -313,9 +322,10 @@ def scan_archive(root: Path | None, local_tz: timezone | None = None) -> Archive
         raw_name = entry.name[: suffix_match.start()]
         target_id = normalize_target_id(raw_name)
 
-        nights: dict[str, int] = {}
-        spans: dict[str, tuple[datetime, datetime]] = {}
-        sub_paths: list[Path] = []
+        display_names.setdefault(target_id, raw_name)  # first in sorted order
+        nights = nights_by_target.setdefault(target_id, {})
+        spans = spans_by_target.setdefault(target_id, {})
+        sub_paths = sub_paths_by_target.setdefault(target_id, [])
         for fit in sorted(entry.glob("Light_*.fit")):
             sub_paths.append(fit)
             night, warning, instant = _parse_light_filename(fit.name, local_tz)
@@ -326,6 +336,9 @@ def scan_archive(root: Path | None, local_tz: timezone | None = None) -> Archive
                 first, last = spans.get(night, (instant, instant))
                 spans[night] = (min(first, instant), max(last, instant))
 
+    targets: dict[str, ArchiveTarget] = {}
+    for target_id, nights in nights_by_target.items():
+        spans = spans_by_target[target_id]
         night_records = [
             ArchiveNight(
                 night=night,
@@ -338,10 +351,10 @@ def scan_archive(root: Path | None, local_tz: timezone | None = None) -> Archive
         ]
         targets[target_id] = ArchiveTarget(
             target_id=target_id,
-            display_name=raw_name,
+            display_name=display_names[target_id],
             minutes=round(sum(n.minutes for n in night_records), 4),
             nights=night_records,
-            sub_paths=sub_paths,
+            sub_paths=sub_paths_by_target[target_id],
         )
 
     if warnings:
