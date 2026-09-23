@@ -1,7 +1,8 @@
 import type { FocuserPosition, LivePreview, StackState, Tier1 } from '../../api/schemas'
 import { Dot } from '../../ui/Dot'
 import { livePreviewImageSrc } from './livePreviewImage'
-import { deriveTelemetryValues, formatAnnotateState } from './telemetryFormatting'
+import { shareReasonLabel } from './shareReasons'
+import { deriveTelemetryValues, formatAnnotateState, singleSubLabel } from './telemetryFormatting'
 import { TelemetryLogCard } from './TelemetryLogCard'
 import type { TelemetryEntry } from './telemetryLog'
 import styles from './MobileLiveView.module.css'
@@ -36,13 +37,13 @@ export interface MobileLiveViewProps {
  *    ruling desktop's TargetHeader button row and PlanCard's primary action
  *    already made (slice-3 spec §0). Not a placeholder card, nothing.
  *
- * 2. **Filter chip / exposure / elapsed** in the header subtitle, and the
- *    "· 71.3 min" integration caption beside the stacked count — both need
- *    fields no confirmed tool returns (live filter state: handback items
- *    5/14; exposure length actually running: TelemetryGrid's own
- *    INTEGRATION cell; session start / elapsed: handback item 20). Desktop's
- *    TargetHeader already drops all three for the same reason — this just
- *    doesn't reintroduce them for mobile.
+ * 2. **Filter chip / exposure / elapsed** in the header subtitle. The data
+ *    for all three now exists (`View.lp_filter`, `View.Stack.Exposure.exp_ms`,
+ *    and `run.session_start_utc` from get_run_state, which desktop's
+ *    TargetHeader shows); this phone layout simply has not taken them on
+ *    yet. The "· 71.3 min" integration caption beside the stacked count IS
+ *    shown, computed from the running exposure the same way TelemetryGrid's
+ *    INTEGRATION cell is, and omitted when a poll carries no exposure.
  *
  * 3. **ALT and BAND stat tiles** — both need an instantaneous current
  *    altitude the tool surface does not return (`get_target_observability`
@@ -63,8 +64,16 @@ export interface MobileLiveViewProps {
  * cropped image with no controls, and there's no room to add them back.
  */
 export function MobileLiveView({ targetId, targetName, stack, tier1, focuser, preview, log }: MobileLiveViewProps) {
-  const { stackedValue, droppedValue, droppedPctValue, focusValue, annotateState, solveTone } =
-    deriveTelemetryValues(stack, tier1, focuser)
+  const {
+    stackedValue,
+    droppedValue,
+    droppedPctValue,
+    focusValue,
+    annotateState,
+    solveTone,
+    exposureMs,
+    integrationMin,
+  } = deriveTelemetryValues(stack, tier1, focuser)
 
   const imageSrc = livePreviewImageSrc(preview)
   // Keyed on `source`, not `url` — the same defect PreviewCard had, and for
@@ -89,7 +98,9 @@ export function MobileLiveView({ targetId, targetName, stack, tier1, focuser, pr
         </div>
         <div className={styles.headerRight}>
           <div className={styles.stackedValue}>{stackedValue != null ? stackedValue : '—'}</div>
-          <div className={styles.stackedCaption}>stacked</div>
+          <div className={styles.stackedCaption}>
+            {integrationMin !== null ? `stacked · ${integrationMin.toFixed(1)} min` : 'stacked'}
+          </div>
         </div>
       </header>
 
@@ -104,7 +115,7 @@ export function MobileLiveView({ targetId, targetName, stack, tier1, focuser, pr
             <div className={styles.badges}>
               {preview?.source === 'sub' && (
                 <span className={styles.badge} data-testid="mobile-preview-source-sub">
-                  single 10 s sub — not the stack
+                  {singleSubLabel(exposureMs, preview.stale)} — not the stack
                 </span>
               )}
               {preview?.stale && (
@@ -116,7 +127,7 @@ export function MobileLiveView({ targetId, targetName, stack, tier1, focuser, pr
           </>
         ) : (
           <div className={styles.previewEmpty} data-testid="mobile-preview-empty">
-            {preview?.reason ?? 'No preview available'}
+            {preview?.reason ? shareReasonLabel(preview.reason) : 'No preview available'}
           </div>
         )}
       </div>

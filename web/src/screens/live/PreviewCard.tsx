@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { Annotate, LivePreview } from '../../api/schemas'
 import { Dot } from '../../ui/Dot'
-import { computeFraming, FRAME_HEIGHT_PX, FRAME_WIDTH_PX } from './framing'
+import { projectOntoCover, resolveSolve, type ImageSize, type SolveResult } from './framing'
 import { livePreviewImageSrc } from './livePreviewImage'
-import { localHhMm, parse } from '../tonight/timeline'
+import { shareReasonLabel } from './shareReasons'
+import { singleSubLabel } from './telemetryFormatting'
+import { formatWhen } from './timestamps'
 import styles from './PreviewCard.module.css'
 
 export interface PreviewCardProps {
@@ -14,6 +16,12 @@ export interface PreviewCardProps {
   /** From `get_view_state`'s `result.View.Stack.Annotate` — `null` while no
    * solve has run this poll (pre-stack stages, or Stack itself absent). */
   annotate: Annotate | null
+  /** The running sub exposure, `View.Stack.Exposure.exp_ms`. Names the
+   * length in the single-sub caption; absent, the caption names none. */
+  exposureMs?: number | null
+  /** `View.target_name` — which of the solve's annotations is the target.
+   * Without it no annotation is treated as the target (see resolveSolve). */
+  targetName?: string | null
 }
 
 /**
@@ -26,28 +34,37 @@ export interface PreviewCardProps {
  *    stays visible as TEXT regardless of the toggle, because it is
  *    information (this unit's own ~20–30′ frame-left characteristic), not
  *    decoration.
- * 2. `source: "sub"` is a single noisy 10 s frame, not the accumulating
- *    stack the vendor app shows — said out loud, not left for a grainy
- *    image to imply a bad result on its own.
+ * 2. `source: "sub"` is a single noisy frame (its length from the scope's
+ *    running exposure), not the accumulating stack the vendor app shows —
+ *    said out loud, not left for a grainy image to imply a bad result on
+ *    its own.
  * 3. `stale: true` is shown, with when the frame is actually from — a stale
  *    image presented as current is exactly the dishonesty this project
  *    avoids everywhere else.
  */
-export function PreviewCard({ preview, annotate }: PreviewCardProps) {
+export function PreviewCard({ preview, annotate, exposureMs = null, targetName = null }: PreviewCardProps) {
   const [overlayOn, setOverlayOn] = useState(false)
+  const imageWrapRef = useRef<HTMLDivElement>(null)
+  const box = useBoxSize(imageWrapRef)
 
   // The solve lives in `Annotate.result.annotations[]`, not flat on `Annotate`
   // — confirmed against firmware 7.75 mid-session on NGC 7380. Reading the flat
   // fields made every live payload fail schema validation, which the client
   // reads as "get_view_state failed" and therefore "the scope is idle": the
-  // screen reported an idle scope while it was stacking. The first annotation
-  // is the plate-solve's primary match (`{type, names, pixelx, pixely,
-  // radius}`); further entries are additional catalogued objects in frame.
-  const solve = annotate?.result?.annotations?.[0]
-  const framing =
-    solve?.pixelx != null && solve?.pixely != null
-      ? computeFraming(solve.pixelx, solve.pixely)
-      : null
+  // screen reported an idle scope while it was stacking.
+  //
+  // Which annotation, and whether to trust it, is resolveSolve's call: the
+  // one naming View.target_name (not simply the first — any catalogued
+  // object in the field can be listed), only from a COMPLETED solve, and
+  // measured against the solve's own image_size rather than an assumed
+  // 1080×1920.
+  const solve = resolveSolve(annotate, targetName)
+  const framing = solve.kind === 'ok' ? solve.framing : null
+  // Mapped through object-fit: cover (see projectOntoCover). Not drawn when
+  // the box has not been measured, or when the point is in the cropped-away
+  // band: a circle over pixels that are not on screen marks nothing.
+  const marker =
+    solve.kind === 'ok' && box ? projectOntoCover(solve.point.x, solve.point.y, solve.imageSize, box) : null
 
   const imageSrc = livePreviewImageSrc(preview)
 
@@ -79,12 +96,14 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
           <Dot tone="accent" pulse size="sm" />
           <span className={styles.eyebrow}>Live stack</span>
         </span>
-        <span className={styles.dims}>
-          {FRAME_WIDTH_PX} × {FRAME_HEIGHT_PX}
-        </span>
+        {solve.kind === 'ok' && (
+          <span className={styles.dims}>
+            {solve.imageSize.width} × {solve.imageSize.height}
+          </span>
+        )}
       </header>
 
-      <div className={styles.imageWrap}>
+      <div className={styles.imageWrap} ref={imageWrapRef}>
         {hasImage && preview ? (
           <>
             <img
@@ -95,10 +114,13 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
 
             {overlayOn && framing && (
               <div className={styles.overlay} data-testid="preview-overlay">
-                <div
-                  className={styles.targetCircle}
-                  style={{ left: `${framing.leftPct}%`, top: `${framing.topPct}%` }}
-                />
+                {marker?.visible && (
+                  <div
+                    className={styles.targetCircle}
+                    data-testid="preview-target-marker"
+                    style={{ left: `${marker.leftPx}px`, top: `${marker.topPx}px` }}
+                  />
+                )}
                 <div className={styles.centreReticleH} />
                 <div className={styles.centreReticleV} />
               </div>
@@ -107,7 +129,7 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
             <div className={styles.badges}>
               {preview.source === 'sub' && (
                 <span className={styles.badge} data-testid="preview-source-sub">
-                  single 10 s sub — not the accumulating stack
+                  {singleSubLabel(exposureMs, preview.stale)} — not the accumulating stack
                 </span>
               )}
               {preview.stale && (
@@ -119,7 +141,7 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
           </>
         ) : (
           <div className={styles.empty} data-testid="preview-empty">
-            {preview?.reason ?? 'No preview available'}
+            {preview?.reason ? shareReasonLabel(preview.reason) : 'No preview available'}
           </div>
         )}
       </div>
@@ -142,19 +164,54 @@ export function PreviewCard({ preview, annotate }: PreviewCardProps) {
             {framing.centreLabel} / {framing.readout}
           </div>
         ) : (
-          <div className={styles.framing}>No plate-solve annotation yet</div>
+          <div className={styles.framing}>{solveAbsentText(solve)}</div>
         )}
       </footer>
     </section>
   )
 }
 
-/** `captured_at` is an ISO timestamp; render it the same local-clock way
- * every other clock on this app does (see tonight/timeline.ts's own
- * zone-honesty note — this inherits the same "browser's zone, not
- * necessarily the site's" caveat, which matters less here since it's a
- * relative "how long ago" figure a viewer reads at a glance). */
+function solveAbsentText(solve: SolveResult): string {
+  if (solve.kind === 'unmatched') {
+    return solve.target
+      ? `Plate solve did not name ${solve.target} — no framing to report`
+      : 'No target name to match the plate solve against'
+  }
+  if (solve.kind === 'no-size') return 'Plate solve carried no image size — framing not computed'
+  return 'No completed plate solve yet'
+}
+
+/**
+ * The element's laid-out content size, kept current with a ResizeObserver
+ * where one exists. `null` until measured, and whenever it measures 0×0 (not
+ * laid out) — the caller must not place anything against an unknown box.
+ */
+function useBoxSize(ref: RefObject<HTMLElement | null>): ImageSize | null {
+  const [size, setSize] = useState<ImageSize | null>(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const read = () => {
+      const width = el.clientWidth
+      const height = el.clientHeight
+      setSize((prev) => {
+        if (width <= 0 || height <= 0) return null
+        return prev && prev.width === width && prev.height === height ? prev : { width, height }
+      })
+    }
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(read)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [ref])
+  return size
+}
+
+/** `captured_at` is an ISO timestamp, rendered with its date whenever it is
+ * not from today (see `formatWhen`): a stale frame is exactly the one that
+ * may be days old. Unparseable reads as "an unknown time", never "Invalid
+ * Date". */
 function formatCapturedAt(capturedAt: string | null): string {
-  if (!capturedAt) return 'an unknown time'
-  return localHhMm(parse(capturedAt))
+  return formatWhen(capturedAt) ?? 'an unknown time'
 }

@@ -15,6 +15,7 @@ import {
   recordedTier1,
 } from '../../test/fixtures'
 import { MobileLiveView } from './MobileLiveView'
+import { shareReasonLabel } from './shareReasons'
 import { appendTelemetryEntry } from './telemetryLog'
 
 const view = StackStateSchema.parse({
@@ -127,7 +128,43 @@ describe('MobileLiveView', () => {
     expect(screen.queryByText('Dumbbell Nebula')).not.toBeInTheDocument()
   })
 
-  it('drops the LP-filter/exposure/elapsed subtitle detail and the "· NN.N min" integration caption — neither field is confirmed returned by any tool', () => {
+  it('shows the "· NN.N min" integration caption, computed from the scope\'s own running exposure', () => {
+    // View.Stack.Exposure.exp_ms was on the real payload all along; the
+    // schema dropped it, so this caption was left out as "not returned".
+    const withExposure = StackStateSchema.parse({ ...view, Exposure: { state: 'complete', exp_ms: 10000 } })
+    render(
+      <MobileLiveView
+        targetId="M27"
+        targetName="Dumbbell Nebula"
+        stack={withExposure}
+        tier1={tier1}
+        focuser={focuser}
+        preview={LivePreviewSchema.parse(livePreviewSub())}
+        log={[]}
+      />,
+    )
+    // tier1's own count (115) × 10 s.
+    expect(screen.getByText('stacked · 19.2 min')).toBeInTheDocument()
+    expect(screen.getByTestId('mobile-preview-source-sub')).toHaveTextContent('single 10 s sub — not the stack')
+  })
+
+  it('claims no integration or sub length when the poll carried no exposure', () => {
+    render(
+      <MobileLiveView
+        targetId="M27"
+        targetName="Dumbbell Nebula"
+        stack={view}
+        tier1={tier1}
+        focuser={focuser}
+        preview={LivePreviewSchema.parse(livePreviewSub())}
+        log={[]}
+      />,
+    )
+    expect(screen.getByText('stacked')).toBeInTheDocument()
+    expect(screen.getByTestId('mobile-preview-source-sub')).toHaveTextContent('single sub — not the stack')
+  })
+
+  it('drops the LP-filter/elapsed subtitle detail, and the integration caption when there is no exposure to compute it from', () => {
     render(
       <MobileLiveView
         targetId="M27"
@@ -178,6 +215,23 @@ describe('MobileLiveView', () => {
       />,
     )
     expect(screen.getByTestId('mobile-preview-stale')).toBeInTheDocument()
+  })
+
+  it('renders a live_preview reason as prose, not as the wire code', () => {
+    const unreachable = LivePreviewSchema.parse({ ...(livePreviewNone() as object), reason: 'share_unreachable' })
+    render(
+      <MobileLiveView
+        targetId="M27"
+        targetName="Dumbbell Nebula"
+        stack={view}
+        tier1={tier1}
+        focuser={focuser}
+        preview={unreachable}
+        log={[]}
+      />,
+    )
+    expect(screen.getByTestId('mobile-preview-empty')).toHaveTextContent(shareReasonLabel('share_unreachable'))
+    expect(screen.queryByText('share_unreachable')).not.toBeInTheDocument()
   })
 
   it('renders the honest empty-preview state, not a broken image, when there is no frame yet', () => {

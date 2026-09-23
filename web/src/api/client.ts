@@ -42,6 +42,19 @@ import {
 
 export class ApiError extends Error {}
 
+/**
+ * The sidecar answered, successfully, with a payload this client's schema
+ * does not accept. Still an `ApiError` (every existing `catch` keeps
+ * working), but distinct, because it means something different from every
+ * other failure: the telescope is talking, in a shape we do not understand.
+ *
+ * The Live screen used to read every `get_view_state` failure as "scope
+ * idle", and a schema mismatch is how that misreport happened on hardware —
+ * "idle" while the scope stacked 94 frames (see AnnotateSchema's doc
+ * comment). A caller that can tell this apart can say so instead.
+ */
+export class SchemaError extends ApiError {}
+
 /** How to get the sidecar running, repeated in every message that means
  * "the sidecar didn't answer" — this is the one line of the app most
  * likely to be read by someone who has never seen the codebase. */
@@ -54,17 +67,76 @@ const SIDECAR_HINT =
  * CLIENT_HEADER. */
 const CLIENT_HEADER = 'X-Seestar-Client'
 
-async function request<T>(path: string, schema: ZodType<T>, init?: RequestInit): Promise<T> {
-  let response: Response
+/**
+ * How long one request may take before this client gives up on it.
+ *
+ * There used to be no limit. The sidecar serialises MCP calls onto one
+ * session (mcp_proxy.py), so a single slow call holds every call behind it,
+ * and a request that never answered left its caller waiting forever — the
+ * Live screen's polls piled up behind it and interleaved their writes.
+ *
+ * Longer than seestar-mcp's own 30 s device timeout (config.py's
+ * `http_timeout_s`), so a device call the SERVER gives up on still comes
+ * back as the server's own, more specific, error rather than ours.
+ */
+export const REQUEST_TIMEOUT_MS = 45_000
+
+export interface RequestOptions {
+  /** Cancels the request — e.g. when the component that asked unmounts. */
+  signal?: AbortSignal
+}
+
+async function request<T>(
+  path: string,
+  schema: ZodType<T>,
+  init: RequestInit = {},
+  { signal: callerSignal }: RequestOptions = {},
+): Promise<T> {
+  // One controller per request, fired by whichever comes first: the timeout,
+  // or the caller's own signal.
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, REQUEST_TIMEOUT_MS)
+  const onCallerAbort = () => controller.abort()
+  if (callerSignal?.aborted) controller.abort()
+  else callerSignal?.addEventListener('abort', onCallerAbort, { once: true })
+
+  // Settles the request on abort even if a fetch implementation (or a test
+  // double) ignores its signal, and covers the body read as well.
+  const aborted = new Promise<never>((_, reject) => {
+    const fail = () =>
+      reject(
+        new ApiError(
+          timedOut
+            ? `sidecar did not answer ${path} within ${REQUEST_TIMEOUT_MS / 1000} s — ${SIDECAR_HINT}`
+            : `request to ${path} was cancelled`,
+        ),
+      )
+    if (controller.signal.aborted) fail()
+    else controller.signal.addEventListener('abort', fail, { once: true })
+  })
+  aborted.catch(() => {})
+
   try {
-    // Only pass init when there is one: a GET must still call fetch(path)
-    // with a single argument, exactly as it did before this was split into
-    // request/get/post. Refactoring should not change what callers observe.
-    response = init ? await fetch(path, init) : await fetch(path)
-  } catch (cause) {
-    throw new ApiError(`sidecar unreachable at ${path} — ${SIDECAR_HINT}`, { cause })
+    let response: Response
+    try {
+      response = await Promise.race([fetch(path, { ...init, signal: controller.signal }), aborted])
+    } catch (cause) {
+      if (controller.signal.aborted) return await aborted
+      throw new ApiError(`sidecar unreachable at ${path} — ${SIDECAR_HINT}`, { cause })
+    }
+    const body = await Promise.race([response.json().catch(() => null), aborted])
+    return parseBody(path, schema, response, body)
+  } finally {
+    clearTimeout(timer)
+    callerSignal?.removeEventListener('abort', onCallerAbort)
   }
-  const body = await response.json().catch(() => null)
+}
+
+function parseBody<T>(path: string, schema: ZodType<T>, response: Response, body: unknown): T {
   if (!response.ok) {
     // A JSON {error} body means the sidecar formed the response itself and
     // has something specific to say (see _serve() in routes.py) — surface
@@ -90,7 +162,7 @@ async function request<T>(path: string, schema: ZodType<T>, init?: RequestInit):
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
     // Loud, not silent: a shape change should be visible, not a blank card.
-    throw new ApiError(`unexpected payload from ${path}: ${parsed.error.message}`)
+    throw new SchemaError(`unexpected payload from ${path}: ${parsed.error.message}`)
   }
   return parsed.data
 }
@@ -105,7 +177,8 @@ function isToolFailure(body: unknown): body is { ok: false; error?: unknown } {
 }
 
 
-const get = <T>(path: string, schema: ZodType<T>): Promise<T> => request(path, schema)
+const get = <T>(path: string, schema: ZodType<T>, opts?: RequestOptions): Promise<T> =>
+  request(path, schema, {}, opts)
 
 /** POST with the client header. Used only by startQaAnalysis — see its own
  * comment for why the one mutating call is not a GET. */
@@ -118,11 +191,12 @@ export const fetchConditions = (): Promise<Conditions> =>
 export const fetchPlan = (limit = 12): Promise<PlanTargets> =>
   get(`/api/plan_targets?limit=${limit}`, PlanTargetsSchema)
 
-export const fetchSite = (): Promise<SiteProfile> =>
-  get('/api/get_site_profile', SiteProfileSchema)
+export const fetchSite = (opts?: RequestOptions): Promise<SiteProfile> =>
+  get('/api/get_site_profile', SiteProfileSchema, opts)
 
 /** Drives the top bar's "fixtures — not live" indicator. */
-export const fetchHealth = (): Promise<Health> => get('/api/health', HealthSchema)
+export const fetchHealth = (opts?: RequestOptions): Promise<Health> =>
+  get('/api/health', HealthSchema, opts)
 
 /** The store's own project records — goals, status, and per-session history.
  * Joined client-side with fetchProjectsCombined() by target_id; see
@@ -155,45 +229,52 @@ export const fetchRecommendProjects = (limit?: number): Promise<RecommendProject
  * distinction, by seeing which calls fail together — see its own doc comment
  * for why that's a more honest signal than pattern-matching error text.
  */
-export const fetchViewState = (): Promise<ViewState> => get('/api/get_view_state', ViewStateSchema)
+export const fetchViewState = (opts?: RequestOptions): Promise<ViewState> =>
+  get('/api/get_view_state', ViewStateSchema, opts)
 
-export const fetchStatus = (): Promise<Status> => get('/api/get_status', StatusSchema)
+export const fetchStatus = (opts?: RequestOptions): Promise<Status> =>
+  get('/api/get_status', StatusSchema, opts)
 
 /**
  * `session_start_utc` is a required query param the sidecar route has no
  * default for (routes.py's `check_night_guardrails` handler) — it needs to
  * know when the session started to compute dawn margin and max-duration
- * remaining. Nothing in the confirmed tool surface returns a real session
- * start time, so `useLiveSession` passes the moment THIS client first
- * observed the session as active, not the scope's actual start — see its
- * own doc comment. That means the max-duration/dawn-margin figures this
- * returns understate elapsed time whenever the dashboard connects mid-
- * session; flagged there and in the handback list, not silently assumed
- * accurate. */
-export const fetchGuardrails = (sessionStartUtc: string): Promise<Guardrails> =>
+ * remaining. `useLiveSession` passes `get_run_state`'s `run.session_start_utc`
+ * (the scope's real start, handback item 20) when the run is active, and only
+ * otherwise falls back to the moment THIS client first observed the session —
+ * which understates elapsed time for a dashboard opened mid-session. See its
+ * own doc comment. */
+export const fetchGuardrails = (sessionStartUtc: string, opts?: RequestOptions): Promise<Guardrails> =>
   get(
     `/api/check_night_guardrails?session_start_utc=${encodeURIComponent(sessionStartUtc)}`,
     GuardrailsSchema,
+    opts,
   )
 
-export const fetchTier1 = (): Promise<Tier1> => get('/api/qa_tier1', Tier1Schema)
+export const fetchTier1 = (opts?: RequestOptions): Promise<Tier1> =>
+  get('/api/qa_tier1', Tier1Schema, opts)
 
-export const fetchFocuserPosition = (): Promise<FocuserPosition> =>
-  get('/api/get_focuser_position', FocuserPositionSchema)
+export const fetchFocuserPosition = (opts?: RequestOptions): Promise<FocuserPosition> =>
+  get('/api/get_focuser_position', FocuserPositionSchema, opts)
 
 /** `target` is a required query param (the catalogue id, e.g. "M27") — the
- * route has no default. `useLiveSession` sources it from `/api/live_preview`'s
- * own `target` field (a normalized id parsed from the live share's directory
- * name), the only confirmed source for "what is currently framed" — see
- * live_preview.py's `LiveFrame.target` and schemas.ts's own note that
- * `get_view_state` carries no target name at all. */
-export const fetchTargetObservability = (target: string): Promise<TargetObservability> =>
-  get(`/api/get_target_observability?target=${encodeURIComponent(target)}`, TargetObservabilitySchema)
+ * route has no default. `useLiveSession` sources it from `get_view_state`'s
+ * own `View.target_name` first and `/api/live_preview`'s `target` second —
+ * see its `currentTarget` doc comment for why that order. */
+export const fetchTargetObservability = (
+  target: string,
+  opts?: RequestOptions,
+): Promise<TargetObservability> =>
+  get(
+    `/api/get_target_observability?target=${encodeURIComponent(target)}`,
+    TargetObservabilitySchema,
+    opts,
+  )
 
 /** Metadata only — `stale`, `source`, `captured_at`, and the `url` to point
  * an `<img>` at (see PreviewCard). Never fetches the image bytes itself. */
-export const fetchLivePreview = (): Promise<LivePreview> =>
-  get('/api/live_preview', LivePreviewSchema)
+export const fetchLivePreview = (opts?: RequestOptions): Promise<LivePreview> =>
+  get('/api/live_preview', LivePreviewSchema, opts)
 
 /** `target` is a required query param — the catalogue id, same value
  * `fetchTargetObservability` takes (see useLiveSession's `currentTarget`).
@@ -202,16 +283,20 @@ export const fetchLivePreview = (): Promise<LivePreview> =>
  * own doc comment on why that is fetched on target change, not on the
  * telemetry poll). Never call this on the 60 s cadence the rest of the
  * active-session fetchers use. */
-export const fetchLastStack = (target: string): Promise<LastStack> =>
-  get(`/api/last_stack?target=${encodeURIComponent(target)}`, LastStackSchema)
+export const fetchLastStack = (target: string, opts?: RequestOptions): Promise<LastStack> =>
+  get(`/api/last_stack?target=${encodeURIComponent(target)}`, LastStackSchema, opts)
 
 /** Newest-first tail of provenance.jsonl (routes.py's `session_activity`
  * handler) — an activity feed, not a tool call itself, and not gated behind
  * an active session the way the telescope-state fetchers above are (it's a
  * local file read, unrelated to whether the scope is observing). See
  * SessionActivityCard for how `origin` must be rendered without flattening. */
-export const fetchSessionActivity = (limit?: number): Promise<SessionActivity> =>
-  get(`/api/session_activity${limit !== undefined ? `?limit=${limit}` : ''}`, SessionActivitySchema)
+export const fetchSessionActivity = (limit?: number, opts?: RequestOptions): Promise<SessionActivity> =>
+  get(
+    `/api/session_activity${limit !== undefined ? `?limit=${limit}` : ''}`,
+    SessionActivitySchema,
+    opts,
+  )
 
 /* --- slice 4: Review & QA -------------------------------------------------
  *
@@ -250,8 +335,8 @@ export const startQaAnalysis = (target: string): Promise<QaAnalysisResponse> =>
  * a get_view_state timeout. Reads a file server-side, no Alpaca call, so
  * unlike every other state fetcher this one costs the bridge nothing and is
  * safe to poll on the idle path. */
-export const fetchRunState = (): Promise<RunState> =>
-  get('/api/get_run_state', RunStateSchema)
+export const fetchRunState = (opts?: RequestOptions): Promise<RunState> =>
+  get('/api/get_run_state', RunStateSchema, opts)
 
 /** URL for one sub's Seestar-written JPEG thumbnail (`<stem>_thn.jpg`).
  *

@@ -21,8 +21,14 @@ export interface GuardrailsCardProps {
  * VerdictBanner), `hard_stops` as the blocking reasons (shown first, with
  * more weight — these are what would actually trigger a park), and the rest
  * of `reasons` underneath as supporting context, exactly as returned.
+ *
+ * "The rest" is literal: the server builds `reasons = hard_stops + reasons`
+ * (seestar-mcp planning/autonomous.py), so every hard stop is also at the
+ * head of `reasons`, and rendering both lists verbatim showed each blocking
+ * reason twice. See `contextReasons`.
  */
 export function GuardrailsCard({ guardrails }: GuardrailsCardProps) {
+  const context = guardrails ? contextReasons(guardrails.reasons, guardrails.hard_stops) : []
   const tone: DotTone | undefined = guardrails
     ? guardrails.proceed
       ? 'pass'
@@ -52,10 +58,10 @@ export function GuardrailsCard({ guardrails }: GuardrailsCardProps) {
             </ul>
           )}
 
-          {guardrails.reasons.length > 0 && (
+          {context.length > 0 && (
             <ul className={styles.reasons}>
-              {guardrails.reasons.map((reason) => (
-                <li key={reason} className={styles.reason}>
+              {context.map((reason, i) => (
+                <li key={`${i}-${reason}`} className={styles.reason}>
                   {reason}
                 </li>
               ))}
@@ -71,4 +77,18 @@ export function GuardrailsCard({ guardrails }: GuardrailsCardProps) {
       )}
     </section>
   )
+}
+
+/** `reasons` with the hard stops taken out, one occurrence per hard stop —
+ * a multiset difference, so a reason that genuinely appears twice keeps its
+ * second copy. Order is preserved; nothing is re-worded or re-ranked. */
+function contextReasons(reasons: string[], hardStops: string[]): string[] {
+  const pending = new Map<string, number>()
+  for (const stop of hardStops) pending.set(stop, (pending.get(stop) ?? 0) + 1)
+  return reasons.filter((reason) => {
+    const left = pending.get(reason) ?? 0
+    if (left === 0) return true
+    pending.set(reason, left - 1)
+    return false
+  })
 }

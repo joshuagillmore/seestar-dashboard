@@ -145,6 +145,21 @@ describe('live-session schemas', () => {
     expect(view?.Stack?.Annotate?.state).toBe('complete')
   })
 
+  it('keeps the running sub exposure — View.Stack.Exposure.exp_ms — rather than dropping it', () => {
+    // On the real payload all along; the schema stripped it, so the screen
+    // said "exposure length not yet returned by any tool".
+    const parsed = ViewStateSchema.parse(recordedViewState())
+    expect(parsed.view_state?.result?.View?.Stack?.Exposure?.exp_ms).toBe(10000)
+  })
+
+  it('treats an absent Exposure block as no value, not a parse failure', () => {
+    const parsed = ViewStateSchema.parse({
+      ok: true,
+      view_state: { result: { View: { stage: 'Stack', Stack: { stacked_frame: 3, dropped_frame: 0 } } } },
+    })
+    expect(parsed.view_state?.result?.View?.Stack?.Exposure?.exp_ms ?? null).toBeNull()
+  })
+
   it('rejects a payload missing the view_state wrapper — the exact extra-nesting bug an earlier version of this schema had', () => {
     // A parser (or a schema) reading `ok.result.View` directly — one level
     // shallower than the real shape — would find nothing, silently. That

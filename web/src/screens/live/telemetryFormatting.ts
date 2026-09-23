@@ -49,6 +49,33 @@ export function formatAnnotateState(state: string | null | undefined): string {
  * doc comment on why nothing else is asserted as a failure state. */
 export const ANNOTATE_STATE_OK = 'complete'
 
+/** Minutes of integration kept so far: stacked frames × the sub exposure
+ * the scope reports running (`View.Stack.Exposure.exp_ms`). Plain
+ * arithmetic over two figures the scope returned, not a judgement. `null`,
+ * never 0, when either is missing. */
+export function integrationMinutes(stacked: number | null, exposureMs: number | null): number | null {
+  if (stacked == null || exposureMs == null) return null
+  return (stacked * exposureMs) / 60_000
+}
+
+/** `10000` → "10 s", `2500` → "2.5 s". */
+export function formatExposure(exposureMs: number): string {
+  const seconds = Math.round((exposureMs / 1000) * 10) / 10
+  return `${seconds} s`
+}
+
+/**
+ * "single 10 s sub" / "single sub" — the caption a `source: "sub"` preview
+ * frame carries, shared by PreviewCard and MobileLiveView. The length comes
+ * from the scope's running exposure; it used to be a hardcoded "10 s".
+ *
+ * No length for a STALE frame: it can be from an earlier session, whose
+ * sub length the current exposure says nothing about.
+ */
+export function singleSubLabel(exposureMs: number | null | undefined, stale: boolean): string {
+  return exposureMs != null && !stale ? `single ${formatExposure(exposureMs)} sub` : 'single sub'
+}
+
 export interface TelemetryValues {
   stackedValue: number | null
   droppedValue: number | null
@@ -56,6 +83,9 @@ export interface TelemetryValues {
   focusValue: number | null
   annotateState: string | null | undefined
   solveTone: 'pass' | undefined
+  /** The running sub exposure, from `View.Stack.Exposure.exp_ms`. */
+  exposureMs: number | null
+  integrationMin: number | null
 }
 
 /**
@@ -79,6 +109,17 @@ export function deriveTelemetryValues(
   const focusValue = snapshot?.focus_pos ?? focuser?.focus_pos ?? null
   const annotateState = stack?.Annotate?.state
   const solveTone = annotateState === ANNOTATE_STATE_OK ? ('pass' as const) : undefined
+  const exposureMs = stack?.Exposure?.exp_ms ?? null
+  const integrationMin = integrationMinutes(stackedValue, exposureMs)
 
-  return { stackedValue, droppedValue, droppedPctValue, focusValue, annotateState, solveTone }
+  return {
+    stackedValue,
+    droppedValue,
+    droppedPctValue,
+    focusValue,
+    annotateState,
+    solveTone,
+    exposureMs,
+    integrationMin,
+  }
 }
