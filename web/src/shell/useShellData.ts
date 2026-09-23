@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchHealth, fetchSite } from '../api/client'
+import { fetchHealth, fetchSite, type RequestOptions } from '../api/client'
 import type { Health, SiteProfile } from '../api/schemas'
 
 export interface ShellData {
@@ -25,6 +25,14 @@ export interface ShellData {
  * state. A screen's OWN data (conditions/plan; projects_combined/
  * list_projects) still surfaces its own fetch failures as a screen-level
  * error banner, independently of this.
+ *
+ * Null must not mean null for good, though. These are fetched once per tab,
+ * and they used to be fetched once, together, with no retry: a sidecar that
+ * was not up yet at first load left `site` (which gates the Live screen's
+ * sweet-band gauge) and the replay badge null for the tab's whole life, and
+ * Promise.all meant either route failing blanked both. Each is now loaded on
+ * its own and retried with a gentle back-off (`shellRetryDelayMs`) until it
+ * succeeds, then never fetched again.
  */
 export function useShellData(): ShellData {
   const [site, setSite] = useState<SiteProfile | null>(null)
@@ -32,20 +40,45 @@ export function useShellData(): ShellData {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetchSite(), fetchHealth()])
-      .then(([siteResult, healthResult]) => {
-        if (!cancelled) {
-          setSite(siteResult)
-          setHealth(healthResult)
-        }
-      })
-      .catch(() => {
-        // See docstring above: shell-level data degrades to absent, silently.
-      })
+    const timers = new Set<ReturnType<typeof setTimeout>>()
+    const controller = new AbortController()
+
+    function load<T>(
+      fetcher: (opts: RequestOptions) => Promise<T>,
+      set: (value: T) => void,
+      attempt = 0,
+    ) {
+      fetcher({ signal: controller.signal }).then(
+        (value) => {
+          if (!cancelled) set(value)
+        },
+        () => {
+          if (cancelled) return
+          const timer = setTimeout(() => {
+            timers.delete(timer)
+            load(fetcher, set, attempt + 1)
+          }, shellRetryDelayMs(attempt))
+          timers.add(timer)
+        },
+      )
+    }
+
+    load(fetchSite, setSite)
+    load(fetchHealth, setHealth)
     return () => {
       cancelled = true
+      timers.forEach(clearTimeout)
+      controller.abort()
     }
   }, [])
 
   return { site, health }
+}
+
+/** Wait before retry `attempt` (0-based): 2 s, doubling, capped at a
+ * minute. Quick enough that starting the sidecar a moment after the page
+ * shows up within seconds; gentle enough that a sidecar that stays down is
+ * asked about once a minute, not hammered. */
+export function shellRetryDelayMs(attempt: number): number {
+  return Math.min(2_000 * 2 ** attempt, 60_000)
 }
