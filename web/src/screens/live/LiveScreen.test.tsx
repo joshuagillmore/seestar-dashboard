@@ -175,7 +175,22 @@ describe('LiveScreen', () => {
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
     await waitFor(() => expect(screen.getByTestId('live-bridge-down')).toBeInTheDocument())
     await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
-    expect(screen.getByTestId('session-activity-not-running')).toBeInTheDocument()
+    // With the bridge down this client cannot know whether a session is
+    // running, so the feed must not say "No session is running right now".
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+
+  it('does not contradict get_run_state when it reports an active run with the bridge down', async () => {
+    // run_state is a file read on the server, so it can still answer while
+    // the scope link is gone.
+    stubBridgeDown({ '/api/get_run_state': runStateActiveFixture() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await waitFor(() => expect(screen.getByTestId('live-bridge-down')).toBeInTheDocument())
+    const runTarget = (runStateActiveFixture() as { run: { target: string } }).run.target
+    expect(screen.getByTestId('live-bridge-down')).toHaveTextContent(/active run/)
+    expect(screen.getByTestId('live-bridge-down')).toHaveTextContent(runTarget)
+    await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
   })
 
   it('does not show the "not running" note during an active session — a session genuinely is running', async () => {

@@ -113,10 +113,13 @@ function StaleNotice({ reason, readAt }: { reason: string; readAt: string }) {
  * sidebar — the user's own reasoning: "most of the time this screen is
  * open, no session is running," and the feed answers what actually happened
  * while nobody was watching, which is the more useful question exactly
- * when there's no live camera to show. `sessionRunning={false}` on the card
- * is what keeps that honest — the feed's own timestamps already say when
- * each entry is from, but the card adds a plain-language note too, so a
+ * when there's no live camera to show. `sessionRunning={false}` on the idle
+ * card is what keeps that honest — the feed's own timestamps already say
+ * when each entry is from, but the card adds a plain-language note too, so a
  * three-nights-old entry can't read as something happening right now.
+ * Bridge-down passes `null` instead (or `true` when get_run_state reports an
+ * active run): with the scope unreachable, "no session is running" is a
+ * claim this client cannot make.
  *
  * **Mobile breakpoint** (slice added later, design README.md:711-737): below
  * `MOBILE_QUERY` (600px), this screen skips `AppShell` entirely rather than
@@ -173,9 +176,21 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
             <div>
               <div className={styles.stateTitle}>Bridge unreachable</div>
               <p className={styles.stateBody}>{state.error}</p>
+              {state.runActive && (
+                <p className={styles.stateBody}>
+                  get_run_state still reports an active run{state.runTarget ? ` on ${state.runTarget}` : ''}. It
+                  may be carrying on without this screen.
+                </p>
+              )}
             </div>
           </div>
-          <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
+          {/* The scope cannot be asked, so this client cannot know whether a
+              session is running: no claim, unless run_state says one is. */}
+          <SessionActivityCard
+            activity={state.sessionActivity}
+            sessionRunning={state.runActive ? true : null}
+            wide
+          />
         </div>
       )}
 

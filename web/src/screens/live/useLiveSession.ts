@@ -96,7 +96,17 @@ export const SESSION_GAP_MS = 6 * 60 * 60 * 1000
 
 export type LiveSessionState =
   | { phase: 'loading' }
-  | { phase: 'bridge-down'; error: string; sessionActivity: SessionActivity | null }
+  | {
+      phase: 'bridge-down'
+      error: string
+      /** Whether `get_run_state` — a file read on the server, which can
+       * still answer while the scope link is down — reports an active run,
+       * and on what. The screen must not contradict it, and without it
+       * cannot say whether any session is running at all. */
+      runActive: boolean
+      runTarget: string | null
+      sessionActivity: SessionActivity | null
+    }
   | {
       phase: 'idle'
       /** How the scope said so. `null`: `get_view_state` answered and
@@ -529,8 +539,15 @@ export function useLiveSession(): LiveSessionState {
         } catch (cause) {
           const sessionActivity = await sessionActivityPromise
           if (cancelled) return
+          const runActive = runState?.state === 'active'
           settleFailure(
-            { phase: 'bridge-down', error: errorMessage(cause), sessionActivity },
+            {
+              phase: 'bridge-down',
+              error: errorMessage(cause),
+              runActive,
+              runTarget: runActive ? (runState?.run?.target ?? null) : null,
+              sessionActivity,
+            },
             `the bridge did not answer (${errorMessage(cause)})`,
             sessionActivity,
           )
