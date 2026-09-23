@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildScale, formatUtcOffset, minutesBetween, parse, spanToPercent, zoneLabel } from './timeline'
 
 describe('timeline scale', () => {
-  const scale = buildScale(['2026-09-24T19:49:29.005', '2026-09-25T03:54:29.005'])
+  const scale = buildScale(['2026-09-24T19:48:37.257', '2026-09-25T03:53:37.257'])
 
   it('pads an hour each side and rounds outward to the hour', () => {
     expect(scale.startMs).toBe(Date.parse('2026-09-24T18:00:00Z'))
@@ -11,8 +11,8 @@ describe('timeline scale', () => {
 
   it('places the dark window inside the padded axis', () => {
     const { left, width } = spanToPercent(scale, [
-      '2026-09-24T19:49:29.005',
-      '2026-09-25T03:54:29.005',
+      '2026-09-24T19:48:37.257',
+      '2026-09-25T03:53:37.257',
     ])
     expect(left).toBeGreaterThan(0)
     expect(left + width).toBeLessThan(100)
@@ -20,8 +20,8 @@ describe('timeline scale', () => {
 
   it('clamps a span that runs past the axis', () => {
     const { left, width } = spanToPercent(scale, [
-      '2026-07-28T00:00:00.000',
-      '2026-07-28T12:00:00.000',
+      '2026-09-24T12:00:00.000',
+      '2026-09-25T12:00:00.000',
     ])
     expect(left).toBe(0)
     expect(width).toBe(100)
@@ -33,13 +33,13 @@ describe('timeline scale', () => {
 
   it('collapses a span entirely outside the axis rather than going negative', () => {
     const before = spanToPercent(scale, [
-      '2026-07-27T20:00:00.000',
-      '2026-07-27T22:00:00.000',
+      '2026-09-24T14:00:00.000',
+      '2026-09-24T16:00:00.000',
     ])
     expect(before).toEqual({ left: 0, width: 0 })
     const after = spanToPercent(scale, [
-      '2026-07-28T10:00:00.000',
-      '2026-07-28T12:00:00.000',
+      '2026-09-25T06:00:00.000',
+      '2026-09-25T08:00:00.000',
     ])
     expect(after).toEqual({ left: 100, width: 0 })
   })
@@ -50,7 +50,7 @@ describe('timeline scale', () => {
   })
 
   it('returns the whole-minute span between two timestamps', () => {
-    // M76's recorded best_window_utc: 19:43:23.680 to 22:03:40.684 UTC.
+    // M76's fixture best_window_utc: 19:43:23.680 to 22:03:40.684 UTC.
     expect(
       minutesBetween(['2026-09-26T19:43:23.680', '2026-09-26T22:03:40.684']),
     ).toBe(140)

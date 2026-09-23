@@ -25,6 +25,34 @@ schema or override them outright.
 
 **If you re-record this fixture, replace the site block again before committing.**
 
+## Everything computed *from* the site is synthetic too
+
+Replacing the site block alone was not enough, and for a while it was all that
+had been done. `plan_targets.json` still carried each target's peak altitude and
+transit time, and `assess_conditions.json` the dark window — all computed at the
+real site. Peak altitude against a catalogue declination gives latitude; transit
+time against right ascension gives longitude. Three targets agreed on the real
+location to about 10–20 km: the same city-level exposure the rounding above was
+rejected for.
+
+So every site-derived value in `plan_targets.json`, `assess_conditions.json` and
+`synthetic/assess_conditions.*.json` — dark windows, best windows, transits, peak
+altitudes, sweet-band minutes, moon separations and the reason strings quoting
+them — is recomputed by seestar-mcp's own planner (`planning.astro` /
+`planning.ranker`, called in-process) at the Greenwich site above. Everything
+else in those payloads — scores, ordering, weather, project notes — is as
+recorded.
+
+The night is also moved **59 days later** (e.g. 2026-07-30 → 2026-09-26). At
+Greenwich in late July astronomical dark lasts about 2.4 h, which collapsed all
+twelve targets onto one identical window and lost the above-ceiling transits the
+recording exercised. 59 days is two synodic months, so the moon phase is
+unchanged and the recording's moon and weather text still holds. The shifted
+night crosses UTC midnight, which the original did not.
+
+**A re-record needs the same treatment:** run the planner against the synthetic
+site rather than hand-editing numbers, or the geometry will again point home.
+
 ## Everything else is verbatim
 
 `get_view_state.json` and `qa_tier1.json` were captured together during one live
@@ -40,4 +68,6 @@ diffed against the previous copy to confirm nothing else moved. A full
 end-to-end re-record would have pulled in unrelated in-flight changes.
 
 Checked 2026-08-03: no fixture contains a local path, a username or the real
-site. That is a property to re-check after any re-record, not one to assume.
+site. Re-checked 2026-09-22 for values *derived* from the site, which the first
+check missed (see above). Both are properties to re-check after any re-record,
+not ones to assume.
