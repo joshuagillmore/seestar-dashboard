@@ -17,7 +17,8 @@ import { SweetBandGauge } from './SweetBandGauge'
 import { TargetHeader } from './TargetHeader'
 import { TelemetryGrid } from './TelemetryGrid'
 import { TelemetryLogCard } from './TelemetryLogCard'
-import { useLiveSession } from './useLiveSession'
+import { formatWhen } from './timestamps'
+import { useLiveSession, type LiveSessionState } from './useLiveSession'
 import styles from './LiveScreen.module.css'
 
 export interface LiveScreenProps {
@@ -34,7 +35,10 @@ export interface LiveScreenProps {
  * unreachable. Kept out of Sidebar itself, same pattern as Tonight's own
  * `verdict`/`verdictTone` — Sidebar stays presentational and does not need
  * to know this screen's phase shape. */
-function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | null } {
+function sidebarStatus(state: LiveSessionState): { tone: DotTone | null; meta: string | null } {
+  const { phase } = state
+  // A held reading is not a live one: not the green dot.
+  if (phase === 'active' && state.stale !== null) return { tone: 'marginal', meta: 'stale' }
   if (phase === 'active') return { tone: 'pass', meta: 'live' }
   if (phase === 'bridge-down') return { tone: 'reject', meta: 'bridge down' }
   if (phase === 'idle') return { tone: 'idle', meta: 'idle' }
@@ -43,6 +47,27 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
   if (phase === 'run-without-view') return { tone: 'marginal', meta: 'run, no view' }
   if (phase === 'unrecognised') return { tone: 'marginal', meta: 'unrecognised' }
   return { tone: null, meta: null }
+}
+
+/**
+ * Shown over an active session whose reading is held from an earlier poll
+ * because this one could not read the scope (see `stale` on useLiveSession's
+ * active state). Says what failed and how old the reading is, so a held
+ * stack count cannot pass for a current one. Not an alert: one failed poll
+ * is expected now and then, and the next poll asks again.
+ */
+function StaleNotice({ reason, readAt }: { reason: string; readAt: string }) {
+  const when = formatWhen(readAt)
+  return (
+    <div className={styles.staleNotice} role="status" data-testid="live-stale">
+      <Dot tone="marginal" />
+      <p className={styles.staleText}>
+        <span className={styles.staleTitle}>Not current.</span> This poll could not read the scope:{' '}
+        {reason}. Showing the last reading{when ? `, from ${when}` : ''}. One failed poll does not end
+        the session, and the next poll asks again.
+      </p>
+    </div>
+  )
 }
 
 /**
@@ -114,7 +139,7 @@ function sidebarStatus(phase: string): { tone: DotTone | null; meta: string | nu
 export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) {
   const state = useLiveSession()
   const isMobile = useMediaQuery(MOBILE_QUERY)
-  const { tone: liveTone, meta: liveMeta } = sidebarStatus(state.phase)
+  const { tone: liveTone, meta: liveMeta } = sidebarStatus(state)
 
   // Mobile — Live (design README.md:724-737) only has a dedicated
   // composition for the 'active' phase — there's no mobile design for
@@ -221,69 +246,82 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
         // `target` field (currentTarget), since it comes from the scope's
         // own live telemetry rather than a directory-name parse.
         const liveView = state.viewState.view_state?.result?.View ?? null
+        const staleNotice =
+          state.stale === null ? null : <StaleNotice reason={state.stale} readAt={state.readAt} />
 
         if (isMobile) {
           return (
-            <MobileLiveView
-              targetId={state.observability?.target?.id ?? state.currentTarget}
-              targetName={state.observability?.target?.name ?? null}
-              stack={liveView?.Stack ?? null}
-              tier1={state.tier1}
-              focuser={state.focuser}
-              preview={state.preview}
-              log={state.log}
-            />
+            <>
+              {staleNotice}
+              <MobileLiveView
+                targetId={state.observability?.target?.id ?? state.currentTarget}
+                targetName={state.observability?.target?.name ?? null}
+                stack={liveView?.Stack ?? null}
+                tier1={state.tier1}
+                focuser={state.focuser}
+                preview={state.preview}
+                log={state.log}
+              />
+            </>
           )
         }
 
         const targetName =
           state.observability?.target?.name ?? liveView?.target_name ?? state.currentTarget
         return (
-          <div className={styles.columns}>
-            <div className={styles.previewColumn}>
-              <PreviewCard
-                preview={state.preview}
-                annotate={liveView?.Stack?.Annotate ?? null}
-                exposureMs={liveView?.Stack?.Exposure?.exp_ms ?? null}
-                targetName={liveView?.target_name ?? null}
-              />
-              <LastStackCard lastStack={state.lastStack} />
-            </div>
+          <>
+            {staleNotice}
+            <div className={styles.columns}>
+              <div className={styles.previewColumn}>
+                <PreviewCard
+                  preview={state.preview}
+                  annotate={liveView?.Stack?.Annotate ?? null}
+                  exposureMs={liveView?.Stack?.Exposure?.exp_ms ?? null}
+                  targetName={liveView?.target_name ?? null}
+                />
+                <LastStackCard lastStack={state.lastStack} />
+              </div>
 
-            <div className={styles.center}>
-              <TargetHeader
-                targetName={targetName}
-                stage={liveView?.stage ?? null}
-                lpFilter={liveView?.lp_filter}
-                sessionStartUtc={state.sessionStartUtc}
-              />
+              <div className={styles.center}>
+                <TargetHeader
+                  targetName={targetName}
+                  stage={liveView?.stage ?? null}
+                  lpFilter={liveView?.lp_filter}
+                  sessionStartUtc={state.sessionStartUtc}
+                />
 
-              <TelemetryGrid
-                stack={liveView?.Stack ?? null}
-                tier1={state.tier1}
-                focuser={state.focuser}
-                stage={liveView?.stage ?? null}
-                stageHistory={state.stageHistory}
-              />
+                <TelemetryGrid
+                  stack={liveView?.Stack ?? null}
+                  tier1={state.tier1}
+                  focuser={state.focuser}
+                  stage={liveView?.stage ?? null}
+                  stageHistory={state.stageHistory}
+                />
 
-              {site?.profile ? (
-                <div className={styles.row}>
-                  <SweetBandGauge
-                    rotationCeilingDeg={site.profile.field_rotation_ceiling_deg}
-                    altitudeFloorDeg={site.profile.min_altitude_deg}
-                    observability={state.observability?.observability ?? null}
-                  />
+                {site?.profile ? (
+                  <div className={styles.row}>
+                    <SweetBandGauge
+                      rotationCeilingDeg={site.profile.field_rotation_ceiling_deg}
+                      altitudeFloorDeg={site.profile.min_altitude_deg}
+                      observability={state.observability?.observability ?? null}
+                    />
+                    <GuardrailsCard guardrails={state.guardrails} />
+                  </div>
+                ) : (
                   <GuardrailsCard guardrails={state.guardrails} />
-                </div>
-              ) : (
-                <GuardrailsCard guardrails={state.guardrails} />
-              )}
+                )}
 
-              <TelemetryLogCard log={state.log} />
+                <TelemetryLogCard log={state.log} />
+              </div>
+
+              {/* A held reading cannot say whether the session is still
+                  running, so the feed makes no claim either way. */}
+              <SessionActivityCard
+                activity={state.sessionActivity}
+                sessionRunning={state.stale === null ? true : null}
+              />
             </div>
-
-            <SessionActivityCard activity={state.sessionActivity} sessionRunning={true} />
-          </div>
+          </>
         )
       })()}
     </div>

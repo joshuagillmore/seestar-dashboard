@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -24,6 +24,7 @@ import {
   sessionActivity,
 } from '../../test/fixtures'
 import { formatStackDate, lastStackReasonLabel } from './lastStack'
+import { POLL_INTERVAL_MS } from './useLiveSession'
 
 const site = SiteProfileSchema.parse(recordedSite())
 const notReplaying: Health = { ok: true, replay: false }
@@ -753,6 +754,51 @@ describe('never idle while get_run_state says a run is active', () => {
     expect(screen.getAllByTestId('dot')[1]).not.toHaveAttribute('data-dot', 'idle')
     await waitFor(() => expect(screen.getByTestId('session-activity-list')).toBeInTheDocument())
     expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+})
+
+describe('a session held through a failed poll', () => {
+  // useLiveSession no longer ends a session on one failed read; it keeps the
+  // last reading and flags it. The flag has to reach the screen, or a held
+  // reading would pass for a fresh one.
+  async function renderThroughOneFailedPoll(mobile: boolean) {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] })
+    stubMatchMedia(mobile)
+    let viewReply: Body = recordedViewState()
+    stubApi({ '/api/get_view_state': () => viewReply })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.queryByTestId('live-stale')).not.toBeInTheDocument()
+
+    viewReply = { ok: false, error: 'get_view_state timed out' }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+    })
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('keeps the telemetry on screen, visibly marked stale, with why', async () => {
+    await renderThroughOneFailedPoll(false)
+
+    expect(screen.getByTestId('live-stale')).toHaveTextContent(/get_view_state timed out/)
+    expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument()
+    expect(screen.queryByTestId('live-idle')).not.toBeInTheDocument()
+    // Not the green "live" dot: this is not a live reading.
+    expect(screen.getAllByTestId('dot')[1]).toHaveAttribute('data-dot', 'marginal')
+    // Nor can the feed claim a session is, or is not, running.
+    expect(screen.queryByTestId('session-activity-not-running')).not.toBeInTheDocument()
+  })
+
+  it('marks it stale on mobile too', async () => {
+    await renderThroughOneFailedPoll(true)
+
+    expect(screen.getByTestId('live-stale')).toHaveTextContent(/get_view_state timed out/)
+    expect(screen.getByTestId('mobile-live-tiles')).toBeInTheDocument()
   })
 })
 

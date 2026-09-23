@@ -9,11 +9,12 @@ import {
   recordedStatus,
   recordedTier1,
   recordedViewState,
+  runStateActive,
   runStateIdle,
   sessionActivity,
 } from '../../test/fixtures'
 import { REQUEST_TIMEOUT_MS } from '../../api/client'
-import { POLL_INTERVAL_MS, useLiveSession } from './useLiveSession'
+import { IDLE_DEVICE_CHECK_EVERY, POLL_INTERVAL_MS, SESSION_GAP_MS, useLiveSession } from './useLiveSession'
 
 /**
  * useLiveSession across several polls. LiveScreen.test.tsx covers what one
@@ -233,9 +234,12 @@ describe('the last completed stack is fetched until it actually answers', () => 
 
 describe('per-session state does not outlive the session', () => {
   it.each([
-    ['get_view_state reports no View', () => ok(noView())],
-    ['get_view_state times out while get_status answers', () => fail('get_view_state timed out')],
-  ])('starts the next night from scratch when the scope went idle in between (%s)', async (_label, idleReply) => {
+    ['get_view_state reports no View', () => ok(noView()), 'idle'],
+    // Not idle any more: one failed read is not evidence the session ended
+    // (see 'one bad poll does not end a session' below). What ends it here
+    // is the day that passes before the next View.
+    ['get_view_state times out while get_status answers', () => fail('get_view_state timed out'), 'active'],
+  ])('starts the next night from scratch when the scope went idle in between (%s)', async (_label, idleReply, between) => {
     // A tab left open overnight. sessionStartedAtRef used to be written once
     // and never cleared, so the next night's guardrail check measured
     // elapsed time from yesterday: a false `park_and_stop — Session duration
@@ -250,7 +254,7 @@ describe('per-session state does not outlive the session', () => {
 
     api.routes['/api/get_view_state'] = idleReply()
     await tick(POLL_INTERVAL_MS)
-    expect(result.current.phase).toBe('idle')
+    expect(result.current.phase).toBe(between)
 
     vi.setSystemTime(new Date('2026-08-03T21:00:00Z'))
     api.routes['/api/get_view_state'] = ok(recordedViewState())
@@ -280,7 +284,10 @@ describe('per-session state does not outlive the session', () => {
     if (state.phase !== 'active') throw new Error('expected active')
     expect(state.currentTarget).toBe('NGC7380')
 
+    // Idle twice running: the confirmed end (one no-View answer alone is
+    // not — see 'an idle answer ends the session only once confirmed').
     api.routes['/api/get_view_state'] = ok(noView())
+    await tick(POLL_INTERVAL_MS)
     await tick(POLL_INTERVAL_MS)
 
     // Tonight's session has not named its target yet: no target_name on the
@@ -306,7 +313,9 @@ describe('per-session state does not outlive the session', () => {
     api.routes['/api/get_view_state'] = fail('bridge unreachable')
     api.routes['/api/get_status'] = fail('bridge unreachable')
     await tick(POLL_INTERVAL_MS)
-    expect(result.current.phase).toBe('bridge-down')
+    // Held as a stale session, not ended: a bridge that drops for one poll
+    // must not restart the guardrail clock.
+    expect(result.current.phase).toBe('active')
 
     vi.setSystemTime(new Date('2026-08-03T21:00:00Z'))
     api.routes['/api/get_view_state'] = ok(recordedViewState())
@@ -314,5 +323,182 @@ describe('per-session state does not outlive the session', () => {
 
     const starts = api.urls('check_night_guardrails').map(sessionStartOf)
     expect(Date.parse(starts[starts.length - 1])).toBeGreaterThanOrEqual(Date.parse('2026-08-03T21:00:00Z'))
+  })
+
+  it('ends a session nobody has seen for longer than SESSION_GAP_MS, however the polls in between failed', async () => {
+    // The bridge is down all day (the scope switched off at dawn), and no
+    // poll ever gets an explicit idle answer. The next View is the same
+    // target on the next night: without a time limit it would inherit
+    // yesterday's start.
+    vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
+    const api = stubRoutes(activeRoutes())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    api.routes['/api/get_view_state'] = fail('bridge unreachable')
+    api.routes['/api/get_status'] = fail('bridge unreachable')
+    await tick(SESSION_GAP_MS + POLL_INTERVAL_MS)
+    // The stale session has been let go: what shows is the bridge itself.
+    expect(result.current.phase).toBe('bridge-down')
+  })
+})
+
+describe('one bad poll does not end a session', () => {
+  // endSession() used to run on the FIRST poll that saw no View, and on
+  // bridge-down. One transient get_view_state failure reset the session
+  // start and wiped the telemetry log, stage history and last stack. In a
+  // hand-driven session (run_state idle, so no real start from the server)
+  // that restarted check_night_guardrails' elapsed clock from "now" — the
+  // direction that understates elapsed time on a guardrail that governs a
+  // hard stop.
+  const handDriven = () => ({ ...activeRoutes(), '/api/get_run_state': ok(runStateIdle()) })
+
+  it.each<[string, Record<string, Route>]>([
+    ['get_view_state fails while get_status answers', { '/api/get_view_state': fail('get_view_state timed out') }],
+    ['get_view_state gets no answer before the client timeout', { '/api/get_view_state': 'hang' }],
+    ['get_view_state answers in a shape this client cannot read', { '/api/get_view_state': ok({ ok: true, result: { View: { stage: 'Stack' } } }) }],
+    ['the bridge is down', { '/api/get_view_state': fail('bridge unreachable'), '/api/get_status': fail('bridge unreachable') }],
+  ])('keeps the session, shown as stale, when %s', async (_label, failure) => {
+    vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
+    const api = stubRoutes(handDriven())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+    const start = sessionStartOf(api.urls('check_night_guardrails')[0])
+    expect(start).toBe('2026-08-02T21:00:00.000Z')
+
+    const good = { ...api.routes }
+    Object.assign(api.routes, failure)
+    await tick(POLL_INTERVAL_MS)
+    await tick(REQUEST_TIMEOUT_MS) // settles the 'hang' case; a no-op for the rest
+
+    const stale = result.current
+    if (stale.phase !== 'active') throw new Error(`expected the session held as stale, got ${stale.phase}`)
+    expect(stale.stale).toBeTruthy()
+    expect(stale.log).toHaveLength(1)
+    expect(stale.stageHistory).toEqual(['Stack'])
+    expect(stale.lastStack).not.toBeNull()
+
+    Object.assign(api.routes, good)
+    await tick(POLL_INTERVAL_MS)
+
+    const back = result.current
+    if (back.phase !== 'active') throw new Error('expected active')
+    expect(back.stale).toBeNull()
+    // Still the same session: the log carries on, and the guardrail is asked
+    // with the original start, not the moment the failure cleared.
+    expect(back.log).toHaveLength(2)
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(starts[starts.length - 1]).toBe(start)
+  })
+})
+
+describe('an idle answer ends the session only once confirmed', () => {
+  it('keeps the session through a single poll reporting no View', async () => {
+    vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
+    const api = stubRoutes(activeRoutes())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    api.routes['/api/get_view_state'] = ok(noView())
+    await tick(POLL_INTERVAL_MS)
+    // Shown as idle — that is what the scope said — but not forgotten.
+    expect(result.current.phase).toBe('idle')
+
+    api.routes['/api/get_view_state'] = ok(recordedViewState())
+    await tick(POLL_INTERVAL_MS)
+
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.log).toHaveLength(2)
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(starts[starts.length - 1]).toBe('2026-08-02T21:00:00.000Z')
+  })
+
+  it('ends it on the second consecutive poll reporting no View', async () => {
+    vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
+    const api = stubRoutes(activeRoutes())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    api.routes['/api/get_view_state'] = ok(noView())
+    await tick(POLL_INTERVAL_MS)
+    await tick(POLL_INTERVAL_MS)
+
+    api.routes['/api/get_view_state'] = ok(recordedViewState())
+    await tick(POLL_INTERVAL_MS)
+
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.log).toHaveLength(1)
+    expect(state.stageHistory).toEqual(['Stack'])
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(Date.parse(starts[starts.length - 1])).toBe(Date.parse('2026-08-02T21:00:00Z') + 3 * POLL_INTERVAL_MS)
+  })
+
+  it('confirms a hand-driven session\'s end on the next poll, not after the idle back-off', async () => {
+    // While a session is open the device is checked every poll, so the
+    // second idle answer comes one poll later, not IDLE_DEVICE_CHECK_EVERY.
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_run_state': ok(runStateIdle()) })
+    renderHook(() => useLiveSession())
+    await tick()
+
+    api.routes['/api/get_view_state'] = ok(noView())
+    await tick(POLL_INTERVAL_MS)
+    await tick(POLL_INTERVAL_MS)
+    expect(api.urls('get_view_state')).toHaveLength(3)
+
+    // Ended now, so the back-off applies again.
+    await tick(POLL_INTERVAL_MS)
+    expect(api.urls('get_view_state')).toHaveLength(3)
+  })
+
+  it('ends it on the first poll with no View once a skill-driven run has gone idle', async () => {
+    const REAL_START = '2026-08-02T19:04:11.500000+00:00'
+    const run = (state: string) => {
+      const base = runStateActive() as { run: Record<string, unknown> }
+      return ok({ ...base, state, run: { ...base.run, session_start_utc: REAL_START } })
+    }
+    vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_run_state': run('active') })
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+    expect(sessionStartOf(api.urls('check_night_guardrails')[0])).toBe(REAL_START)
+
+    api.routes['/api/get_run_state'] = run('idle')
+    api.routes['/api/get_view_state'] = ok(noView())
+    await tick(POLL_INTERVAL_MS)
+
+    // A View again, the run still idle: a new, hand-driven session. The
+    // ended session is behind the idle back-off again, so allow the polls
+    // it takes to look.
+    api.routes['/api/get_view_state'] = ok(recordedViewState())
+    for (let i = 0; i < IDLE_DEVICE_CHECK_EVERY; i += 1) await tick(POLL_INTERVAL_MS)
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.log).toHaveLength(1)
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(starts).toHaveLength(2)
+    expect(starts[1]).not.toBe(REAL_START)
+    expect(Date.parse(starts[1])).toBeGreaterThan(Date.parse('2026-08-02T21:00:00Z') + POLL_INTERVAL_MS)
+  })
+
+  it('starts a new session when the View names a different target', async () => {
+    vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
+    const api = stubRoutes(activeRoutes())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    const other = recordedViewState() as { view_state: { result: { View: Record<string, unknown> } } }
+    other.view_state.result.View.target_name = 'M27'
+    api.routes['/api/get_view_state'] = ok(other)
+    await tick(POLL_INTERVAL_MS)
+
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.currentTarget).toBe('M27')
+    expect(state.log).toHaveLength(1)
+    expect(state.stageHistory).toEqual(['Stack'])
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(Date.parse(starts[starts.length - 1])).toBe(Date.parse('2026-08-02T21:00:00Z') + POLL_INTERVAL_MS)
   })
 })

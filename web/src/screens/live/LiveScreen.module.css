@@ -41,6 +41,21 @@
    path or JSON fragment cannot widen the fixed-width state card. */
 .stateDetail { margin: 8px 0 0; max-height: 160px; overflow-y: auto; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; white-space: pre-wrap; }
 
+/* Over an active session held from an earlier poll (LiveScreen's
+   StaleNotice): full width above the columns, in the marginal callout tones
+   so it reads as a caveat on everything below it, not as an error. */
+.staleNotice {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--marginal-callout-bg);
+  border: 1px solid var(--marginal-callout-border);
+  border-radius: var(--radius-card);
+}
+.staleText { margin: 0; font-family: var(--font-sans); font-size: 12.5px; line-height: 1.6; color: var(--text-dimmer); overflow-wrap: anywhere; }
+.staleTitle { font-weight: 600; color: var(--marginal); }
+
 /* Below MOBILE_QUERY, LiveScreen renders this instead of AppShell — no
    Sidebar/TopBar chrome, matching the design's phone frame content exactly
    (README.md:718-719: bg/root, padding 8px 16px 0). At this width
