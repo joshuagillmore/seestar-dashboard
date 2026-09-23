@@ -1133,6 +1133,11 @@ async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
     A target the archive scan has never heard of, or one with no subs on
     disk (an archive target directory that exists but is currently empty),
     is an honest 404 — there is nothing to analyse, not a transport failure.
+
+    At qa_analysis.MAX_CONCURRENT_ANALYSES a new job is refused with HTTP 429
+    `{"ok": false, "error": ...}` — a refusal, not a job state. A start
+    answered from a finished analysis of the current sub set carries its
+    `report`, the same shape qa_analysis_status returns.
     """
     refusal = _reject_untrusted_caller(request)
     if refusal is not None:
@@ -1158,9 +1163,18 @@ async def qa_analysis_start(request: Request, target: str) -> JSONResponse:
     async def call_qa_tier2(paths: list[str]) -> dict:
         return await _call_tool_on_app(app, "qa_tier2", {"paths": paths})
 
-    status = qa_analysis.start_analysis(
-        registry, cache_dir, target, archive_target.sub_paths, call_qa_tier2, include_report=False
-    )
+    try:
+        # include_report=True: when start short-circuits on a finished
+        # analysis of the current sub set (in memory or on disk), the answer
+        # carries that report exactly as qa_analysis_status would. A running
+        # job never has one, so a fresh start is unaffected.
+        status = qa_analysis.start_analysis(
+            registry, cache_dir, target, archive_target.sub_paths, call_qa_tier2, include_report=True
+        )
+    except qa_analysis.TooManyAnalyses as refusal:
+        # A refusal, not a job state: nothing was started, and whatever the
+        # client already shows for this target (a stale report, say) stands.
+        return JSONResponse({"ok": False, "error": str(refusal)}, status_code=429)
     # `sub_count` included so this matches qa_analysis_status exactly. It used
     # to be omitted here and present there, which meant one client schema
     # could not describe both — the browser rejected every start response and

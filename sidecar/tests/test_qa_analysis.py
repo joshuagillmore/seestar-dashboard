@@ -612,12 +612,17 @@ def test_a_third_concurrent_analysis_is_refused_rather_than_queued(tmp_path):
         for name in ("A", "B"):
             qa_analysis.start_analysis(registry, cache_dir, name, [tmp_path / "a.fit"], slow)
         await asyncio.sleep(0.05)
-        return qa_analysis.start_analysis(registry, cache_dir, "C", [tmp_path / "a.fit"], slow)
+        with pytest.raises(qa_analysis.TooManyAnalyses) as refused:
+            qa_analysis.start_analysis(registry, cache_dir, "C", [tmp_path / "a.fit"], slow)
+        return refused.value
 
-    third = asyncio.run(run())
+    refusal = asyncio.run(run())
 
-    assert third["status"] == STATUS_FAILED
-    assert "already running" in third["error"]
+    # A refusal is not a job state: it raises rather than returning
+    # status "failed", which the client could not tell from a job that ran
+    # and failed — and which replaced whatever report it was showing.
+    assert "already running" in str(refusal)
+    assert registry.get("C") is None, "a refused start must not register a job"
 
 
 # --- defence in depth: the cache never builds a path outside cache_dir -------

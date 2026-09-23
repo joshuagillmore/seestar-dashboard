@@ -231,7 +231,7 @@ def test_qa_analysis_start_returns_running_immediately_then_completes(app_factor
         start_body = start.json()
         assert start_body["ok"] is True
         assert start_body["status"] == "running"
-        assert "report" not in start_body  # qa_analysis_start never embeds the report
+        assert "report" not in start_body  # a start that launched a job has none yet
 
         final = _wait_until_not_running(client)
 
@@ -518,6 +518,84 @@ def test_verdict_counts_are_withheld_once_the_sub_set_changes(
 
     assert stale["status"] == "stale"
     assert "verdicts" not in stale, "a stale report must not carry an unqualified count"
+
+
+# --- qa_analysis_start contract: refusals and short-circuits ----------------
+
+
+def test_starting_past_the_concurrency_limit_is_a_429_not_a_failed_job(
+    app_factory, synthetic_archive, monkeypatch
+):
+    """A refusal is not a job state. It used to come back as a 200 with
+    status "failed", which the client could not tell from an analysis that
+    ran and failed — and which replaced the stale report it was showing."""
+    import asyncio
+
+    from seestar_sidecar import qa_analysis
+
+    for name in ("M 33", "M 42"):
+        subs = synthetic_archive / f"{name}-sub"
+        subs.mkdir()
+        _write_light_fit(subs, name, "20240102", "172320")
+
+    async def never_finishes(app, tool, arguments):
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", never_finishes)
+    with TestClient(app_factory()) as client:
+        assert start_analysis(client, "M33").json()["status"] == "running"
+        assert start_analysis(client, "M42").json()["status"] == "running"
+        refused = start_analysis(client, "M31")
+        after = client.get("/api/qa_analysis_status?target=M31").json()
+
+    assert refused.status_code == 429
+    body = refused.json()
+    assert set(body) == {"ok", "error"}
+    assert body["ok"] is False
+    assert f"(limit {qa_analysis.MAX_CONCURRENT_ANALYSES})" in body["error"]
+    # Nothing was registered for the refused target.
+    assert after["status"] == "not_analysed"
+
+
+def test_a_start_answered_from_the_cache_carries_the_report(app_factory, monkeypatch):
+    """When start short-circuits on a finished analysis of the current sub
+    set, it returns that report exactly as qa_analysis_status would, so the
+    client need not poll once more just to fetch what start already knew."""
+    async def record(app, tool, arguments):
+        return REAL_REPORT
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", record)
+    with TestClient(app_factory()) as client:
+        start_analysis(client, "M31")
+        _wait_until_not_running(client)
+        again = start_analysis(client, "M31").json()
+        polled = client.get("/api/qa_analysis_status?target=M31").json()
+
+    assert again["status"] == "complete"
+    assert again["report"] == REAL_REPORT
+    assert again == polled
+
+
+def test_a_start_answered_from_the_disk_cache_after_a_restart_carries_the_report(
+    app_factory, monkeypatch
+):
+    async def record(app, tool, arguments):
+        return REAL_REPORT
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", record)
+    with TestClient(app_factory()) as client:
+        start_analysis(client, "M31")
+        _wait_until_not_running(client)
+
+    def boom(app, tool, arguments):
+        raise AssertionError("a disk-cache hit must not re-run the analysis")
+
+    monkeypatch.setattr(routes, "_call_tool_on_app", boom)
+    with TestClient(app_factory()) as client:  # fresh registry, same cache dir
+        again = start_analysis(client, "M31").json()
+
+    assert again["status"] == "complete"
+    assert again["report"] == REAL_REPORT
 
 
 # --- target-id validation: the cache path is built from `target` -----------

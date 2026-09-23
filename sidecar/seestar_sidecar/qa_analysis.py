@@ -211,6 +211,11 @@ def _inflight_path(cache_dir: Path, target_id: str) -> Path:
 MAX_CONCURRENT_ANALYSES = 2
 
 
+class TooManyAnalyses(RuntimeError):
+    """start_analysis refused a new job: MAX_CONCURRENT_ANALYSES are already
+    running. Nothing was registered or started."""
+
+
 def running_count(registry: "QaJobRegistry") -> int:
     return sum(1 for job in registry.all() if job.status == STATUS_RUNNING)
 
@@ -459,13 +464,15 @@ def start_analysis(
         # Refused, not queued. A queue would accept work the caller cannot see
         # the position of and cannot cancel; saying no now is honest and the
         # caller can retry when something finishes.
-        return {
-            "status": STATUS_FAILED,
-            "error": (
-                f"{running_count(registry)} analyses already running"
-                f" (limit {MAX_CONCURRENT_ANALYSES}) — wait for one to finish"
-            ),
-        }
+        #
+        # Raised, not returned as status "failed": a refusal is not a job
+        # state. As a status it was indistinguishable from an analysis that
+        # ran and failed, and the client replaced the report it was showing
+        # with it. routes.qa_analysis_start turns this into a 429.
+        raise TooManyAnalyses(
+            f"{running_count(registry)} analyses already running"
+            f" (limit {MAX_CONCURRENT_ANALYSES}) — wait for one to finish"
+        )
 
     registry.set(job)
 
