@@ -54,6 +54,7 @@ from seestar_sidecar.live_preview import (
     is_frame_stale,
 )
 from seestar_sidecar.mcp_proxy import LONG_RUNNING_TOOLS, ProxyTransportError, effective_client_id
+from seestar_sidecar.host_check import LOOPBACK_HOSTS, normalise_host
 from seestar_sidecar.json_safety import replace_non_finite
 from seestar_sidecar.redaction import redact_payload, redact_secrets
 from seestar_sidecar.projects_union import attach_integration_goals, combine_projects
@@ -80,25 +81,33 @@ router = APIRouter(prefix="/api")
 #: and it requires a custom header, which a cross-origin request cannot set
 #: without a preflight this server never answers. The Origin check below is
 #: the belt to those braces.
-_LOCAL_ORIGIN_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+#:
+#: An Origin must name a host this server answers to — the same set the Host
+#: check uses (app.state.allowed_hosts; see host_check.py): loopback, plus a
+#: deliberately configured LAN bind or SEESTAR_ALLOWED_HOSTS name.
 
 #: A header no cross-origin *simple* request can set. Its presence is what
 #: distinguishes "our own fetch()" from "a page that happens to be open".
 CLIENT_HEADER = "x-seestar-client"
 
 
-def _is_local_origin(origin: str | None) -> bool:
+def _is_allowed_origin(origin: str | None, allowed: frozenset[str]) -> bool:
     if not origin:
-        # Same-origin fetch() sends no Origin for same-site GETs, but POST
-        # always carries one in every browser we target. Absent means it did
-        # not come from a browser page at all (curl, a test client) — which is
-        # allowed: this guard exists to stop a THIRD-PARTY PAGE, not to
-        # authenticate a local operator who already has shell access.
+        # Deliberately allowed. Every browser we target sends Origin on every
+        # POST, same-origin included, so an absent one means the request did
+        # not come from a browser page at all (curl, a script, a test client).
+        # This guard exists to stop a THIRD-PARTY PAGE, not to authenticate a
+        # local process, which can already do anything this API offers.
+        # `Origin: null` is different — a sandboxed frame or file:// page, a
+        # browser page we cannot place — and falls through to be refused.
         return True
     from urllib.parse import urlparse
 
+    # hostname strips IPv6 brackets and lower-cases, matching how
+    # allowed_hosts stores names. The old literal list spelled loopback as
+    # "[::1]", which hostname never returns, so an IPv6 origin was refused.
     host = urlparse(origin).hostname
-    return host in _LOCAL_ORIGIN_HOSTS
+    return host is not None and normalise_host(host) in allowed
 
 
 def _reject_untrusted_caller(request: Request) -> JSONResponse | None:
@@ -107,7 +116,8 @@ def _reject_untrusted_caller(request: Request) -> JSONResponse | None:
         return JSONResponse(
             {"ok": False, "error": f"missing {CLIENT_HEADER} header"}, status_code=403
         )
-    if not _is_local_origin(request.headers.get("origin")):
+    allowed = getattr(request.app.state, "allowed_hosts", LOOPBACK_HOSTS)
+    if not _is_allowed_origin(request.headers.get("origin"), allowed):
         return JSONResponse(
             {"ok": False, "error": "cross-origin analysis requests are refused"},
             status_code=403,

@@ -11,6 +11,7 @@ from seestar_sidecar import env as _env  # noqa: F401 — loads .env before SEES
 from seestar_sidecar.archive import DEFAULT_ARCHIVE_DIR
 from seestar_sidecar.catalog import DEFAULT_ALIASES_PATH, DEFAULT_CATALOG_PATH
 from seestar_sidecar.frontend import DEFAULT_WEB_DIST, mount_frontend
+from seestar_sidecar.host_check import AllowedHostMiddleware, allowed_hosts, warn_if_exposed
 from seestar_sidecar.imagery import DEFAULT_IMAGE_CACHE_DIR
 from seestar_sidecar.live_preview import DEFAULT_LIVE_SHARE_DIR
 from seestar_sidecar.allowlist import ALLOWED_TOOLS
@@ -115,6 +116,7 @@ def create_app(
     live_share_dir: Path | str | None = None,
     provenance_path: Path | str | None = None,
     qa_cache_dir: Path | str | None = None,
+    bind_host: str | None = None,
 ) -> FastAPI:
     """`web_dist` defaults to web/dist; `archive_dir` defaults to
     SEESTAR_ARCHIVE_DIR, or `None` — "not configured" — when that isn't set
@@ -153,6 +155,12 @@ def create_app(
     (`sidecar/.cache/qa_analysis`, gitignored) and only needs overriding so a
     test can point at `tmp_path` instead of writing into the real cache —
     see qa_analysis.write_cached_report().
+
+    `bind_host` is the address the server listens on, used to decide which
+    Host headers to answer (see host_check.py). It defaults to
+    SEESTAR_BIND_HOST, which launcher.py sets from `--host`, because uvicorn
+    calls this factory with no arguments; unset reads as loopback.
+    SEESTAR_ALLOWED_HOSTS (comma-separated) adds further names.
     """
     app = FastAPI(title="seestar-sidecar", version="0.1.0", lifespan=lifespan)
     # Safe default for callers that never run the lifespan — a bare
@@ -205,6 +213,17 @@ def create_app(
         allow_methods=["GET"],
         allow_headers=["*"],
     )
+    # Added last, so it is the OUTERMOST middleware: a request with a Host
+    # this server does not answer to is refused before CORS, routing or the
+    # static frontend see it. See host_check.py (DNS rebinding).
+    if bind_host is None:
+        bind_host = os.environ.get("SEESTAR_BIND_HOST") or None
+    extra_hosts = os.environ.get("SEESTAR_ALLOWED_HOSTS", "").split(",")
+    # Also read by routes._reject_untrusted_caller: an Origin must name one
+    # of these too.
+    app.state.allowed_hosts = allowed_hosts(bind_host, extra_hosts)
+    warn_if_exposed(bind_host)
+    app.add_middleware(AllowedHostMiddleware, hosts=app.state.allowed_hosts)
     app.include_router(router)
     # Must come after include_router(): mount_frontend()'s "/" mount
     # technically matches every path, so anything registered after it would
