@@ -598,7 +598,7 @@ export function useLiveSession(): LiveSessionState {
       // fetch for a session that did not exist, while the sidecar's
       // live_preview, given no View to scope by, scanned the whole share and
       // named an old target. No View is idle (unless a run is active — see
-      // settleWithoutView). The bridge has just answered, so get_status would
+      // withoutView). The bridge has just answered, so get_status would
       // only re-prove it: skipped.
       const view = viewState.view_state?.result?.View
       if (view == null) {
