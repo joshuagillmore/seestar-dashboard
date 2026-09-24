@@ -290,9 +290,12 @@ def test_no_root_entry_is_stat_ed(share_root, monkeypatch):
     _many_targets(share_root)
     stats = []
     real = os.stat
+    share = os.fspath(share_root)
 
     def spy(path, *args, **kwargs):
-        stats.append(os.fspath(path))
+        # Only the share's paths: a stray stat elsewhere must not count.
+        if isinstance(path, (str, os.PathLike)) and os.fspath(path).startswith(share):
+            stats.append(os.fspath(path))
         return real(path, *args, **kwargs)
 
     monkeypatch.setattr(os, "stat", spy)

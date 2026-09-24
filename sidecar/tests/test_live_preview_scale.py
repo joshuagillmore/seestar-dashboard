@@ -78,13 +78,17 @@ def listings(monkeypatch):
 
 
 @pytest.fixture
-def stats(monkeypatch):
-    """Every os.stat() of a path, which over SMB is one round trip each."""
+def stats(monkeypatch, long_night):
+    """Every os.stat() of a path on the share, which over SMB is one round
+    trip each. Only the share's paths count, so a stray stat elsewhere (a
+    previous test's abandoned share thread, pytest itself) cannot fail it."""
     calls = []
     real = os.stat
+    share = os.fspath(long_night)
 
     def spy(path, *args, **kwargs):
-        calls.append(os.fspath(path))
+        if isinstance(path, (str, os.PathLike)) and os.fspath(path).startswith(share):
+            calls.append(os.fspath(path))
         return real(path, *args, **kwargs)
 
     monkeypatch.setattr(os, "stat", spy)
