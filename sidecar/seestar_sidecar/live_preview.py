@@ -102,11 +102,12 @@ DEFAULT_LIVE_SHARE_DIR: Path | None = Path(_env_live_share_dir) if _env_live_sha
 #: of these would misinform the UI about what's actually wrong (see each
 #: docstring below).
 #:
-#: The scope could not be confirmed observing because get_view_state itself
+#: The scope could not be confirmed observing: get_view_state itself
 #: returned `{"ok": false, ...}` — this IS the expected shape of "not
 #: observing" (see docs/superpowers/specs/2026-07-30-slice-3-live-session.md
-#: §4: "a timeout means 'not observing', not 'broken'"). Nothing on the share
-#: is touched in this state.
+#: §4: "a timeout means 'not observing', not 'broken'") — or it answered with
+#: a View that is not observing (see is_observing(): an ended session's View
+#: persists after a park). Nothing on the share is touched in this state.
 REASON_IDLE = "idle"
 #: The scope could not be confirmed observing because the MCP call itself
 #: failed transport-level (ProxyTransportError/FileNotFoundError) — the
@@ -215,6 +216,36 @@ def extract_target_name(view_state_payload: dict) -> str | None:
     except (KeyError, TypeError):
         return None
     return normalize_target_id(name) if isinstance(name, str) and name.strip() else None
+
+
+def is_observing(view_state_payload: dict) -> bool:
+    """Whether a get_view_state payload says a session is running now.
+
+    A View being present does not mean that. Hardware-verified 2026-09-24:
+    a parked, folded scope keeps the ended session's View, with
+    `state: "cancel"` and `mode: "none"` and its final counts, and the
+    preview served that session's frame as live. The rule, per the
+    seestar-mcp session: observing <=> `View.state == "working"` and
+    `View.mode != "none"`. `"complete"` is seen only on finished sub-steps,
+    `result: {}` only on a freshly booted scope, and `"fail"` is assumed to
+    exist, so anything but `"working"` is not observing.
+
+    seestar-mcp is adding a top-level `observing` bool beside `view_state`,
+    computed by the same rule. When the payload carries one, it decides.
+    Never raises: an unexpected shape is "not observing".
+    """
+    if not isinstance(view_state_payload, dict):
+        return False
+    flag = view_state_payload.get("observing")
+    if isinstance(flag, bool):
+        return flag
+    try:
+        view = view_state_payload["view_state"]["result"]["View"]
+    except (KeyError, TypeError):
+        return False
+    if not isinstance(view, dict):
+        return False
+    return view.get("state") == "working" and view.get("mode") != "none"
 
 
 def extract_named_stacks(view_state_payload: dict) -> tuple[str, ...]:

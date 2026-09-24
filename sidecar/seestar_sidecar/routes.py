@@ -59,6 +59,7 @@ from seestar_sidecar.live_preview import (
     extract_stack_count,
     extract_target_name,
     is_frame_stale,
+    is_observing,
 )
 from seestar_sidecar.mcp_proxy import LONG_RUNNING_TOOLS, ProxyTransportError, effective_client_id
 from seestar_sidecar.host_check import LOOPBACK_HOSTS, normalise_host
@@ -703,12 +704,16 @@ async def live_preview(request: Request) -> JSONResponse:
     `{"ok": false, ...}` response (the scope answering "idle") are reported as
     distinct reasons — REASON_BRIDGE_DOWN vs. REASON_IDLE — per CLAUDE.md's
     "bridge-down and scope-idle are first-class UI states", not the same one.
+
+    An `ok` answer is not enough on its own: a parked scope keeps the ended
+    session's View, and that session's frames are not live. So the View
+    must pass live_preview.is_observing() too, or this is REASON_IDLE.
     """
     try:
         view = await _fetch(request, "get_view_state", {})
     except (ProxyTransportError, FileNotFoundError):
         return JSONResponse(_live_preview_absent(REASON_BRIDGE_DOWN))
-    if not view.get("ok"):
+    if not view.get("ok") or not is_observing(view):
         return JSONResponse(_live_preview_absent(REASON_IDLE))
 
     stack_count = extract_stack_count(view)
@@ -842,9 +847,12 @@ def _last_stack_payload(stack: LastStack) -> dict:
 async def last_stack(request: Request) -> JSONResponse:
     """Metadata only — no image bytes; see last_stack.py's module docstring.
 
-    Never touches SEESTAR_LIVE_SHARE_DIR unless get_view_state confirms the
-    scope is observing AND names a target, matching live_preview's "a
-    timeout means not observing; there is nothing to fetch" rule. `reason`
+    Never touches SEESTAR_LIVE_SHARE_DIR unless get_view_state answers (`ok`)
+    AND names a target, matching live_preview's "a timeout means not
+    observing; there is nothing to fetch" rule. Unlike live_preview it does
+    NOT require live_preview.is_observing(): a parked scope keeps the ended
+    session's View, which names the target just finished, and that
+    session's completed stack is exactly what this panel is for. `reason`
     values: REASON_BRIDGE_DOWN / REASON_IDLE / REASON_NOT_CONFIGURED /
     REASON_SHARE_UNREACHABLE / REASON_SCAN_SLOW are the exact tokens
     live_preview.py defines for the same underlying conditions, reused

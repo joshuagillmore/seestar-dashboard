@@ -9,13 +9,17 @@ scan_stacked_images() preference. See live_preview.py's module docstring for
 why that's deliberate, not a bug: 476 KB (measured) on a polling path would
 be exactly the offload this feature was built to avoid.
 """
+import json
 from datetime import timezone
+from pathlib import Path
 
 import time
 
 import pytest
 
 from seestar_sidecar import live_preview
+
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 
 
 @pytest.fixture
@@ -272,3 +276,58 @@ async def test_discover_frame_within_timeout_returns_the_frame_on_success(share_
     frame = await live_preview.discover_frame_within_timeout(share_root)
     assert frame is not None
     assert frame.source == "sub"
+
+
+# --- is_observing(): the View-state rule --------------------------------------
+#
+# Hardware, 2026-09-24: a parked scope keeps the ended session's View
+# (`state: "cancel"`, `mode: "none"`), so "a View is present" is not
+# "observing". Rule, per the seestar-mcp session: observing <=> View.state ==
+# "working" and View.mode != "none", or the payload's own top-level
+# `observing` bool when it has one.
+
+
+def _view(**fields):
+    return {"ok": True, "view_state": {"result": {"View": {"target_name": "M1", **fields}}}}
+
+
+def test_the_july_working_fixture_is_observing():
+    working = json.loads((FIXTURES / "get_view_state.json").read_text(encoding="utf-8"))
+
+    assert live_preview.is_observing(working) is True
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        _view(state="cancel", mode="none"),  # ended or stopped; persists after a park
+        _view(state="working", mode="none"),
+        _view(state="complete", mode="star"),
+        _view(state="fail", mode="star"),
+        _view(mode="star"),  # no state at all
+        {"ok": True, "view_state": {"result": {}}},  # a freshly booted scope
+        {"ok": True, "view_state": {"result": {"View": None}}},
+        {"ok": False},
+        {},
+        None,
+    ],
+)
+def test_anything_but_a_working_view_is_not_observing(payload):
+    assert live_preview.is_observing(payload) is False
+
+
+def test_a_working_view_in_any_mode_but_none_is_observing():
+    assert live_preview.is_observing(_view(state="working", mode="star")) is True
+    assert live_preview.is_observing(_view(state="working")) is True
+
+
+@pytest.mark.parametrize(
+    ("view", "flag"),
+    [(_view(state="cancel", mode="none"), True), (_view(state="working", mode="star"), False)],
+)
+def test_a_top_level_observing_bool_decides_when_present(view, flag):
+    assert live_preview.is_observing({**view, "observing": flag}) is flag
+
+
+def test_a_non_bool_observing_field_is_ignored():
+    assert live_preview.is_observing({**_view(state="cancel", mode="none"), "observing": "yes"}) is False

@@ -258,6 +258,36 @@ def test_finds_the_stack_for_the_active_target_end_to_end(tmp_path, monkeypatch)
     assert body["url"] == "/api/last_stack/image"
 
 
+def test_a_parked_scope_still_gets_the_stack_its_ended_session_left(tmp_path, monkeypatch):
+    """Unlike the live preview, this panel does not need a session running:
+    the View a parked scope keeps names the target it just finished, and its
+    completed stack is exactly what this panel shows. Worked on hardware on
+    2026-09-24; kept working when /api/live_preview started treating that
+    same View as not observing."""
+    parked_m1 = {
+        "ok": True,
+        "view_state": {
+            "result": {
+                "View": {
+                    "state": "cancel",
+                    "mode": "none",
+                    "target_name": "M1",
+                    "Stack": {"state": "cancel", "stacked_frame": 1003},
+                }
+            }
+        },
+    }
+    share = tmp_path / "MyWorks"
+    _touch(share / "M1" / "Stacked_1003_M1_10.0s_LP_20260924-110824.jpg", mtime=_ago(3600))
+    _touch(share / "M1_sub" / "Light_M1_10.0s_LP_20260924-110710.fit", mtime=_ago(3700))
+    client = _client(tmp_path, share_dir=share, view_state=parked_m1, monkeypatch=monkeypatch)
+
+    body = client.get("/api/last_stack").json()
+
+    assert (body["target"], body["frame_count"], body["reason"]) == ("M1", 1003, None)
+    assert client.get("/api/last_stack/image").status_code == 200
+
+
 def test_returns_the_newest_of_several_stacks_end_to_end(tmp_path, monkeypatch):
     share = tmp_path / "share"
     _touch(share / "M27" / "Stacked_40_M27_10.0s_LP_20260601-010000.jpg", mtime=_ago(90000))

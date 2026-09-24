@@ -26,9 +26,14 @@ from seestar_sidecar.live_preview import ShareScanSlowError, ShareUnreachableErr
 from seestar_sidecar.main import create_app
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 
+#: `state`/`mode` as the real working View carries them (fixtures/
+#: get_view_state.json): without them a View is not observing, see
+#: live_preview.is_observing().
 OBSERVING_VIEW_STATE = {
     "ok": True,
-    "view_state": {"result": {"View": {"stage": "Stack", "Stack": {"stacked_frame": 97}}}},
+    "view_state": {
+        "result": {"View": {"state": "working", "mode": "star", "stage": "Stack", "Stack": {"stacked_frame": 97}}}
+    },
 }
 IDLE_VIEW_STATE = {"ok": False, "error": "Error: Exceeded allotted wait time for result"}
 
@@ -129,6 +134,52 @@ def test_idle_scope_reports_a_distinct_reason_and_never_touches_the_share(tmp_pa
     assert body["source"] is None
     assert body["reason"] == "idle"
     assert body["stale"] is False
+
+
+#: The parked scope's real View, 2026-09-24, trimmed: an ended session keeps
+#: its View, with `state: "cancel"` and `mode: "none"`.
+PARKED_M1 = {
+    "ok": True,
+    "view_state": {
+        "result": {
+            "View": {
+                "state": "cancel",
+                "mode": "none",
+                "target_name": "M1",
+                "Stack": {"state": "cancel", "frame_errcode": 266, "stacked_frame": 1003},
+                "stage": "Stack",
+            }
+        }
+    },
+}
+
+
+def test_a_view_left_over_from_an_ended_session_is_not_presented_as_live(tmp_path, monkeypatch):
+    """Hardware, 2026-09-24: the parked scope still returned the M1 session's
+    View, and the preview served its frame as the live view."""
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", _must_not_be_called)
+    share = tmp_path / "share"
+    _touch(share / "M1_sub" / "Light_M1_10.0s_LP_20260924-110710_thn.jpg", mtime=_ago(5))
+    client = _client(tmp_path, share_dir=share, view_state=PARKED_M1, monkeypatch=monkeypatch)
+
+    body = client.get("/api/live_preview").json()
+
+    assert (body["source"], body["reason"], body["target"]) == (None, "idle", None)
+
+
+def test_the_servers_observing_flag_outranks_the_views_own_fields(tmp_path, monkeypatch):
+    """seestar-mcp adds a top-level `observing` bool beside `view_state`,
+    computed by the same rule. When it is there, it decides."""
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", _must_not_be_called)
+    working_but_not_observing = {**_view_on("M27"), "observing": False}
+    client = _client(
+        tmp_path,
+        share_dir=tmp_path / "share",
+        view_state=working_but_not_observing,
+        monkeypatch=monkeypatch,
+    )
+
+    assert client.get("/api/live_preview").json()["reason"] == "idle"
 
 
 def test_bridge_down_and_idle_are_distinct_reasons():
@@ -350,7 +401,9 @@ def test_stack_count_updates_on_every_call_even_when_the_frame_is_stale(tmp_path
     async def later_view_state(request, tool, arguments):
         return {
             "ok": True,
-            "view_state": {"result": {"View": {"Stack": {"stacked_frame": 150}}}},
+            "view_state": {
+                "result": {"View": {"state": "working", "mode": "star", "Stack": {"stacked_frame": 150}}}
+            },
         }
 
     monkeypatch.setattr(routes, "call_tool", later_view_state)
@@ -372,7 +425,15 @@ def _view_on(target_name):
     return {
         "ok": True,
         "view_state": {
-            "result": {"View": {"stage": "Stack", "target_name": target_name, "Stack": {"stacked_frame": 5}}}
+            "result": {
+                "View": {
+                    "state": "working",
+                    "mode": "star",
+                    "stage": "Stack",
+                    "target_name": target_name,
+                    "Stack": {"stacked_frame": 5},
+                }
+            }
         },
     }
 
