@@ -72,12 +72,74 @@ export function shouldCheckDevice(
 export const SESSION_ACTIVITY_LIMIT = 30
 
 /**
- * How many polls in a row must get an explicit "no View" answer before the
- * session is forgotten. One is not enough: a single `result: {}` mid-session
- * would otherwise wipe the log and restart the guardrail clock. See
- * `endSession` in the hook below for the full list of what ends a session.
+ * How many polls in a row must get an explicit "not observing" answer (an
+ * ended View, or no View at all; see isObserving) before the session is
+ * forgotten. One is not enough: a single such answer mid-session would
+ * otherwise wipe the log and restart the guardrail clock. See `endSession`
+ * in the hook below for the full list of what ends a session.
  */
 export const IDLE_ANSWERS_TO_END = 2
+
+/**
+ * Whether `get_view_state` says the scope is observing right now.
+ *
+ * A View being present is not enough, and treating it as enough was a real
+ * defect (hardware, 2026-09-24). A parked scope does not answer `result: {}`:
+ * it keeps the ended session's View, with `state: "cancel"`, `mode: "none"`,
+ * the last target and its final counts. Read as a session, that put a green
+ * live dot, "Watch the current stack" and M1 at 1003 stacked frames over a
+ * folded scope, and fetched guardrails with "now" as the session start: a
+ * false `park_and_stop — Within 15 min of dawn`.
+ *
+ * The rule, from the seestar-mcp session: observing if and only if
+ * `View.state` is `"working"` AND `View.mode` is not `"none"`. Everything else
+ * is not observing, including `"cancel"`, `"complete"`, a `"fail"` nobody has
+ * seen yet, and a View with no state at all. `result: {}` (no View) comes
+ * only from a freshly booted scope.
+ *
+ * seestar-mcp's own top-level `observing`, computed by the same rule, is
+ * preferred when the payload carries it. With no View there is no session to
+ * show, so no View is never observing.
+ */
+export function isObserving(viewState: ViewState): boolean {
+  const view = viewState.view_state?.result?.View
+  if (view == null) return false
+  if (viewState.observing != null) return viewState.observing
+  return view.state === 'working' && view.mode !== 'none'
+}
+
+/** What a not-observing answer still says about the session it last ran,
+ * for the idle card: the target and its final counts. A record of what
+ * finished, never evidence that anything is running. */
+export interface LastSession {
+  target: string
+  stacked: number | null
+  dropped: number | null
+  /** The View's state is not `working`, so the session really finished
+   * (`cancel`, `fail`, …). False for a `working` View that fails the
+   * observing rule only on `mode: "none"`: not observing, but not ended. */
+  ended: boolean
+}
+
+/**
+ * The last session a not-observing `get_view_state` still describes, or
+ * `null` when it names no target (a freshly booted scope's `result: {}`).
+ * seestar-mcp's top-level `stack` summary first, since it is the server's own
+ * reading and persists after a session ends, and the ended View's own fields
+ * where it is absent.
+ */
+export function lastSessionOf(viewState: ViewState): LastSession | null {
+  const summary = viewState.stack
+  const view = viewState.view_state?.result?.View
+  const target = summary?.target_name ?? view?.target_name
+  if (!target) return null
+  return {
+    target,
+    stacked: summary?.stacked ?? view?.Stack?.stacked_frame ?? null,
+    dropped: summary?.dropped ?? view?.Stack?.dropped_frame ?? null,
+    ended: (view?.state ?? summary?.state) !== 'working',
+  }
+}
 
 /**
  * K: how many polls in a row may fail before a failed read stops being
@@ -161,12 +223,17 @@ export type LiveSessionState =
     }
   | {
       phase: 'idle'
-      /** How the scope said so. `null`: `get_view_state` answered and
-       * reported no view session (`result: {}`, the commonest real idle).
-       * Otherwise `get_view_state` failed while `get_status` still answered;
-       * see ViewFailure for the two ways, which the screen must word
+      /** How the scope said so. `null`: `get_view_state` answered, and not
+       * observing (see isObserving): usually the ended View a parked scope
+       * keeps, or `result: {}` on a freshly booted one. Otherwise
+       * `get_view_state` failed while `get_status` still answered; see
+       * ViewFailure for the two ways, which the screen must word
        * differently. */
       viewError: ViewFailure | null
+      /** The session that answer still describes, with its final counts
+       * (see lastSessionOf). `null` when it names none, and always when
+       * `get_view_state` failed. */
+      lastSession: LastSession | null
       sessionActivity: SessionActivity | null
     }
   | {
@@ -182,13 +249,14 @@ export type LiveSessionState =
     }
   | {
       /** `get_run_state` says a skill-driven run is active, but the scope
-       * reports no view session (or `get_view_state` failed). Between
+       * reports it is not observing (or `get_view_state` failed). Between
        * targets, or a view that stopped: either way not "idle", which is
        * the confident wrong answer run_state exists to prevent. */
       phase: 'run-without-view'
       /** `run.target` from run_state — the string passed to goto_target. */
       runTarget: string | null
-      /** As on `idle`: `null` for "answered, no View", else the failure. */
+      /** As on `idle`: `null` for "answered, not observing", else the
+       * failure. */
       viewError: ViewFailure | null
       sessionActivity: SessionActivity | null
     }
@@ -300,10 +368,10 @@ export type LiveSessionState =
  *
  * Inverted:
  *
- *   view_state OK, View present    → active. Bridge proved up; get_status
+ *   view_state OK, observing       → active. Bridge proved up; get_status
  *                                    never called.        1 request
- *   view_state OK, no View         → idle. Same proof;    1 request
- *                                    get_status skipped
+ *   view_state OK, not observing   → idle. Same proof;    1 request
+ *   (an ended View, or no View)      get_status skipped
  *   view_state unparseable         → unrecognised. The    1 request
  *                                    sidecar answered;
  *                                    never read as idle
@@ -316,13 +384,16 @@ export type LiveSessionState =
  * And while a session is open and on screen, a failed row (unparseable,
  * view_state fails, bridge-down) keeps it there instead, as `active` with
  * `stale` set, for up to FAILED_POLLS_LIMIT - 1 failures in a row: one failed
- * read is not evidence the session ended. Only the "no View" row and a
+ * read is not evidence the session ended. Only the "not observing" row and a
  * relayed view_state failure count towards ending one — see endSession for
  * the full list.
  *
- * "Answered" is not "observing": a connected scope with no view session
- * returns `result: {}`, which parses. Treating any successful fetch as
- * active once put a green live dot over a parked scope.
+ * "Answered" is not "observing", and neither is "answered with a View". A
+ * freshly booted scope returns `result: {}`, which parses; treating any
+ * successful fetch as active once put a green live dot over it. A parked
+ * scope keeps its ended View (`state: "cancel"`, `mode: "none"`), and
+ * treating any View as active put the same dot, a finished session's counts
+ * and a false dawn guardrail over that. See isObserving.
  *
  * An active tick drops from 6 device requests to 1. The idle path is
  * unchanged in cost and already behind the back-off below, so it pays the
@@ -407,8 +478,8 @@ export function useLiveSession(): LiveSessionState {
   const currentTargetRef = useRef<string | null>(null)
   const sessionStartedAtRef = useRef<string | null>(null)
   // Consecutive polls reporting idle, counting the current one. Reset by any
-  // non-idle run_state answer AND by any poll where the device reports a
-  // View, so a session (skill-driven or by hand) gets full cadence.
+  // non-idle run_state answer AND by any poll where the device reports it is
+  // observing, so a session (skill-driven or by hand) gets full cadence.
   const idleTicksRef = useRef(0)
   // Carries the last_stack result forward across polls where the target
   // hasn't changed, alongside which target it was actually fetched for —
@@ -417,10 +488,10 @@ export function useLiveSession(): LiveSessionState {
   const lastStackRef = useRef<LastStack | null>(null)
   const lastStackTargetRef = useRef<string | null>(null)
   // What decides when a session ends — see endSession below.
-  // The current run of idle-looking polls: explicit "no View" answers and
-  // relayed get_view_state failures, and whether every one was explicit.
+  // The current run of idle-looking polls: explicit "not observing" answers
+  // and relayed get_view_state failures, and whether every one was explicit.
   // Other failures carry no answer either way, so they neither count nor
-  // break the run; a View resets it.
+  // break the run; an observing View resets it.
   const idleRunRef = useRef({ length: 0, explicitOnly: true })
   // Consecutive polls that failed to read the scope, of any kind. Reset by
   // any answer from the device (a View, or an explicit no-View).
@@ -434,7 +505,8 @@ export function useLiveSession(): LiveSessionState {
   // name, never the preview's: the share lags and can name a previous
   // session's object, which would reset a target that never changed.
   const sessionViewTargetRef = useRef<string | null>(null)
-  // Date.now() of the last poll that saw a View; see SESSION_GAP_MS.
+  // Date.now() of the last poll that saw an observing View; see
+  // SESSION_GAP_MS.
   const lastViewAtRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -460,13 +532,13 @@ export function useLiveSession(): LiveSessionState {
      * governs a hard stop. So a session ends only on evidence that it has:
      *
      *   - a run of idle-looking polls (while no skill-driven run is active):
-     *     IDLE_ANSWERS_TO_END explicit "no View" answers, or
+     *     IDLE_ANSWERS_TO_END explicit "not observing" answers, or
      *     FAILED_POLLS_LIMIT polls once any of them was a relayed
      *     get_view_state failure, the documented idle signature (see
      *     countIdleSign);
      *   - get_run_state going from active to idle/unknown, followed by an
-     *     explicit no-View answer;
-     *   - no View at all for SESSION_GAP_MS, whatever the polls said.
+     *     explicit not-observing answer;
+     *   - no observing View for SESSION_GAP_MS, whatever the polls said.
      *
      * Any other failed poll (the bridge down, a SchemaError, a request that
      * got no answer) never ends it by count: it is held and shown as stale,
@@ -505,7 +577,7 @@ export function useLiveSession(): LiveSessionState {
       lastStackTargetRef.current = null
     }
 
-    /** A session is open from the first View until endSession. */
+    /** A session is open from the first observing View until endSession. */
     const sessionOpen = () => sessionStartedAtRef.current !== null
 
     /**
@@ -518,8 +590,8 @@ export function useLiveSession(): LiveSessionState {
     const holdingSession = () => sessionOpen() && failStreakRef.current < FAILED_POLLS_LIMIT
 
     /**
-     * This poll looked idle: an explicit no-View answer (`explicit`), or a
-     * get_view_state failure relayed while get_status answered. One run
+     * This poll looked idle: an explicit not-observing answer (`explicit`),
+     * or a get_view_state failure relayed while get_status answered. One run
      * counts both, and ends the session at IDLE_ANSWERS_TO_END if every
      * poll in it was explicit, or at FAILED_POLLS_LIMIT once any was
      * relayed: a relayed failure is the documented idle signature, but also
@@ -550,15 +622,16 @@ export function useLiveSession(): LiveSessionState {
     }
 
     /**
-     * The bridge is up and the scope is not showing a view session. That is
-     * idle — unless `get_run_state` says a skill-driven run is active, in
-     * which case "Scope idle — not observing" would be the confident wrong
-     * answer: the run may be between targets, or its view may have stopped.
+     * The bridge is up and the scope is not observing. That is idle —
+     * unless `get_run_state` says a skill-driven run is active, in which
+     * case "Scope idle — not observing" would be the confident wrong answer:
+     * the run may be between targets, or its view may have stopped.
      */
     function withoutView(
       runState: RunState | null,
       viewError: ViewFailure | null,
       sessionActivity: SessionActivity | null,
+      lastSession: LastSession | null = null,
     ): LiveSessionState {
       if (runState?.state === 'active') {
         return {
@@ -568,7 +641,7 @@ export function useLiveSession(): LiveSessionState {
           sessionActivity,
         }
       }
-      return { phase: 'idle', viewError, sessionActivity }
+      return { phase: 'idle', viewError, lastSession, sessionActivity }
     }
 
     async function poll() {
@@ -682,16 +755,18 @@ export function useLiveSession(): LiveSessionState {
         return
       }
 
-      // Answering is not observing. A connected scope with no view session
-      // returns `result: {}` — it parses, and it used to count as "active":
-      // a green live dot, "Stacking", a column of dashes and a guardrails
-      // fetch for a session that did not exist, while the sidecar's
-      // live_preview, given no View to scope by, scanned the whole share and
-      // named an old target. No View is idle (unless a run is active — see
-      // withoutView). The bridge has just answered, so get_status would
-      // only re-prove it: skipped.
+      // Answering is not observing, and neither is answering with a View
+      // (see isObserving). A freshly booted scope returns `result: {}`, and a
+      // parked one keeps its ended View, cancelled, with the last target's
+      // final counts. Each used to count as "active": a green live dot, a
+      // stack count, and a guardrails fetch for a session that was not
+      // running, which on the parked scope said `park_and_stop`. Not
+      // observing is idle (unless a run is active — see withoutView), and the
+      // ended View's counts are kept only as a record of what finished. The
+      // bridge has just answered, so get_status would only re-prove it:
+      // skipped.
       const view = viewState.view_state?.result?.View
-      if (view == null) {
+      if (view == null || !isObserving(viewState)) {
         const sessionActivity = await sessionActivityPromise
         if (cancelled) return
         // The device answered, so no failure streak; and an explicit answer
@@ -700,13 +775,14 @@ export function useLiveSession(): LiveSessionState {
         // not.
         failStreakRef.current = 0
         if (runState?.state !== 'active') countIdleSign(true)
-        setState(withoutView(runState, null, sessionActivity))
+        setState(withoutView(runState, null, sessionActivity, lastSessionOf(viewState)))
         return
       }
       if (cancelled) return
 
-      // A View, so no idle run and no failure streak, and a run that ended
-      // while the device still showed one has been outlived by the session:
+      // An observing View, so no idle run and no failure streak, and a run
+      // that ended while the device still showed one has been outlived by
+      // the session:
       // from here the ordinary idle-run rule applies. A View naming a
       // different target is a goto within the session: the target's own
       // state resets, the session's clock does not.

@@ -14,20 +14,26 @@ per test case) the same way test_replay.py's
 test_transport_failure_uses_the_same_error_shape already does, and every
 "share" is a synthetic tmp_path tree.
 """
+import functools
 import os
 import time
 
 import pytest
 from fastapi.testclient import TestClient
 
-from seestar_sidecar import main, routes
-from seestar_sidecar.live_preview import ShareUnreachableError
+from seestar_sidecar import live_preview, main, routes
+from seestar_sidecar.live_preview import ShareScanSlowError, ShareUnreachableError
 from seestar_sidecar.main import create_app
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 
+#: `state`/`mode` as the real working View carries them (fixtures/
+#: get_view_state.json): without them a View is not observing, see
+#: live_preview.is_observing().
 OBSERVING_VIEW_STATE = {
     "ok": True,
-    "view_state": {"result": {"View": {"stage": "Stack", "Stack": {"stacked_frame": 97}}}},
+    "view_state": {
+        "result": {"View": {"state": "working", "mode": "star", "stage": "Stack", "Stack": {"stacked_frame": 97}}}
+    },
 }
 IDLE_VIEW_STATE = {"ok": False, "error": "Error: Exceeded allotted wait time for result"}
 
@@ -38,12 +44,12 @@ IDLE_VIEW_STATE = {"ok": False, "error": "Error: Exceeded allotted wait time for
 #: (live_preview.STALE_AFTER_SECONDS). A 1970 frame is legitimately stale, so
 #: the old constants made the not-stale assertions test the opposite of their
 #: intent. Relative offsets keep the ordering these tests actually care about.
-_NOW = time.time()
-
-
+#: They are taken from the clock at call time, not at import: a stack only
+#: beats a newer sub within live_preview.STACK_FRESH_SECONDS (60 s), which a
+#: long test run can outlast.
 def _ago(seconds: float) -> float:
     """An mtime `seconds` in the past — recent enough to count as current."""
-    return _NOW - seconds
+    return time.time() - seconds
 
 
 def _touch(path, mtime=None):
@@ -130,6 +136,52 @@ def test_idle_scope_reports_a_distinct_reason_and_never_touches_the_share(tmp_pa
     assert body["stale"] is False
 
 
+#: The parked scope's real View, 2026-09-24, trimmed: an ended session keeps
+#: its View, with `state: "cancel"` and `mode: "none"`.
+PARKED_M1 = {
+    "ok": True,
+    "view_state": {
+        "result": {
+            "View": {
+                "state": "cancel",
+                "mode": "none",
+                "target_name": "M1",
+                "Stack": {"state": "cancel", "frame_errcode": 266, "stacked_frame": 1003},
+                "stage": "Stack",
+            }
+        }
+    },
+}
+
+
+def test_a_view_left_over_from_an_ended_session_is_not_presented_as_live(tmp_path, monkeypatch):
+    """Hardware, 2026-09-24: the parked scope still returned the M1 session's
+    View, and the preview served its frame as the live view."""
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", _must_not_be_called)
+    share = tmp_path / "share"
+    _touch(share / "M1_sub" / "Light_M1_10.0s_LP_20260924-110710_thn.jpg", mtime=_ago(5))
+    client = _client(tmp_path, share_dir=share, view_state=PARKED_M1, monkeypatch=monkeypatch)
+
+    body = client.get("/api/live_preview").json()
+
+    assert (body["source"], body["reason"], body["target"]) == (None, "idle", None)
+
+
+def test_the_servers_observing_flag_outranks_the_views_own_fields(tmp_path, monkeypatch):
+    """seestar-mcp adds a top-level `observing` bool beside `view_state`,
+    computed by the same rule. When it is there, it decides."""
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", _must_not_be_called)
+    working_but_not_observing = {**_view_on("M27"), "observing": False}
+    client = _client(
+        tmp_path,
+        share_dir=tmp_path / "share",
+        view_state=working_but_not_observing,
+        monkeypatch=monkeypatch,
+    )
+
+    assert client.get("/api/live_preview").json()["reason"] == "idle"
+
+
 def test_bridge_down_and_idle_are_distinct_reasons():
     """Proves the two states above are not silently collapsed into one — a
     real, meaningful distinction per CLAUDE.md's "bridge-down and scope-idle
@@ -169,8 +221,8 @@ def test_share_not_configured_reports_its_own_reason(tmp_path, monkeypatch):
 
 def test_prefers_stacked_thumbnail_over_sub_end_to_end_through_the_route(tmp_path, monkeypatch):
     share = tmp_path / "share"
-    _touch(share / "M27" / "Stacked_M27_10.0s_IRCUT_20260730-030000_thn.jpg", mtime=_ago(60))
-    _touch(share / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg", mtime=_ago(30))
+    _touch(share / "M27" / "Stacked_M27_10.0s_IRCUT_20260730-030000_thn.jpg", mtime=_ago(20))
+    _touch(share / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg", mtime=_ago(10))
     client = _client(tmp_path, share_dir=share, monkeypatch=monkeypatch)
 
     body = client.get("/api/live_preview").json()
@@ -266,7 +318,7 @@ def test_a_failed_scan_after_a_success_falls_back_to_the_cached_frame_marked_sta
     assert first["stale"] is False
     assert first["source"] == "sub"
 
-    async def raises(root, timeout_s=None, target=None):
+    async def raises(root, timeout_s=None, target=None, **kwargs):
         raise ShareUnreachableError("share went quiet mid-session")
 
     monkeypatch.setattr(routes, "discover_frame_within_timeout", raises)
@@ -286,7 +338,7 @@ def test_image_route_still_serves_the_last_known_frame_while_stale(tmp_path, mon
     client = _client(tmp_path, share_dir=share, monkeypatch=monkeypatch)
     client.get("/api/live_preview")  # seeds the cache
 
-    async def raises(root, timeout_s=None, target=None):
+    async def raises(root, timeout_s=None, target=None, **kwargs):
         raise ShareUnreachableError("share went quiet mid-session")
 
     monkeypatch.setattr(routes, "discover_frame_within_timeout", raises)
@@ -300,7 +352,7 @@ def test_image_route_still_serves_the_last_known_frame_while_stale(tmp_path, mon
 def test_a_scan_failure_with_no_prior_cache_reports_share_unreachable_not_stale(
     tmp_path, monkeypatch
 ):
-    async def raises(root, timeout_s=None, target=None):
+    async def raises(root, timeout_s=None, target=None, **kwargs):
         raise ShareUnreachableError("never reachable")
 
     client = _client(tmp_path, share_dir=tmp_path / "share", monkeypatch=monkeypatch)
@@ -319,7 +371,7 @@ def test_a_single_failed_attempt_does_not_retry(tmp_path, monkeypatch):
     """
     calls = []
 
-    async def raises_and_counts(root, timeout_s=None, target=None):
+    async def raises_and_counts(root, timeout_s=None, target=None, **kwargs):
         calls.append(1)
         raise ShareUnreachableError("down")
 
@@ -341,7 +393,7 @@ def test_stack_count_updates_on_every_call_even_when_the_frame_is_stale(tmp_path
     first = client.get("/api/live_preview").json()
     assert first["stack_count"] == 97
 
-    async def raises(root, timeout_s=None, target=None):
+    async def raises(root, timeout_s=None, target=None, **kwargs):
         raise ShareUnreachableError("down")
 
     monkeypatch.setattr(routes, "discover_frame_within_timeout", raises)
@@ -349,7 +401,9 @@ def test_stack_count_updates_on_every_call_even_when_the_frame_is_stale(tmp_path
     async def later_view_state(request, tool, arguments):
         return {
             "ok": True,
-            "view_state": {"result": {"View": {"Stack": {"stacked_frame": 150}}}},
+            "view_state": {
+                "result": {"View": {"state": "working", "mode": "star", "Stack": {"stacked_frame": 150}}}
+            },
         }
 
     monkeypatch.setattr(routes, "call_tool", later_view_state)
@@ -371,7 +425,15 @@ def _view_on(target_name):
     return {
         "ok": True,
         "view_state": {
-            "result": {"View": {"stage": "Stack", "target_name": target_name, "Stack": {"stacked_frame": 5}}}
+            "result": {
+                "View": {
+                    "state": "working",
+                    "mode": "star",
+                    "stage": "Stack",
+                    "target_name": target_name,
+                    "Stack": {"stacked_frame": 5},
+                }
+            }
         },
     }
 
@@ -389,7 +451,7 @@ def _prime_cache_with_m27(tmp_path, monkeypatch):
 def test_after_a_slew_the_previous_targets_frame_is_not_served(tmp_path, monkeypatch, failure):
     client = _prime_cache_with_m27(tmp_path, monkeypatch)
 
-    async def discover(root, timeout_s=None, target=None):
+    async def discover(root, timeout_s=None, target=None, **kwargs):
         if failure == "unreachable":
             raise ShareUnreachableError("down")
         return None
@@ -413,7 +475,7 @@ def test_after_a_slew_the_previous_targets_frame_is_not_served(tmp_path, monkeyp
 def test_the_same_targets_cached_frame_still_degrades_to_stale(tmp_path, monkeypatch):
     client = _prime_cache_with_m27(tmp_path, monkeypatch)
 
-    async def raises(root, timeout_s=None, target=None):
+    async def raises(root, timeout_s=None, target=None, **kwargs):
         raise ShareUnreachableError("down")
 
     monkeypatch.setattr(routes, "discover_frame_within_timeout", raises)
@@ -429,7 +491,7 @@ def test_with_no_active_target_the_cached_frame_still_degrades_to_stale(tmp_path
     so there is nothing to mismatch against — the old degrade still holds."""
     client = _prime_cache_with_m27(tmp_path, monkeypatch)
 
-    async def raises(root, timeout_s=None, target=None):
+    async def raises(root, timeout_s=None, target=None, **kwargs):
         raise ShareUnreachableError("down")
 
     monkeypatch.setattr(routes, "discover_frame_within_timeout", raises)
@@ -443,3 +505,100 @@ def test_with_no_active_target_the_cached_frame_still_degrades_to_stale(tmp_path
 
     assert body["target"] == "M27"
     assert body["stale"] is True
+
+
+# --- the View names the file: no scan ----------------------------------------
+
+
+def test_a_stack_the_view_names_is_served_without_listing_the_share(tmp_path, monkeypatch):
+    share = tmp_path / "MyWorks"
+    thumb = "Stacked_120_M1_10.0s_LP_20260924-110824_thn.jpg"
+    _touch(share / "M1" / thumb, mtime=_ago(10))
+    view = {
+        "ok": True,
+        "view_state": {
+            "result": {
+                "View": {
+                    "state": "working",
+                    "mode": "star",
+                    "target_name": "M1",
+                    "Stack": {
+                        "stacked_frame": 120,
+                        "output_file": {"path": "MyWorks/M1", "files": [{"thn": thumb}]},
+                    },
+                }
+            }
+        },
+    }
+
+    def no_listing(*args, **kwargs):
+        raise AssertionError("the share was listed although the View named the file")
+
+    monkeypatch.setattr(live_preview, "list_matching", no_listing)
+    client = _client(tmp_path, share_dir=share, view_state=view, monkeypatch=monkeypatch)
+
+    body = client.get("/api/live_preview").json()
+
+    assert (body["source"], body["target"], body["stale"]) == ("stacked", "M1", False)
+    assert client.get("/api/live_preview/image").content == b"jpeg-bytes-" + thumb.encode()
+
+
+# --- a slow scan is not an unreachable share --------------------------------
+#
+# Found on hardware after a 1003-sub night: the share listed its root in
+# 0.08 s, but the scan ran past its budget, and the preview said
+# `share_unreachable` while /api/last_stack was serving an image off the
+# same share.
+
+
+async def _scan_slow(root, timeout_s=None, target=None, **kwargs):
+    raise ShareScanSlowError("the share answered, then the scan ran long")
+
+
+def test_a_slow_scan_reports_scan_slow_not_share_unreachable(tmp_path, monkeypatch):
+    client = _client(tmp_path, share_dir=tmp_path / "share", monkeypatch=monkeypatch)
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", _scan_slow)
+
+    body = client.get("/api/live_preview").json()
+
+    assert (body["source"], body["reason"], body["stale"]) == (None, "scan_slow", False)
+
+
+def test_a_slow_scan_after_a_success_degrades_to_the_cached_frame_marked_stale(
+    tmp_path, monkeypatch
+):
+    share = tmp_path / "share"
+    _touch(share / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg", mtime=_ago(60))
+    client = _client(tmp_path, share_dir=share, monkeypatch=monkeypatch)
+    first = client.get("/api/live_preview").json()
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", _scan_slow)
+
+    second = client.get("/api/live_preview").json()
+
+    assert (second["source"], second["stale"], second["reason"]) == ("sub", True, None)
+    assert second["captured_at"] == first["captured_at"]
+
+
+def test_a_share_that_answers_but_lists_slowly_reports_scan_slow_end_to_end(
+    tmp_path, monkeypatch
+):
+    share = tmp_path / "share"
+    _touch(share / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg", mtime=_ago(5))
+    real = live_preview.list_matching
+
+    def sub_folder_is_slow(directory, pattern="*"):
+        if directory.name == "M27-sub":
+            time.sleep(0.5)
+        return real(directory, pattern)
+
+    monkeypatch.setattr(live_preview, "list_matching", sub_folder_is_slow)
+    client = _client(tmp_path, share_dir=share, monkeypatch=monkeypatch)
+    monkeypatch.setattr(
+        routes,
+        "discover_frame_within_timeout",
+        functools.partial(live_preview.discover_frame_within_timeout, timeout_s=0.2),
+    )
+
+    body = client.get("/api/live_preview").json()
+
+    assert body["reason"] == "scan_slow"

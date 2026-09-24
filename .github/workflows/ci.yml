@@ -60,3 +60,23 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run pytest
+
+  # The app runs on Windows, and share_listing's Windows API path (the one
+  # production uses for the live share) only executes there: the Linux job
+  # above runs its portable fallback. ruff already ran above, so tests only.
+  sidecar-windows:
+    name: sidecar — pytest (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: sidecar
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: sidecar/uv.lock
+      - run: uv sync --locked
+      - run: uv run pytest

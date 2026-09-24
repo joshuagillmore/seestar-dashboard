@@ -15,6 +15,7 @@ import {
   recordedFocuserPosition,
   recordedGuardrails,
   recordedObservability,
+  recordedParkedViewState,
   recordedSite,
   recordedStatus,
   recordedTier1,
@@ -928,5 +929,75 @@ describe('the target name does not depend on the file share', () => {
 
     expect(await screen.findByText(expected!)).toBeInTheDocument()
     expect(screen.queryByText('Target unknown')).not.toBeInTheDocument()
+  })
+})
+
+describe('a parked scope, which keeps its ended View (hardware, 2026-09-24)', () => {
+  // On the real parked scope this screen showed a green "live" dot, "Watch
+  // the current stack", M1 with STACKED 1003 and "+0 last poll", and a red
+  // `park_and_stop — Within 15 min of dawn` from a guardrails check it should
+  // never have made.
+  it('renders idle, with no live dot, no guardrails and no "Watch the current stack"', async () => {
+    stubApi({ '/api/get_view_state': recordedParkedViewState() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    expect(screen.getByTestId('live-idle')).toHaveTextContent('Scope idle — not observing')
+    expect(screen.queryByText('Watch the current stack')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('telemetry-grid')).not.toBeInTheDocument()
+    expect(screen.queryByText('check_night_guardrails')).not.toBeInTheDocument()
+    expect(fetchedUrls().some((u) => u.includes('check_night_guardrails'))).toBe(false)
+    // The sidebar's Live row: the idle dot and meta, not the green "live".
+    expect(screen.getAllByTestId('dot')[1]).toHaveAttribute('data-dot', 'idle')
+    expect(screen.queryByText('live', { exact: true })).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('session-activity-not-running')).toBeInTheDocument())
+  })
+
+  it('says what the scope last did, without implying any of it is live', async () => {
+    stubApi({ '/api/get_view_state': recordedParkedViewState() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    const card = screen.getByTestId('live-idle')
+    expect(within(card).getByTestId('live-idle-last-session')).toHaveTextContent(
+      'Last session ended: M1 · 1003 stacked · 0 dropped',
+    )
+    expect(card).not.toHaveTextContent(/\blive\b|stacking|current/i)
+    // It answered with a View, so "reports no view session" would be false.
+    expect(card).not.toHaveTextContent(/no view session/)
+  })
+
+  it('does not say "ended" for a View that is still working, only not observing', async () => {
+    // `state: "working"` with `mode: "none"` fails the observing rule, but
+    // nothing about it says the session finished.
+    const parked = recordedParkedViewState() as { view_state: { result: { View: Record<string, unknown> } } }
+    parked.view_state.result.View.state = 'working'
+    stubApi({ '/api/get_view_state': parked })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('live-idle-last-session')).toBeInTheDocument())
+    const line = screen.getByTestId('live-idle-last-session')
+    expect(line).not.toHaveTextContent(/ended/i)
+    expect(line).toHaveTextContent('M1 · 1003 stacked · 0 dropped')
+    expect(line).toHaveTextContent(/not observing/i)
+  })
+
+  it('shows no last session for a freshly booted scope, which has none to report', async () => {
+    stubApi({ '/api/get_view_state': connectedButIdleViewState() })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('live-idle')).toBeInTheDocument())
+    expect(screen.queryByTestId('live-idle-last-session')).not.toBeInTheDocument()
+  })
+
+  it('still renders the July working recording as a live session', async () => {
+    stubApi()
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('telemetry-grid')).toBeInTheDocument())
+    expect(screen.getByText('Watch the current stack')).toBeInTheDocument()
+    expect(screen.getAllByTestId('dot')[1]).toHaveAttribute('data-dot', 'pass')
+    expect(screen.getByText('live', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByTestId('live-idle')).not.toBeInTheDocument()
   })
 })

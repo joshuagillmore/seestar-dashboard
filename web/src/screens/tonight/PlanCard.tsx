@@ -17,9 +17,15 @@ import styles from './PlanCard.module.css'
  * with an alias table here): renders no progress row at all rather than a
  * fabricated zero, and Detail's reason is qualified by the id.
  * Never doubled here — the doubling control is a Projects-screen concept
- * (see doubling.ts); Tonight shows the model's own number as-is. */
+ * (see doubling.ts); Tonight shows the model's own number as-is.
+ *
+ * `storeMinutes`/`archiveMinutes` are the same entry's split of
+ * `totalMinutes`. QA verdicts cover the archive only, so the quality bar
+ * needs them to say so beside a total that includes the store. */
 export interface PlanCardProgress {
   totalMinutes: number
+  storeMinutes: number
+  archiveMinutes: number
   goal: IntegrationGoal | null
 }
 
@@ -170,7 +176,12 @@ export function PlanCard({
               bar there means. Not clickable on this screen: Detail below is
               already the route to the report, and two affordances to one
               place on one card is noise. */}
-          {verdicts && <QualityBar verdicts={verdicts} />}
+          {verdicts && (
+            <QualityBar
+              verdicts={verdicts}
+              coverage={{ storeMinutes: progress.storeMinutes, archiveMinutes: progress.archiveMinutes }}
+            />
+          )}
         </div>
       )}
 

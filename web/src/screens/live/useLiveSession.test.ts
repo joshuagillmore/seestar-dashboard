@@ -6,6 +6,7 @@ import {
   recordedFocuserPosition,
   recordedGuardrails,
   recordedObservability,
+  recordedParkedViewState,
   recordedStatus,
   recordedTier1,
   recordedViewState,
@@ -14,9 +15,11 @@ import {
   sessionActivity,
 } from '../../test/fixtures'
 import { REQUEST_TIMEOUT_MS } from '../../api/client'
+import { ViewStateSchema } from '../../api/schemas'
 import {
   FAILED_POLLS_LIMIT,
   IDLE_DEVICE_CHECK_EVERY,
+  isObserving,
   POLL_INTERVAL_MS,
   SESSION_GAP_MS,
   useLiveSession,
@@ -73,8 +76,20 @@ const activeRoutes = (): Record<string, Route> => ({
   '/api/last_stack': ok(lastStackFound()),
 })
 
-/** Scope connected, no view session: `result: {}` (hardware, 2026-07-31). */
+/** Scope connected, no view session: `result: {}` (hardware, 2026-07-31).
+ * Only a freshly booted scope answers this way; a parked one keeps its ended
+ * View (see `recordedParkedViewState`). */
 const noView = () => ({ ok: true, view_state: { method: 'get_view_state', result: {}, code: 0 } })
+
+type Mutable = { observing?: unknown; view_state: { result: { View: Record<string, unknown> } } }
+
+/** The July working recording with some View fields and top-level fields
+ * changed. */
+const workingWith = (view: Record<string, unknown>, top: Record<string, unknown> = {}) => {
+  const payload = recordedViewState() as Mutable
+  Object.assign(payload.view_state.result.View, view)
+  return { ...payload, ...top }
+}
 
 const sessionStartOf = (url: string): string =>
   new URL(url, 'http://x').searchParams.get('session_start_utc') ?? ''
@@ -653,5 +668,175 @@ describe('an idle answer ends the session only once confirmed', () => {
     expect(state.stageHistory).toEqual(['Stack'])
     expect(state.log).toHaveLength(1)
     expect(api.urls('last_stack').filter((u) => u.includes('M27'))).toHaveLength(1)
+  })
+})
+
+describe('a View is observing only while it is working (hardware, 2026-09-24)', () => {
+  // A parked scope does not answer `result: {}`. It keeps the ended
+  // session's View: state "cancel", mode "none", the last target and its
+  // final counts. Any View used to count as observing, so the parked scope
+  // showed as a live M1 session, and the guardrails fetch, given "now" as the
+  // session start, reported `park_and_stop — Within 15 min of dawn`.
+  const parse = (payload: unknown) => ViewStateSchema.parse(payload)
+
+  describe('isObserving', () => {
+    it.each<[string, boolean, unknown]>([
+      ['the July working recording', true, recordedViewState()],
+      ['the parked recording (cancel, mode none)', false, recordedParkedViewState()],
+      ['a working View with mode "none"', false, workingWith({ mode: 'none' })],
+      ['a View whose state is "complete"', false, workingWith({ state: 'complete' })],
+      ['a View whose state is "fail" (not yet seen, assumed to exist)', false, workingWith({ state: 'fail' })],
+      ['a View with no state at all', false, workingWith({ state: undefined })],
+      ['no View (`result: {}`, a freshly booted scope)', false, noView()],
+    ])('%s: observing = %s', (_label, expected, payload) => {
+      expect(isObserving(parse(payload))).toBe(expected)
+    })
+
+    // seestar-mcp's get_view_state gains a top-level `observing` computed by
+    // the same rule. The server's own answer wins over this client's reading
+    // of the View whenever it is present.
+    it('lets observing: false override a View that reads as working', () => {
+      expect(isObserving(parse(workingWith({}, { observing: false })))).toBe(false)
+    })
+
+    it('honours observing: true over a View this client would not call working', () => {
+      expect(isObserving(parse(workingWith({ mode: 'none' }, { observing: true })))).toBe(true)
+    })
+
+    it('falls back to the View when observing is null', () => {
+      expect(isObserving(parse(workingWith({}, { observing: null })))).toBe(true)
+      expect(isObserving(parse({ ...(recordedParkedViewState() as object), observing: null }))).toBe(false)
+    })
+  })
+
+  it('treats the parked recording as idle: no guardrails, no preview, and the final counts kept for display', async () => {
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_view_state': ok(recordedParkedViewState()) })
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    const state = result.current
+    if (state.phase !== 'idle') throw new Error(`expected idle, got ${state.phase}`)
+    expect(state.viewError).toBeNull()
+    expect(state.lastSession).toEqual({ target: 'M1', stacked: 1003, dropped: 0, ended: true })
+    for (const route of ['check_night_guardrails', 'qa_tier1', 'get_focuser_position', 'live_preview', 'last_stack', 'get_status']) {
+      expect(api.urls(route)).toEqual([])
+    }
+  })
+
+  it('still treats the July working recording as an active session', async () => {
+    const api = stubRoutes(activeRoutes())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    expect(result.current.phase).toBe('active')
+    expect(api.urls('check_night_guardrails')).toHaveLength(1)
+  })
+
+  it('reads the final counts from the server\'s stack summary when it sends one', async () => {
+    // seestar-mcp's follow-up adds a top-level `stack` summary that persists
+    // after a session ends. It is the server's own reading, so it wins.
+    const parked = {
+      ...(recordedParkedViewState() as object),
+      observing: false,
+      stack: { target_name: 'M1', stacked: 1004, dropped: 2, state: 'cancel', mode: 'none' },
+    }
+    stubRoutes({ ...activeRoutes(), '/api/get_view_state': ok(parked) })
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    const state = result.current
+    if (state.phase !== 'idle') throw new Error(`expected idle, got ${state.phase}`)
+    expect(state.lastSession).toEqual({ target: 'M1', stacked: 1004, dropped: 2, ended: true })
+  })
+
+  it('has no last session to show for a freshly booted scope', async () => {
+    stubRoutes({ ...activeRoutes(), '/api/get_view_state': ok(noView()) })
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    const state = result.current
+    if (state.phase !== 'idle') throw new Error(`expected idle, got ${state.phase}`)
+    expect(state.lastSession).toBeNull()
+  })
+
+  it('goes idle on observing: false, and active on observing: true, whatever the View says', async () => {
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_view_state': ok(workingWith({}, { observing: false })) })
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+    expect(result.current.phase).toBe('idle')
+    expect(api.urls('check_night_guardrails')).toEqual([])
+
+    api.routes['/api/get_view_state'] = ok(workingWith({ mode: 'none' }, { observing: true }))
+    await tick(POLL_INTERVAL_MS)
+    expect(result.current.phase).toBe('active')
+  })
+
+  it('shows a run, not idle, when get_run_state says a run is active and the View has ended', async () => {
+    // The same withoutView rule as `result: {}`: a skill-driven run between
+    // targets is not "Scope idle".
+    stubRoutes({
+      ...activeRoutes(),
+      '/api/get_run_state': ok(runStateActive()),
+      '/api/get_view_state': ok(recordedParkedViewState()),
+    })
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    expect(result.current.phase).toBe('run-without-view')
+  })
+
+  it('keeps the idle back-off on a parked scope', async () => {
+    // The parked View must not count as "the device says it is observing",
+    // which resets the back-off: a parked scope is asked once, then left
+    // alone until the IDLE_DEVICE_CHECK_EVERY-th poll after.
+    const api = stubRoutes({
+      ...activeRoutes(),
+      '/api/get_run_state': ok(runStateIdle()),
+      '/api/get_view_state': ok(recordedParkedViewState()),
+    })
+    renderHook(() => useLiveSession())
+    await tick()
+    for (let i = 0; i < IDLE_DEVICE_CHECK_EVERY - 1; i += 1) await tick(POLL_INTERVAL_MS)
+
+    expect(api.urls('get_view_state')).toHaveLength(1)
+  })
+
+  it('keeps an open session through one parked answer', async () => {
+    vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
+    const api = stubRoutes(activeRoutes())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    api.routes['/api/get_view_state'] = ok(recordedParkedViewState())
+    await tick(POLL_INTERVAL_MS)
+    expect(result.current.phase).toBe('idle')
+
+    api.routes['/api/get_view_state'] = ok(recordedViewState())
+    await tick(POLL_INTERVAL_MS)
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.log).toHaveLength(2)
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(starts[starts.length - 1]).toBe('2026-08-02T21:00:00.000Z')
+  })
+
+  it('ends an open session on two parked answers in a row, as it does on two `result: {}` answers', async () => {
+    vi.setSystemTime(new Date('2026-08-02T21:00:00Z'))
+    const api = stubRoutes(activeRoutes())
+    const { result } = renderHook(() => useLiveSession())
+    await tick()
+
+    api.routes['/api/get_view_state'] = ok(recordedParkedViewState())
+    await tick(POLL_INTERVAL_MS)
+    await tick(POLL_INTERVAL_MS)
+
+    api.routes['/api/get_view_state'] = ok(recordedViewState())
+    await tick(POLL_INTERVAL_MS)
+    const state = result.current
+    if (state.phase !== 'active') throw new Error('expected active')
+    expect(state.log).toHaveLength(1)
+    expect(state.stageHistory).toEqual(['Stack'])
+    const starts = api.urls('check_night_guardrails').map(sessionStartOf)
+    expect(Date.parse(starts[starts.length - 1])).toBe(Date.parse('2026-08-02T21:00:00Z') + 3 * POLL_INTERVAL_MS)
   })
 })

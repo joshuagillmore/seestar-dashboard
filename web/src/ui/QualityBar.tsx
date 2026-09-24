@@ -6,6 +6,12 @@ export interface QualityBarProps {
   /** Opens this target's report on the Review & QA screen. Omitted when the
    * caller has nowhere to send them. */
   onOpen?: () => void
+  /** The target's captured minutes by source (projects_combined's
+   * `store_minutes`/`archive_minutes`), so the bar can say what its
+   * verdicts cover. The dashboard's Tier-2 runs on archive paths only: store
+   * minutes have never been analysed here. Pass it wherever the bar sits
+   * beside a captured-time figure that includes the store. */
+  coverage?: { storeMinutes: number; archiveMinutes: number }
 }
 
 const SEGMENTS = [
@@ -37,8 +43,15 @@ const SEGMENTS = [
  * `unknown` gets a segment despite never appearing today. It is the count of
  * verdicts outside the policy's three, and a vocabulary change should show up
  * as a visible slice rather than quietly inflating another one.
+ *
+ * **Says what it covers when that is not everything.** The verdicts are the
+ * archive's subs only, and the callers show them beside a captured-time
+ * figure that also counts the store. M1 read "113 of 265 subs keepable" next
+ * to 3.5 h, where the 265 subs are the archive's 44.2 min and the store's
+ * 167.2 min were never analysed, so 43% keepable read as applying to all
+ * 3.5 h. With store time present, a note under the caption says so.
  */
-export function QualityBar({ verdicts, onOpen }: QualityBarProps) {
+export function QualityBar({ verdicts, onOpen, coverage }: QualityBarProps) {
   const { total } = verdicts
   if (total === 0) return null
 
@@ -68,16 +81,25 @@ export function QualityBar({ verdicts, onOpen }: QualityBarProps) {
   )
 
   const caption = `${keepable} of ${total} subs keepable · ${verdicts.reject} rejected`
+  const note =
+    coverage && coverage.storeMinutes > 0 ? (
+      <span className={styles.note} data-testid="qa-coverage-note">
+        QA covers the archive&apos;s {coverage.archiveMinutes.toFixed(1)} min only; the store&apos;s{' '}
+        {coverage.storeMinutes.toFixed(1)} min is not analysed here
+      </span>
+    ) : null
 
   return onOpen ? (
     <button type="button" className={styles.clickable} onClick={onOpen} title="Open the QA report">
       {bar}
       <span className={styles.caption}>{caption}</span>
+      {note}
     </button>
   ) : (
     <div className={styles.static}>
       {bar}
       <span className={styles.caption}>{caption}</span>
+      {note}
     </div>
   )
 }
