@@ -246,7 +246,7 @@ async def test_discover_frame_within_timeout_raises_share_unreachable_on_real_ti
 
     share_root.mkdir()
 
-    def hangs_forever(root, target=None):
+    def hangs_forever(root, target=None, named_stacks=()):
         # A `to_thread` work item can't truly be cancelled once started — it
         # keeps the underlying thread busy for its full duration regardless
         # of asyncio.wait_for's timeout. Long enough to comfortably outlast

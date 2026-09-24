@@ -12,8 +12,11 @@ The layout is the real one: SEESTAR_LIVE_SHARE_DIR points AT the `MyWorks`
 folder, which holds `<target>/` (stacked masters) and `<target>_sub/` (three
 files per sub) for every object ever imaged.
 """
+import copy
+import json
 import os
 import time
+from pathlib import Path
 
 import pytest
 
@@ -153,3 +156,171 @@ def test_a_stack_newer_than_every_sub_still_wins(long_night):
     assert frame is not None
     assert frame.source == "stacked"
     assert live_preview.is_frame_stale(frame)
+
+
+# --- the View names the stack: no scan at all ------------------------------
+
+#: The real get_view_state payload of the parked scope on 2026-09-24, after
+#: the 1003-sub M1 night (Annotate trimmed). The ended session's View keeps
+#: naming its output: `output_file` and `jpg_name`, relative to the share's
+#: parent, so they start with `MyWorks/`, the share root's own name.
+PARKED_M1 = {
+    "ok": True,
+    "view_state": {
+        "jsonrpc": "2.0",
+        "method": "get_view_state",
+        "result": {
+            "View": {
+                "state": "cancel",
+                "lapse_ms": 13422564,
+                "mode": "none",
+                "cam_id": 0,
+                "target_ra_dec": [5.575534, 22.017],
+                "target_name": "M1",
+                "lp_filter": True,
+                "gain": 80,
+                "Stack": {
+                    "state": "cancel",
+                    "lapse_ms": 13356715,
+                    "frame_errcode": 266,
+                    "stacked_frame": 1003,
+                    "dropped_frame": 0,
+                    "can_annotate": True,
+                    "jpg_name": "MyWorks/M1/Stacked_1003_M1_10.0s_LP_20260924-110824.jpg",
+                    "output_file": {
+                        "path": "MyWorks/M1",
+                        "files": [
+                            {
+                                "name": "Stacked_1003_M1_10.0s_LP_20260924-110824.fit",
+                                "date": "2026-09-24 11:08:26",
+                                "thn": "Stacked_1003_M1_10.0s_LP_20260924-110824_thn.jpg",
+                                "type": 2,
+                            }
+                        ],
+                    },
+                    "Exposure": {"state": "complete", "lapse_ms": 11277, "exp_ms": 10000.0, "port": 4700},
+                    "stage": "Exposure",
+                },
+                "stage": "Stack",
+            }
+        },
+        "code": 0,
+        "id": 25728,
+    },
+}
+
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
+
+
+def test_the_parked_view_names_its_stacked_thumbnail():
+    assert live_preview.extract_named_stacks(PARKED_M1) == (f"MyWorks/M1/{STACK_THUMB}",)
+
+
+def test_jpg_name_alone_names_the_thumbnail_beside_it():
+    view = copy.deepcopy(PARKED_M1)
+    del view["view_state"]["result"]["View"]["Stack"]["output_file"]
+
+    assert live_preview.extract_named_stacks(view) == (f"MyWorks/M1/{STACK_THUMB}",)
+
+
+def test_a_view_mid_stack_names_nothing():
+    """The July working fixture has no output_file or jpg_name while
+    stacking, so the scan is the normal path during a session."""
+    working = json.loads((FIXTURES / "get_view_state.json").read_text(encoding="utf-8"))
+
+    assert live_preview.extract_named_stacks(working) == ()
+
+
+@pytest.mark.parametrize(
+    "stack",
+    [
+        None,
+        "Stack",
+        {"output_file": None, "jpg_name": None},
+        {"output_file": {"path": 5, "files": [{"thn": STACK_THUMB}]}},
+        {"output_file": {"path": "MyWorks/M1", "files": "nope"}},
+        {"output_file": {"path": "MyWorks/M1", "files": [None, {"thn": 7}, {"name": "x.fit"}]}},
+        {"jpg_name": "MyWorks/M1/Stacked_1003_M1_10.0s_LP_20260924-110824.fit"},
+    ],
+)
+def test_odd_stack_fields_name_nothing_and_never_raise(stack):
+    view = {"ok": True, "view_state": {"result": {"View": {"target_name": "M1", "Stack": stack}}}}
+
+    assert live_preview.extract_named_stacks(view) == ()
+
+
+@pytest.mark.parametrize("payload", [None, {}, {"ok": False}, {"ok": True, "view_state": None}])
+def test_a_payload_without_a_view_names_nothing(payload):
+    assert live_preview.extract_named_stacks(payload) == ()
+
+
+@pytest.mark.parametrize(
+    ("named", "expected"),
+    [
+        (f"MyWorks/M1/{STACK_THUMB}", f"M1/{STACK_THUMB}"),
+        (f"myworks/M1/{STACK_THUMB}", f"M1/{STACK_THUMB}"),
+        (f"M1/{STACK_THUMB}", f"M1/{STACK_THUMB}"),
+        (f"MyWorks\\M1\\{STACK_THUMB}", f"M1/{STACK_THUMB}"),
+        # Another target's stack is not this target's.
+        ("MyWorks/M31/Stacked_80_M31_10.0s_LP_20260924-110824_thn.jpg", None),
+        # Only a stacked thumbnail: never the full-res sibling or the FITS.
+        ("MyWorks/M1/Stacked_1003_M1_10.0s_LP_20260924-110824.jpg", None),
+        ("MyWorks/M1/Stacked_1003_M1_10.0s_LP_20260924-110824.fit", None),
+        # Never a sub, and never outside `<root>/<target folder>/`.
+        ("MyWorks/M1_sub/Light_M1_10.0s_LP_20260924-123310_thn.jpg", None),
+        (f"MyWorks/../M1/{STACK_THUMB}", None),
+        (f"../{STACK_THUMB}", None),
+        (f"C:/{STACK_THUMB}", None),
+        (f"Other/MyWorks/M1/{STACK_THUMB}", None),
+        (STACK_THUMB, None),
+    ],
+)
+def test_a_named_stack_resolves_only_to_the_targets_own_folder(named, expected):
+    root = Path("share") / "MyWorks"
+
+    resolved = live_preview._resolve_named_stack(root, "M1", named)
+
+    assert resolved == (None if expected is None else root / expected)
+
+
+def test_a_fresh_stack_named_by_the_view_is_served_without_listing_anything(
+    long_night, listings, stats
+):
+    _age(long_night, f"M1/{STACK_THUMB}", 10)
+    stats.clear()
+
+    frame = live_preview.discover_frame(
+        long_night, "M1", named_stacks=live_preview.extract_named_stacks(PARKED_M1)
+    )
+
+    assert frame is not None
+    assert (frame.source, frame.target, frame.path) == ("stacked", "M1", long_night / "M1" / STACK_THUMB)
+    assert listings == []
+    assert len(stats) == 1  # the one named file
+
+
+def test_an_older_named_stack_is_still_compared_with_the_subs(long_night, listings):
+    """The View's stack is the newest stacked frame this target has, so its
+    folder is not listed; the sub folder still is, since a sub can be newer."""
+    _age(long_night, f"M1/{STACK_THUMB}", 3 * 3600)
+    _age(long_night, f"M1_sub/{NEWEST_SUB}", 5)
+
+    frame = live_preview.discover_frame(
+        long_night, "M1", named_stacks=live_preview.extract_named_stacks(PARKED_M1)
+    )
+
+    assert frame is not None
+    assert (frame.source, frame.path.name) == ("sub", NEWEST_SUB)
+    assert [folder for folder, _ in listings] == ["MyWorks", "M1_sub"]
+
+
+def test_a_named_stack_missing_from_the_share_falls_back_to_the_scan(long_night, listings):
+    _age(long_night, f"M1/{STACK_THUMB}", 10)
+
+    frame = live_preview.discover_frame(
+        long_night, "M1", named_stacks=("MyWorks/M1/Stacked_9_M1_10.0s_LP_20260924-112310_thn.jpg",)
+    )
+
+    assert frame is not None
+    assert frame.path.name == STACK_THUMB
+    assert [folder for folder, _ in listings] == ["MyWorks", "M1"]

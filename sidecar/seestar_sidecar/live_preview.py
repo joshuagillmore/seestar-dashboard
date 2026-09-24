@@ -49,6 +49,12 @@ scan of SEESTAR_LIVE_SHARE_DIR found. That scan can only widen (a new target
 directory appears on the real share) never narrow to something a client
 requested, so there is no equivalent of `is_plausible_target_id()` needed.
 
+The one other source of a path is the scope itself: the View can name its
+session's stacked thumbnail (extract_named_stacks()). That name is used only
+if it resolves to a `Stacked_..._thn.jpg` directly inside the current
+target's own folder under the share root (_resolve_named_stack()); anything
+else is ignored and the scan runs instead.
+
 ## Never touches the network/share while idle
 
 discover_frame() and everything below it assume the caller has ALREADY
@@ -64,6 +70,7 @@ import asyncio
 import logging
 import os
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -198,6 +205,42 @@ def extract_target_name(view_state_payload: dict) -> str | None:
     except (KeyError, TypeError):
         return None
     return normalize_target_id(name) if isinstance(name, str) and name.strip() else None
+
+
+def extract_named_stacks(view_state_payload: dict) -> tuple[str, ...]:
+    """The stacked thumbnails the View itself names, exactly as the scope
+    wrote them: '/'-separated and relative to the share's parent, so they
+    start with the share root's own folder name (e.g.
+    `MyWorks/M1/Stacked_1003_M1_10.0s_LP_20260924-110824_thn.jpg`).
+
+    Hardware-verified on 2026-09-24, on a scope parked after a 1003-sub M1
+    night: `View.Stack.output_file` is `{path, files: [{name, thn, ...}]}`,
+    and `View.Stack.jpg_name` names the full-resolution stacked JPEG, whose
+    `_thn` sibling is the thumbnail. The July working fixture carries
+    neither while stacking, so `()` is the normal answer mid-session and
+    discover_frame() then scans.
+
+    discover_frame() resolves these with _resolve_named_stack() and stats the
+    one file instead of scanning. Never raises: any unexpected shape names
+    nothing.
+    """
+    try:
+        stack = view_state_payload["view_state"]["result"]["View"]["Stack"]
+    except (KeyError, TypeError):
+        return ()
+    if not isinstance(stack, dict):
+        return ()
+    named: list[str] = []
+    output = stack.get("output_file")
+    if isinstance(output, dict) and isinstance(output.get("path"), str):
+        files = output.get("files")
+        for entry in files if isinstance(files, list) else ():
+            if isinstance(entry, dict) and isinstance(entry.get("thn"), str):
+                named.append(f"{output['path'].rstrip('/')}/{entry['thn']}")
+    jpg_name = stack.get("jpg_name")
+    if isinstance(jpg_name, str) and jpg_name.endswith(".jpg") and not jpg_name.endswith("_thn.jpg"):
+        named.append(jpg_name[: -len(".jpg")] + "_thn.jpg")
+    return tuple(dict.fromkeys(named))
 
 
 def is_frame_stale(frame: "LiveFrame", now: datetime | None = None) -> bool:
@@ -341,7 +384,61 @@ def _newest_frame(
     return newest
 
 
-def discover_frame(root: Path, target: str | None = None) -> LiveFrame | None:
+def _resolve_named_stack(root: Path, target: str, named: str) -> Path | None:
+    """Where a View-named stacked thumbnail (see extract_named_stacks()) sits
+    under `root`, or `None` unless it is a stacked thumbnail directly inside
+    `target`'s own stacked folder.
+
+    The scope names files relative to the share's parent, so the first
+    component is the share root's own folder name (`MyWorks/M1/...` for a
+    root that IS `MyWorks`) and is dropped when it matches. What remains
+    must be exactly `<folder>/<file>`: a folder that normalizes to `target`
+    and is not a sub folder, and a `Stacked_..._thn.jpg` name. Anything else,
+    `..` and drive letters included, names nothing, and the caller scans.
+    """
+    parts = [part for part in re.split(r"[\\/]+", named) if part]
+    if parts and parts[0].casefold() == root.name.casefold():
+        parts = parts[1:]
+    if len(parts) != 2:
+        return None
+    folder, name = parts
+    if folder in (".", "..") or ":" in folder or _SUB_DIR_SUFFIX.search(folder):
+        return None
+    if normalize_target_id(folder) != target or not _STACKED_THUMBNAIL.match(name):
+        return None
+    return root / folder / name
+
+
+def _named_stack_frame(root: Path, target: str, named_stacks) -> LiveFrame | None:
+    """The first View-named stacked thumbnail that exists, as a LiveFrame:
+    one stat, no listing. `None` when the View names none, or none of them
+    is on the share (then the caller scans).
+
+    A missing file is not a fault here. It can also be how an unreachable
+    share answers a stat (Windows reports a missing network path as
+    FileNotFoundError), and then the scan's own root listing raises. Any
+    other OSError propagates.
+    """
+    for named in named_stacks:
+        path = _resolve_named_stack(root, target, named)
+        if path is None:
+            continue
+        try:
+            mtime = path.stat().st_mtime
+        except FileNotFoundError:
+            continue
+        return LiveFrame(
+            path=path,
+            source="stacked",
+            target=target,
+            captured_at=datetime.fromtimestamp(mtime, tz=timezone.utc),
+        )
+    return None
+
+
+def discover_frame(
+    root: Path, target: str | None = None, named_stacks: Sequence[str] = ()
+) -> LiveFrame | None:
     """The frame the preview should show for `target`: a stacked thumbnail
     written within STACK_FRESH_SECONDS, else whichever of the newest stacked
     thumbnail and the newest sub thumbnail is newer, else `None`. With
@@ -349,9 +446,14 @@ def discover_frame(root: Path, target: str | None = None) -> LiveFrame | None:
     "reachable, nothing there yet" (REASON_NO_FRAME at the route), not a
     failure.
 
-    What it costs over SMB, however long the night: one listing of the
-    root, one pattern-filtered listing of the target's stacked folder, and,
-    unless that found a fresh stack, one of its sub folder. Nothing is
+    `named_stacks` are the stacked thumbnails the View names (see
+    extract_named_stacks()). When one exists for `target`, it is the
+    session's stack and costs one stat: if it is fresh nothing is listed at
+    all, and otherwise the stacked folder is not listed, only the sub folder.
+
+    What it costs over SMB otherwise, however long the night: one listing of
+    the root, one pattern-filtered listing of the target's stacked folder,
+    and, unless that found a fresh stack, one of its sub folder. Nothing is
     stat-ed per entry (see _target_folders() and _newest_frame()).
 
     Raises OSError (a real filesystem/SMB fault, e.g. a dropped share, or a
@@ -362,10 +464,15 @@ def discover_frame(root: Path, target: str | None = None) -> LiveFrame | None:
     knows whether SEESTAR_LIVE_SHARE_DIR was set at all, and doesn't call
     this function when it wasn't.
     """
-    stacked_folders, sub_folders = _target_folders(root, target)
-    stacked = _newest_frame(stacked_folders, "Stacked_*_thn.jpg", _STACKED_THUMBNAIL, "stacked")
+    stacked = _named_stack_frame(root, target, named_stacks) if target is not None else None
     if stacked is not None and _is_newer_than(stacked, STACK_FRESH_SECONDS):
         return stacked
+
+    stacked_folders, sub_folders = _target_folders(root, target)
+    if stacked is None:
+        stacked = _newest_frame(stacked_folders, "Stacked_*_thn.jpg", _STACKED_THUMBNAIL, "stacked")
+        if stacked is not None and _is_newer_than(stacked, STACK_FRESH_SECONDS):
+            return stacked
 
     # A stale stacked frame must not beat a fresh sub. Proven on hardware
     # 2026-07-31: mid-session on NGC 7380 at 37 stacked frames, the target's
@@ -390,9 +497,10 @@ async def discover_frame_within_timeout(
     root: Path,
     timeout_s: float = SHARE_SCAN_TIMEOUT_SECONDS,
     target: str | None = None,
+    named_stacks: Sequence[str] = (),
 ) -> LiveFrame | None:
     """Async wrapper for callers on the event loop (routes.py): discover_frame()
-    is a blocking Path.iterdir()/glob()/stat() walk, and over a live SMB share
+    is a blocking walk of listings and stats, and over a live SMB share
     that must neither block the whole server while it runs nor be allowed to
     hang past SHARE_SCAN_TIMEOUT_SECONDS if the share has gone quiet mid-scan
     (a dropped session, the scope rebooting). `share_io.run_share_io` keeps the
@@ -413,7 +521,9 @@ async def discover_frame_within_timeout(
     needs "could not tell", not which of the two happened.
     """
     try:
-        return await asyncio.wait_for(run_share_io(discover_frame, root, target), timeout=timeout_s)
+        return await asyncio.wait_for(
+            run_share_io(discover_frame, root, target, tuple(named_stacks)), timeout=timeout_s
+        )
     except asyncio.TimeoutError as exc:
         raise ShareUnreachableError(f"scan of {root} exceeded {timeout_s}s") from exc
     except OSError as exc:

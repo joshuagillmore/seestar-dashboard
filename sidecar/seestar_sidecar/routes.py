@@ -53,6 +53,7 @@ from seestar_sidecar.live_preview import (
     LiveFrame,
     ShareUnreachableError,
     discover_frame_within_timeout,
+    extract_named_stacks,
     extract_stack_count,
     extract_target_name,
     is_frame_stale,
@@ -732,7 +733,9 @@ async def live_preview(request: Request) -> JSONResponse:
         request.app.state.live_preview_cache = None
         cache = None
     try:
-        frame = await discover_frame_within_timeout(share_dir, target=active_target)
+        frame = await discover_frame_within_timeout(
+            share_dir, target=active_target, named_stacks=extract_named_stacks(view)
+        )
     except ShareUnreachableError:
         if cache is not None:
             return JSONResponse(_live_preview_frame(cache, stack_count, stale=True))
