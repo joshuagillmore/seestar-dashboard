@@ -290,12 +290,17 @@ export const fetchFocuserPosition = (opts?: RequestOptions): Promise<FocuserPosi
  * route has no default. `useLiveSession` sources it from `get_view_state`'s
  * own `View.target_name` first and `/api/live_preview`'s `target` second —
  * see its `currentTarget` doc comment for why that order. */
+/** `date`, when given, is an instant inside the night to describe: with none,
+ * seestar-mcp (contract 1.2.0) answers for the night in progress only inside
+ * astronomical dark, and for the NEXT night after dawn. */
 export const fetchTargetObservability = (
   target: string,
+  date?: string | null,
   opts?: RequestOptions,
 ): Promise<TargetObservability> =>
   get(
-    `/api/get_target_observability?target=${encodeURIComponent(target)}`,
+    `/api/get_target_observability?target=${encodeURIComponent(target)}` +
+      (date ? `&date=${encodeURIComponent(date)}` : ''),
     TargetObservabilitySchema,
     opts,
   )

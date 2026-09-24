@@ -848,8 +848,12 @@ export function useLiveSession(): LiveSessionState {
       const namedTarget = view.target_name ?? preview?.target
       if (namedTarget) currentTargetRef.current = namedTarget
       const target = currentTargetRef.current
+      // Pinned to the session's own night by its start (the same instant the
+      // guardrails are given): undated, the server describes the NEXT night
+      // once dawn passes, and a session imaging into morning twilight would
+      // see its gauge flip to tomorrow.
       const observability = target
-        ? await fetchTargetObservability(target, opts).catch(() => null)
+        ? await fetchTargetObservability(target, sessionStart, opts).catch(() => null)
         : null
       if (cancelled) return
 

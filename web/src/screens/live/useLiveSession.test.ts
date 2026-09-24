@@ -640,6 +640,38 @@ describe('an idle answer ends the session only once confirmed', () => {
     expect(Date.parse(starts[1])).toBeGreaterThan(Date.parse('2026-08-02T21:00:00Z') + POLL_INTERVAL_MS)
   })
 
+  it("pins the sweet-band gauge to the session's own night, not whichever night 'now' falls in", async () => {
+    // With no date, seestar-mcp (contract 1.2.0) answers for the night in
+    // progress only inside astronomical dark, and the NEXT night after dawn —
+    // so a session imaging into morning twilight would see its gauge flip to
+    // tomorrow. An instant inside the session's night pins it. It is the same
+    // start the guardrails are given.
+    const REAL_START = '2026-09-26T20:05:00.000000+00:00'
+    const base = runStateActive() as { run: Record<string, unknown> }
+    vi.setSystemTime(new Date('2026-09-27T05:30:00Z'))
+    const api = stubRoutes({
+      ...activeRoutes(),
+      '/api/get_run_state': ok({ ...base, state: 'active', run: { ...base.run, session_start_utc: REAL_START } }),
+    })
+    renderHook(() => useLiveSession())
+    await tick()
+
+    const dateOf = (url: string) => new URL(url, 'http://x').searchParams.get('date')
+    expect(dateOf(api.urls('get_target_observability')[0])).toBe(REAL_START)
+    expect(sessionStartOf(api.urls('check_night_guardrails')[0])).toBe(REAL_START)
+  })
+
+  it('pins a hand-driven session the same way, to the start the guardrails are given', async () => {
+    vi.setSystemTime(new Date('2026-09-24T03:00:00Z'))
+    const api = stubRoutes({ ...activeRoutes(), '/api/get_run_state': ok(runStateIdle()) })
+    renderHook(() => useLiveSession())
+    await tick()
+
+    const date = new URL(api.urls('get_target_observability')[0], 'http://x').searchParams.get('date')
+    expect(date).not.toBeNull()
+    expect(date).toBe(sessionStartOf(api.urls('check_night_guardrails')[0]))
+  })
+
   it('keeps the session clock through a goto to another target, resetting only what belongs to the target', async () => {
     // A hand-driven multi-target night: no run_state start to recover, so
     // ending the session on every goto restarted the guardrail's elapsed

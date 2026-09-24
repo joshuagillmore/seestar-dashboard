@@ -39,8 +39,21 @@ import { z } from 'zod'
  * GUARANTEE is new. MetricChart still draws both lines as sent and visibly
  * flags an inverted pair (qa.ts's cutoffsInverted), since a report cached
  * before 1.1.1 can carry one.
+ *
+ * 1.2.0 (MINOR) adds `get_view_state.observing` and a `stack` summary beside
+ * `view_state` (observing ⇔ View.state "working" and mode not "none"; a
+ * parked scope keeps its ended View), `mount_parked`/`mount_tracking` on
+ * `get_status`, `dark_window_utc` and `now` on the planning tools, and
+ * changes an omitted `date`: the night in progress only inside astronomical
+ * dark, the next night after dawn. The Live gauge passes the session start
+ * as `date` for that reason.
+ *
+ * 1.3.0 (MINOR) fixes `goto_target`'s epoch — it sent J2000 to a firmware
+ * working in JNow, which was the systematic framing offset — and adds J2000
+ * twins of the solve coordinates. The dashboard frames from Annotate's
+ * `target_px`, so neither changes what it reads.
  */
-export const SEESTAR_MCP_CONTRACT_VERSION = '1.1.1'
+export const SEESTAR_MCP_CONTRACT_VERSION = '1.3.0'
 
 export const LocationSchema = z.object({
   matched: z.boolean().nullable(),

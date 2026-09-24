@@ -247,6 +247,15 @@ describe('api client', () => {
       expect(spy.mock.calls[0][0]).toBe('/api/get_target_observability?target=M27')
     })
 
+    it('pins get_target_observability to a night when given an instant inside it', async () => {
+      const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => recordedObservability() })
+      vi.stubGlobal('fetch', spy)
+      await fetchTargetObservability('M27', '2026-09-26T20:05:00.000Z')
+      expect(spy.mock.calls[0][0]).toBe(
+        '/api/get_target_observability?target=M27&date=2026-09-26T20%3A05%3A00.000Z',
+      )
+    })
+
     it('parses get_target_observability', async () => {
       mockFetch(recordedObservability())
       expect((await fetchTargetObservability('M27')).observability?.max_alt_deg).toBe(61.4)
