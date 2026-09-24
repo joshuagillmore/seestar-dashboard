@@ -72,6 +72,15 @@ session, so this showed a parked scope as M1 stacking, with a false
 `isObserving`). It was checked for site data when captured and has none:
 `target_ra_dec` is M1's catalogue position, not the observer's.
 
+**One edit to the recording:** the local timestamps in the stacked file's names
+and `date` are replaced with arbitrary ones. A stack's end time plus its
+`lapse_ms` duration gives the session's window, and a session scheduled to fill
+a target's altitude band can then be solved for the site: an audit placed it
+within about 70 km that way. Either value alone is harmless, so the durations,
+counts and everything else stay verbatim. The sidecar tests built around this
+name use equally arbitrary times, chosen only to keep the same order, and
+nothing in them relates back to the real clock.
+
 `synthetic/` holds hand-built payloads for states that cannot be recorded on
 demand — a stale frame, an unreachable share, an absent stack — and is named
 `synthetic/` precisely so nobody mistakes them for recordings.

@@ -15,6 +15,11 @@ __pycache__/
 .env
 .env.local
 *.env.local
+# Every other .env variant too (.env.production, sidecar/.env.dev, ...), except
+# the template and a sops-encrypted file, which are safe to commit.
+.env.*
+!.env.example
+!.env.enc
 secrets/
 *.pem
 *.key
