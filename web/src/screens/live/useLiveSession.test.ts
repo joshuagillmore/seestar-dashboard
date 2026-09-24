@@ -717,7 +717,7 @@ describe('a View is observing only while it is working (hardware, 2026-09-24)', 
     const state = result.current
     if (state.phase !== 'idle') throw new Error(`expected idle, got ${state.phase}`)
     expect(state.viewError).toBeNull()
-    expect(state.lastSession).toEqual({ target: 'M1', stacked: 1003, dropped: 0 })
+    expect(state.lastSession).toEqual({ target: 'M1', stacked: 1003, dropped: 0, ended: true })
     for (const route of ['check_night_guardrails', 'qa_tier1', 'get_focuser_position', 'live_preview', 'last_stack', 'get_status']) {
       expect(api.urls(route)).toEqual([])
     }
@@ -746,7 +746,7 @@ describe('a View is observing only while it is working (hardware, 2026-09-24)', 
 
     const state = result.current
     if (state.phase !== 'idle') throw new Error(`expected idle, got ${state.phase}`)
-    expect(state.lastSession).toEqual({ target: 'M1', stacked: 1004, dropped: 2 })
+    expect(state.lastSession).toEqual({ target: 'M1', stacked: 1004, dropped: 2, ended: true })
   })
 
   it('has no last session to show for a freshly booted scope', async () => {

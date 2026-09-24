@@ -115,6 +115,10 @@ export interface LastSession {
   target: string
   stacked: number | null
   dropped: number | null
+  /** The View's state is not `working`, so the session really finished
+   * (`cancel`, `fail`, …). False for a `working` View that fails the
+   * observing rule only on `mode: "none"`: not observing, but not ended. */
+  ended: boolean
 }
 
 /**
@@ -133,6 +137,7 @@ export function lastSessionOf(viewState: ViewState): LastSession | null {
     target,
     stacked: summary?.stacked ?? view?.Stack?.stacked_frame ?? null,
     dropped: summary?.dropped ?? view?.Stack?.dropped_frame ?? null,
+    ended: (view?.state ?? summary?.state) !== 'working',
   }
 }
 

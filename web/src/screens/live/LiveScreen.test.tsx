@@ -967,6 +967,21 @@ describe('a parked scope, which keeps its ended View (hardware, 2026-09-24)', ()
     expect(card).not.toHaveTextContent(/no view session/)
   })
 
+  it('does not say "ended" for a View that is still working, only not observing', async () => {
+    // `state: "working"` with `mode: "none"` fails the observing rule, but
+    // nothing about it says the session finished.
+    const parked = recordedParkedViewState() as { view_state: { result: { View: Record<string, unknown> } } }
+    parked.view_state.result.View.state = 'working'
+    stubApi({ '/api/get_view_state': parked })
+    render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('live-idle-last-session')).toBeInTheDocument())
+    const line = screen.getByTestId('live-idle-last-session')
+    expect(line).not.toHaveTextContent(/ended/i)
+    expect(line).toHaveTextContent('M1 · 1003 stacked · 0 dropped')
+    expect(line).toHaveTextContent(/not observing/i)
+  })
+
   it('shows no last session for a freshly booted scope, which has none to report', async () => {
     stubApi({ '/api/get_view_state': connectedButIdleViewState() })
     render(<LiveScreen view="live" onNavigate={vi.fn()} site={site} health={notReplaying} />)

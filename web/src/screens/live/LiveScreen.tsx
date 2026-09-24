@@ -61,12 +61,15 @@ function sidebarStatus(state: LiveSessionState): { tone: DotTone | null; meta: s
 }
 
 /** "Last session ended: M1 · 1003 stacked · 0 dropped". A count the scope
- * did not report is left out rather than shown as zero. */
-function lastSessionLine({ target, stacked, dropped }: LastSession): string {
+ * did not report is left out rather than shown as zero, and "ended" is said
+ * only when the View's own state says so. */
+function lastSessionLine({ target, stacked, dropped, ended }: LastSession): string {
   const parts = [target]
   if (stacked !== null) parts.push(`${stacked} stacked`)
   if (dropped !== null) parts.push(`${dropped} dropped`)
-  return `Last session ended: ${parts.join(' · ')}`
+  return ended
+    ? `Last session ended: ${parts.join(' · ')}`
+    : `Scope reports ${parts.join(' · ')}, but is not observing`
 }
 
 /**

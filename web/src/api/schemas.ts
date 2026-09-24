@@ -414,6 +414,7 @@ export const ViewStateSchema = z.object({
   stack: z
     .object({
       target_name: z.string().nullish(),
+      state: z.string().nullish(),
       stacked: z.number().nullish(),
       dropped: z.number().nullish(),
     })
