@@ -568,8 +568,9 @@ export const LivePreviewSchema = z.object({
  *   convention as `LivePreviewSchema.source` above. It always carries a
  *   `reason`.
  * - `reason` is a short, stable, machine-readable wire token —
- *   `no_stack`/`idle`/`bridge_down`/`not_configured`/`share_unreachable`,
- *   the same tokens `live_preview.py` already defines for the last four,
+ *   `no_stack`/`idle`/`bridge_down`/`not_configured`/`share_unreachable`/
+ *   `scan_slow`, the same tokens `live_preview.py` already defines for the
+ *   last five (`scan_slow`: the share answered but the search timed out),
  *   reused rather than duplicated — never prose. The client must translate
  *   it, never render it raw; see `lastStackReasonLabel` in lastStack.ts.
  * - `url` is always the literal `"/api/last_stack/image"` on BOTH branches
