@@ -367,6 +367,15 @@ export const StackStateSchema = z.object({
  * render as "unknown" rather than as `false` — see TargetHeader's own LP
  * chip, which renders three distinct states for exactly this reason. */
 const ViewSchema = z.object({
+  /** `"working"` while a session runs. A parked scope keeps its ended View
+   * with `"cancel"` (hardware, 2026-09-24); `"complete"` is documented and
+   * `"fail"` assumed. With `mode`, this decides whether the scope is
+   * observing: see useLiveSession's `isObserving`. Strings, not an enum: the
+   * controller has no canonical list, and an unknown state must not break the
+   * parse. */
+  state: z.string().nullish(),
+  /** `"star"` in the working recording; `"none"` once the session ended. */
+  mode: z.string().nullish(),
   stage: z.string().nullable().optional(),
   target_name: z.string().nullish(),
   lp_filter: z.boolean().nullish(),
@@ -392,6 +401,23 @@ export const ViewStateSchema = z.object({
       result: z.object({ View: ViewSchema.nullish() }).nullish(),
     })
     .nullable(),
+  /** seestar-mcp's own answer to "is the scope observing", by the same rule
+   * (`View.state == "working"` and `mode != "none"`). Top level, beside
+   * `view_state`. Added by a seestar-mcp follow-up, so absent from older
+   * servers; when present it is preferred over this client's reading of the
+   * View. */
+  observing: z.boolean().nullish(),
+  /** seestar-mcp's summary of the session the View describes, which persists
+   * after it ends. `null` only for a fresh `result: {}`. Only what the idle
+   * card shows is declared; its `solve_ra_deg`/`solve_dec_deg` are not the
+   * field centre on this firmware, so framing stays on Annotate. */
+  stack: z
+    .object({
+      target_name: z.string().nullish(),
+      stacked: z.number().nullish(),
+      dropped: z.number().nullish(),
+    })
+    .nullish(),
 })
 
 export const StatusSchema = z.object({
