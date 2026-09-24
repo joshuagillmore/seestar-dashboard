@@ -324,3 +324,78 @@ def test_a_named_stack_missing_from_the_share_falls_back_to_the_scan(long_night,
     assert frame is not None
     assert frame.path.name == STACK_THUMB
     assert [folder for folder, _ in listings] == ["MyWorks", "M1"]
+
+
+# --- slow is not unreachable -------------------------------------------------
+
+#: What a listing costs per entry it returns, on the simulated share: 2,000
+#: sub thumbnails take 1 s, the 42-entry root 21 ms.
+PER_ENTRY_S = 0.0005
+#: Well above the root listing, well below the sub folder's.
+TIMEOUT_S = 0.3
+
+
+@pytest.fixture
+def slow_share(monkeypatch):
+    """A share whose listings cost time in proportion to what they return,
+    the way the real one's did before the server filtered them."""
+    real = live_preview.list_matching
+
+    def slow(directory, pattern="*"):
+        entries = real(directory, pattern)
+        time.sleep(PER_ENTRY_S * len(entries))
+        return entries
+
+    monkeypatch.setattr(live_preview, "list_matching", slow)
+
+
+async def test_a_scan_that_outlasts_its_budget_after_the_root_answered_is_slow_not_unreachable(
+    long_night, slow_share
+):
+    _age(long_night, f"M1/{STACK_THUMB}", 6 * 3600)
+
+    with pytest.raises(live_preview.ShareScanSlowError) as caught:
+        await live_preview.discover_frame_within_timeout(long_night, timeout_s=TIMEOUT_S, target="M1")
+
+    assert not isinstance(caught.value, live_preview.ShareUnreachableError)
+
+
+async def test_the_named_stack_answering_counts_as_the_share_answering(long_night, slow_share):
+    _age(long_night, f"M1/{STACK_THUMB}", 6 * 3600)
+
+    with pytest.raises(live_preview.ShareScanSlowError):
+        await live_preview.discover_frame_within_timeout(
+            long_night,
+            timeout_s=TIMEOUT_S,
+            target="M1",
+            named_stacks=live_preview.extract_named_stacks(PARKED_M1),
+        )
+
+
+async def test_a_root_that_does_not_answer_in_time_is_unreachable(long_night, monkeypatch):
+    real = live_preview.list_matching
+
+    def root_hangs(directory, pattern="*"):
+        if directory == long_night:
+            time.sleep(TIMEOUT_S + 0.3)
+        return real(directory, pattern)
+
+    monkeypatch.setattr(live_preview, "list_matching", root_hangs)
+
+    with pytest.raises(live_preview.ShareUnreachableError):
+        await live_preview.discover_frame_within_timeout(long_night, timeout_s=TIMEOUT_S, target="M1")
+
+
+async def test_on_the_same_slow_share_a_fresh_stack_answers_in_time(long_night, slow_share):
+    """Skipping the sub folder is what keeps a fresh stack inside the budget."""
+    _age(long_night, f"M1/{STACK_THUMB}", 10)
+
+    frame = await live_preview.discover_frame_within_timeout(long_night, timeout_s=TIMEOUT_S, target="M1")
+
+    assert frame is not None
+    assert frame.source == "stacked"
+
+
+async def test_a_root_that_cannot_be_listed_is_still_unreachable(tmp_path):
+    with pytest.raises(live_preview.ShareUnreachableError):
+        await live_preview.discover_frame_within_timeout(tmp_path / "gone", target="M1")

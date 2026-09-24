@@ -48,10 +48,12 @@ from seestar_sidecar.live_preview import (
     REASON_IDLE,
     REASON_NO_FRAME,
     REASON_NOT_CONFIGURED,
+    REASON_SCAN_SLOW,
     REASON_SHARE_UNREACHABLE,
     SHARE_SCAN_TIMEOUT_SECONDS,
     LiveFrame,
-    ShareUnreachableError,
+    ShareScanError,
+    ShareScanSlowError,
     discover_frame_within_timeout,
     extract_named_stacks,
     extract_stack_count,
@@ -736,10 +738,13 @@ async def live_preview(request: Request) -> JSONResponse:
         frame = await discover_frame_within_timeout(
             share_dir, target=active_target, named_stacks=extract_named_stacks(view)
         )
-    except ShareUnreachableError:
+    except ShareScanError as exc:
         if cache is not None:
             return JSONResponse(_live_preview_frame(cache, stack_count, stale=True))
-        return JSONResponse(_live_preview_absent(REASON_SHARE_UNREACHABLE))
+        # Slow is not unreachable: the share answered and only the search
+        # ran long. See live_preview.REASON_SCAN_SLOW.
+        reason = REASON_SCAN_SLOW if isinstance(exc, ShareScanSlowError) else REASON_SHARE_UNREACHABLE
+        return JSONResponse(_live_preview_absent(reason))
 
     if frame is None:
         if cache is not None:
@@ -841,8 +846,9 @@ async def last_stack(request: Request) -> JSONResponse:
     scope is observing AND names a target, matching live_preview's "a
     timeout means not observing; there is nothing to fetch" rule. `reason`
     values: REASON_BRIDGE_DOWN / REASON_IDLE / REASON_NOT_CONFIGURED /
-    REASON_SHARE_UNREACHABLE are the exact tokens live_preview.py defines for
-    the same underlying conditions, reused rather than duplicated;
+    REASON_SHARE_UNREACHABLE / REASON_SCAN_SLOW are the exact tokens
+    live_preview.py defines for the same underlying conditions, reused
+    rather than duplicated;
     REASON_NO_STACK is new to this route (see last_stack.py).
 
     `app.state.last_stack_cache` is always overwritten to match THIS call's
@@ -880,9 +886,10 @@ async def last_stack(request: Request) -> JSONResponse:
 
     try:
         stack = await discover_last_stack_within_timeout(share_dir, active_target)
-    except ShareUnreachableError:
+    except ShareScanError as exc:
         request.app.state.last_stack_cache = None
-        return JSONResponse(_last_stack_absent(REASON_SHARE_UNREACHABLE))
+        reason = REASON_SCAN_SLOW if isinstance(exc, ShareScanSlowError) else REASON_SHARE_UNREACHABLE
+        return JSONResponse(_last_stack_absent(reason))
 
     if stack is None:
         request.app.state.last_stack_cache = None

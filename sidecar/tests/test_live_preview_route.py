@@ -14,6 +14,7 @@ per test case) the same way test_replay.py's
 test_transport_failure_uses_the_same_error_shape already does, and every
 "share" is a synthetic tmp_path tree.
 """
+import functools
 import os
 import time
 
@@ -21,7 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from seestar_sidecar import live_preview, main, routes
-from seestar_sidecar.live_preview import ShareUnreachableError
+from seestar_sidecar.live_preview import ShareScanSlowError, ShareUnreachableError
 from seestar_sidecar.main import create_app
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 
@@ -479,3 +480,64 @@ def test_a_stack_the_view_names_is_served_without_listing_the_share(tmp_path, mo
 
     assert (body["source"], body["target"], body["stale"]) == ("stacked", "M1", False)
     assert client.get("/api/live_preview/image").content == b"jpeg-bytes-" + thumb.encode()
+
+
+# --- a slow scan is not an unreachable share --------------------------------
+#
+# Found on hardware after a 1003-sub night: the share listed its root in
+# 0.08 s, but the scan ran past its budget, and the preview said
+# `share_unreachable` while /api/last_stack was serving an image off the
+# same share.
+
+
+async def _scan_slow(root, timeout_s=None, target=None, **kwargs):
+    raise ShareScanSlowError("the share answered, then the scan ran long")
+
+
+def test_a_slow_scan_reports_scan_slow_not_share_unreachable(tmp_path, monkeypatch):
+    client = _client(tmp_path, share_dir=tmp_path / "share", monkeypatch=monkeypatch)
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", _scan_slow)
+
+    body = client.get("/api/live_preview").json()
+
+    assert (body["source"], body["reason"], body["stale"]) == (None, "scan_slow", False)
+
+
+def test_a_slow_scan_after_a_success_degrades_to_the_cached_frame_marked_stale(
+    tmp_path, monkeypatch
+):
+    share = tmp_path / "share"
+    _touch(share / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg", mtime=_ago(60))
+    client = _client(tmp_path, share_dir=share, monkeypatch=monkeypatch)
+    first = client.get("/api/live_preview").json()
+    monkeypatch.setattr(routes, "discover_frame_within_timeout", _scan_slow)
+
+    second = client.get("/api/live_preview").json()
+
+    assert (second["source"], second["stale"], second["reason"]) == ("sub", True, None)
+    assert second["captured_at"] == first["captured_at"]
+
+
+def test_a_share_that_answers_but_lists_slowly_reports_scan_slow_end_to_end(
+    tmp_path, monkeypatch
+):
+    share = tmp_path / "share"
+    _touch(share / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg", mtime=_ago(5))
+    real = live_preview.list_matching
+
+    def sub_folder_is_slow(directory, pattern="*"):
+        if directory.name == "M27-sub":
+            time.sleep(0.5)
+        return real(directory, pattern)
+
+    monkeypatch.setattr(live_preview, "list_matching", sub_folder_is_slow)
+    client = _client(tmp_path, share_dir=share, monkeypatch=monkeypatch)
+    monkeypatch.setattr(
+        routes,
+        "discover_frame_within_timeout",
+        functools.partial(live_preview.discover_frame_within_timeout, timeout_s=0.2),
+    )
+
+    body = client.get("/api/live_preview").json()
+
+    assert body["reason"] == "scan_slow"

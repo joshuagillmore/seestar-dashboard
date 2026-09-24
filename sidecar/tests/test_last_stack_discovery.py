@@ -222,7 +222,7 @@ async def test_discover_last_stack_within_timeout_raises_share_unreachable_on_re
     proves asyncio.wait_for's ceiling actually fires."""
     share_root.mkdir()
 
-    def hangs_forever(root, target):
+    def hangs_forever(root, target, answered=None):
         import time
 
         time.sleep(0.5)
@@ -252,3 +252,87 @@ async def test_discover_last_stack_within_timeout_returns_none_when_nothing_matc
     share_root.mkdir()
     frame = await last_stack.discover_last_stack_within_timeout(share_root, "NGC7380")
     assert frame is None
+
+
+# --- the same cheap listing, and the same slow-is-not-unreachable rule as the
+# --- live preview (see test_live_preview_scale.py)
+
+
+def _many_targets(share_root):
+    for i in range(20):
+        _touch(share_root / f"NGC{7000 + i}" / f"Stacked_50_NGC{7000 + i}_10.0s_LP_20260701-010000.jpg")
+        _touch(share_root / f"NGC{7000 + i}_sub" / f"Light_NGC{7000 + i}_10.0s_LP_20260701-010000.fit")
+    return _touch(share_root / "M1" / "Stacked_1003_M1_10.0s_LP_20260924-110824.jpg", mtime=1000)
+
+
+def test_the_root_is_listed_once_and_only_the_targets_folder_after_it(share_root, monkeypatch):
+    stack = _many_targets(share_root)
+    listed = []
+    real = last_stack.list_matching
+
+    def spy(directory, pattern="*"):
+        listed.append(directory.name)
+        return real(directory, pattern)
+
+    monkeypatch.setattr(last_stack, "list_matching", spy)
+
+    frame = last_stack.discover_last_stack(share_root, "M1")
+
+    assert frame is not None and frame.path == stack
+    assert listed == ["share", "M1"]
+
+
+def test_no_root_entry_is_stat_ed(share_root, monkeypatch):
+    """The old scan called is_dir() on every root entry: one SMB round trip
+    per object ever imaged. At most the winner is stat-ed."""
+    import os
+
+    _many_targets(share_root)
+    stats = []
+    real = os.stat
+
+    def spy(path, *args, **kwargs):
+        stats.append(os.fspath(path))
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", spy)
+
+    last_stack.discover_last_stack(share_root, "M1")
+
+    assert len(stats) <= 1, stats
+
+
+async def test_a_scan_that_runs_long_after_the_root_answered_is_slow_not_unreachable(
+    share_root, monkeypatch
+):
+    import time
+
+    _many_targets(share_root)
+    real = last_stack.list_matching
+
+    def target_folder_is_slow(directory, pattern="*"):
+        if directory.name == "M1":
+            time.sleep(0.5)
+        return real(directory, pattern)
+
+    monkeypatch.setattr(last_stack, "list_matching", target_folder_is_slow)
+
+    with pytest.raises(last_stack.ShareScanSlowError):
+        await last_stack.discover_last_stack_within_timeout(share_root, "M1", timeout_s=0.2)
+
+
+async def test_a_root_that_does_not_answer_in_time_is_unreachable(share_root, monkeypatch):
+    import time
+
+    _many_targets(share_root)
+    real = last_stack.list_matching
+
+    def root_hangs(directory, pattern="*"):
+        if directory == share_root:
+            time.sleep(0.5)
+        return real(directory, pattern)
+
+    monkeypatch.setattr(last_stack, "list_matching", root_hangs)
+
+    with pytest.raises(last_stack.ShareUnreachableError):
+        await last_stack.discover_last_stack_within_timeout(share_root, "M1", timeout_s=0.2)

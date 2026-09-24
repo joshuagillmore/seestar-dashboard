@@ -70,6 +70,7 @@ import asyncio
 import logging
 import os
 import re
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -120,12 +121,21 @@ REASON_BRIDGE_DOWN = "bridge_down"
 #: the other is something to fix.
 REASON_NOT_CONFIGURED = "not_configured"
 #: The share is configured, the scope is (as far as we can tell) observing,
-#: but the directory scan raised or ran past SHARE_SCAN_TIMEOUT_SECONDS — the
-#: hazard this whole feature was built around (see the spec's D2). If a
-#: previously-discovered frame exists this degrades to that frame with
-#: `stale: true` instead (see routes.py); this reason only fires when there
-#: is nothing cached to fall back to yet.
+#: but the share did not answer: listing its root raised, or did not finish
+#: within SHARE_SCAN_TIMEOUT_SECONDS, or a later listing raised (the share
+#: dropping mid-scan). This is the hazard the whole feature was built around
+#: (see the spec's D2). If a previously-discovered frame exists this degrades
+#: to that frame with `stale: true` instead (see routes.py); this reason
+#: only fires when there is nothing cached to fall back to yet.
 REASON_SHARE_UNREACHABLE = "share_unreachable"
+#: The share answered (its root was listed, or the View-named stack was
+#: found) but the rest of the scan did not finish within
+#: SHARE_SCAN_TIMEOUT_SECONDS. Distinct from REASON_SHARE_UNREACHABLE on
+#: purpose: after a 1003-sub night the real share listed its root in 0.08 s
+#: while the scan, then listing the whole sub folder, took 5.6 s, and the
+#: preview told the user the share was unreachable when it was merely
+#: slow to search. Same stale-cache degrade as unreachable.
+REASON_SCAN_SLOW = "scan_slow"
 #: The share was reached fine and nothing raised, but no stacked-thumbnail or
 #: sub-thumbnail file exists yet anywhere on it — e.g. a session that just
 #: started and hasn't written its first sub. Deliberately NOT the same value
@@ -250,12 +260,22 @@ def is_frame_stale(frame: "LiveFrame", now: datetime | None = None) -> bool:
     return (reference - frame.captured_at).total_seconds() > STALE_AFTER_SECONDS
 
 
-class ShareUnreachableError(RuntimeError):
-    """The share is configured but a scan of it raised or ran past
-    SHARE_SCAN_TIMEOUT_SECONDS. Distinct from returning `None` (see
-    discover_frame()'s docstring): this means "could not tell", not "told me
-    there is nothing".
+class ShareScanError(RuntimeError):
+    """A scan of the configured share could not tell what is on it. Distinct
+    from returning `None` (see discover_frame()'s docstring): this means
+    "could not tell", not "told me there is nothing". Always one of the two
+    subclasses below, which the routes report as different reasons.
     """
+
+
+class ShareUnreachableError(ShareScanError):
+    """The share did not answer: its root could not be listed, or not within
+    SHARE_SCAN_TIMEOUT_SECONDS, or a listing raised part-way through."""
+
+
+class ShareScanSlowError(ShareScanError):
+    """The share answered, but the scan did not finish within
+    SHARE_SCAN_TIMEOUT_SECONDS. See REASON_SCAN_SLOW."""
 
 
 @dataclass
@@ -324,6 +344,11 @@ def _newest_by_filename(paths, pattern) -> "Path | None":
 #: of a live session, and share_listing.list_matching() is what keeps that
 #: listing cheap.
 STACK_FRESH_SECONDS = 60.0
+
+
+def _mark(answered: threading.Event | None) -> None:
+    if answered is not None:
+        answered.set()
 
 
 def _is_newer_than(frame: LiveFrame, seconds: float) -> bool:
@@ -437,7 +462,10 @@ def _named_stack_frame(root: Path, target: str, named_stacks) -> LiveFrame | Non
 
 
 def discover_frame(
-    root: Path, target: str | None = None, named_stacks: Sequence[str] = ()
+    root: Path,
+    target: str | None = None,
+    named_stacks: Sequence[str] = (),
+    answered: threading.Event | None = None,
 ) -> LiveFrame | None:
     """The frame the preview should show for `target`: a stacked thumbnail
     written within STACK_FRESH_SECONDS, else whichever of the newest stacked
@@ -456,6 +484,10 @@ def discover_frame(
     and, unless that found a fresh stack, one of its sub folder. Nothing is
     stat-ed per entry (see _target_folders() and _newest_frame()).
 
+    `answered` is set as soon as the share has answered: the root was
+    listed, or the View-named stack was found. The timeout wrapper reads it
+    to tell a slow scan (REASON_SCAN_SLOW) from an unreachable share.
+
     Raises OSError (a real filesystem/SMB fault, e.g. a dropped share, or a
     missing `root`) rather than degrading it itself; the caller (see
     discover_frame_within_timeout() below, and routes.py) decides how that
@@ -465,10 +497,13 @@ def discover_frame(
     this function when it wasn't.
     """
     stacked = _named_stack_frame(root, target, named_stacks) if target is not None else None
-    if stacked is not None and _is_newer_than(stacked, STACK_FRESH_SECONDS):
-        return stacked
+    if stacked is not None:
+        _mark(answered)
+        if _is_newer_than(stacked, STACK_FRESH_SECONDS):
+            return stacked
 
     stacked_folders, sub_folders = _target_folders(root, target)
+    _mark(answered)
     if stacked is None:
         stacked = _newest_frame(stacked_folders, "Stacked_*_thn.jpg", _STACKED_THUMBNAIL, "stacked")
         if stacked is not None and _is_newer_than(stacked, STACK_FRESH_SECONDS):
@@ -515,16 +550,22 @@ async def discover_frame_within_timeout(
     than this function itself hammering a share that just showed signs of
     being starved.
 
-    Raises ShareUnreachableError uniformly for a real OSError (share
-    unreachable, or removed mid-session per the spec's "the scope sleeps
-    after park and drops its SMB share") and for a timeout — the route only
-    needs "could not tell", not which of the two happened.
+    Raises ShareUnreachableError for a real OSError (share unreachable, or
+    removed mid-session per the spec's "the scope sleeps after park and
+    drops its SMB share"), and for a timeout before the share answered at
+    all. A timeout after it answered raises ShareScanSlowError: the share is
+    there, the search is what ran long, and telling the user to check their
+    network would be wrong.
     """
+    answered = threading.Event()
     try:
         return await asyncio.wait_for(
-            run_share_io(discover_frame, root, target, tuple(named_stacks)), timeout=timeout_s
+            run_share_io(discover_frame, root, target, tuple(named_stacks), answered),
+            timeout=timeout_s,
         )
     except asyncio.TimeoutError as exc:
+        if answered.is_set():
+            raise ShareScanSlowError(f"scan of {root} answered but exceeded {timeout_s}s") from exc
         raise ShareUnreachableError(f"scan of {root} exceeded {timeout_s}s") from exc
     except OSError as exc:
         raise ShareUnreachableError(str(exc)) from exc

@@ -21,7 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from seestar_sidecar import main, routes
-from seestar_sidecar.last_stack import ShareUnreachableError
+from seestar_sidecar.last_stack import ShareScanSlowError, ShareUnreachableError
 from seestar_sidecar.main import create_app
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 
@@ -194,6 +194,22 @@ def test_a_single_failed_attempt_does_not_retry(tmp_path, monkeypatch):
     client.get("/api/last_stack")
 
     assert len(calls) == 1
+
+
+def test_a_slow_scan_reports_scan_slow_not_share_unreachable(tmp_path, monkeypatch):
+    """The share answered and only the search ran long, which is not what
+    `share_unreachable` tells the user. Same token as the live preview's."""
+
+    async def slow(root, target, timeout_s=None):
+        raise ShareScanSlowError("the share answered, then the scan ran long")
+
+    client = _client(tmp_path, share_dir=tmp_path / "share", monkeypatch=monkeypatch)
+    monkeypatch.setattr(routes, "discover_last_stack_within_timeout", slow)
+
+    body = client.get("/api/last_stack").json()
+
+    assert (body["target"], body["reason"]) == (None, "scan_slow")
+    assert client.get("/api/last_stack/image").status_code == 404
 
 
 # --- reachable, but nothing for this target yet -----------------------------
