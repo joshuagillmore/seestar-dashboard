@@ -44,6 +44,13 @@
   font-size: 9px;
   letter-spacing: 0.04em;
   white-space: nowrap;
+  /* A chip in the card's own colour: bars are drawn at each bucket's worst
+     value, so they routinely reach the cutoff line, and a bare label over a
+     red bar was unreadable. The cutoff value must stay legible — it is what
+     makes each verdict traceable (CLAUDE.md). */
+  background: var(--bg-card);
+  padding: 0 3px;
+  border-radius: 2px;
 }
 
 /* The marginal cutoff's label, moved to the opposite end so it cannot collide
