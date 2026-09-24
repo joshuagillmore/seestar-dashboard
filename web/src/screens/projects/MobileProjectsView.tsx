@@ -76,7 +76,11 @@ export function MobileProjectsView({ projects, headline, qa, onOpenQa }: MobileP
               )}
 
               {verdicts && (
-                <QualityBar verdicts={verdicts} onOpen={() => onOpenQa(project.targetId)} />
+                <QualityBar
+                  verdicts={verdicts}
+                  onOpen={() => onOpenQa(project.targetId)}
+                  coverage={{ storeMinutes: project.storeMinutes, archiveMinutes: project.archiveMinutes }}
+                />
               )}
             </div>
           )

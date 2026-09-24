@@ -39,6 +39,13 @@ Tools are defined in `SeeStar-AI/src/seestar_mcp/server.py` (FastMCP,
 | `list_subs` | the subs captured for a target |
 | `get_site_profile` | site position, Bortle, horizon mask |
 
+**A View is not a live session (hardware, 2026-09-24).** A parked scope keeps
+its ended session's View in `get_view_state`, with `state: "cancel"`,
+`mode: "none"`, the last target and its final counts. Only a freshly booted
+scope returns `result: {}`. The scope is observing only when `View.state` is
+`"working"` and `View.mode` is not `"none"`, or when the server's top-level
+`observing` flag says so. See `isObserving` in `useLiveSession.ts`.
+
 **⚠️ NOT read-only — never call these from the UI on load:**
 `qa_session_report`, `goto_target`, `start_stack`, `stop_view`, `park`,
 `shutdown`, `run_autofocus`, `set_filter`, `set_dew_heater`, `set_project_goal`,

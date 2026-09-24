@@ -24,6 +24,7 @@ import {
   IDLE_DEVICE_CHECK_EVERY,
   POLL_INTERVAL_MS,
   useLiveSession,
+  type LastSession,
   type LiveSessionState,
 } from './useLiveSession'
 import styles from './LiveScreen.module.css'
@@ -57,6 +58,15 @@ function sidebarStatus(state: LiveSessionState): { tone: DotTone | null; meta: s
   if (phase === 'run-without-view') return { tone: 'marginal', meta: 'run, no view' }
   if (phase === 'unrecognised') return { tone: 'marginal', meta: 'unrecognised' }
   return { tone: null, meta: null }
+}
+
+/** "Last session ended: M1 · 1003 stacked · 0 dropped". A count the scope
+ * did not report is left out rather than shown as zero. */
+function lastSessionLine({ target, stacked, dropped }: LastSession): string {
+  const parts = [target]
+  if (stacked !== null) parts.push(`${stacked} stacked`)
+  if (dropped !== null) parts.push(`${dropped} dropped`)
+  return `Last session ended: ${parts.join(' · ')}`
 }
 
 /**
@@ -176,7 +186,12 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
       {!mobileActive && (
         <div className={styles.header}>
           <div className={styles.eyebrow}>Live session</div>
-          <h1 className={styles.heading}>Watch the current stack</h1>
+          {/* Only a session actually running has a current stack to watch.
+              Everywhere else this heading sat over a card saying there was
+              none, and on a parked scope it read as confirming a live one. */}
+          <h1 className={styles.heading}>
+            {state.phase === 'active' ? 'Watch the current stack' : 'Scope status'}
+          </h1>
         </div>
       )}
 
@@ -218,11 +233,22 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
             <div>
               <div className={styles.stateTitle}>Scope idle — not observing</div>
               <p className={styles.stateBody}>
+                {/* "No session in progress", not "no view session": a parked
+                    scope answers with its ended View, which is a view
+                    session, just not a running one. */}
                 {state.viewError === null
-                  ? 'The scope answered and reports no view session, so nothing is being observed right now.'
+                  ? 'The scope answered and reports no session in progress, so nothing is being observed right now.'
                   : `The bridge answered, but ${describeViewFailure(state.viewError)}, which on this scope means no active session rather than a fault.`}{' '}
                 This is the normal state for most of the day, and most of the night.
               </p>
+              {/* A parked scope keeps its ended session's View, final counts
+                  and all. Said as what finished, so it cannot read as a
+                  stack in progress. */}
+              {state.lastSession !== null && (
+                <p className={styles.stateBody} data-testid="live-idle-last-session">
+                  {lastSessionLine(state.lastSession)}
+                </p>
+              )}
             </div>
           </div>
           <SessionActivityCard activity={state.sessionActivity} sessionRunning={false} wide />
@@ -261,7 +287,7 @@ export function LiveScreen({ view, onNavigate, site, health }: LiveScreenProps) 
               <p className={styles.stateBody}>
                 get_run_state reports an active run{state.runTarget ? ` on ${state.runTarget}` : ''}, but{' '}
                 {state.viewError === null
-                  ? 'the scope reports no view session'
+                  ? 'the scope reports no session in progress'
                   : describeViewFailure(state.viewError)}{' '}
                 this poll. That is not shown as idle: the run may be between targets, or its view may
                 have stopped.

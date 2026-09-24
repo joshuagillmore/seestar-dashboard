@@ -183,7 +183,11 @@ export function ProjectCard({
             // Raised above the selection area, so its own button takes the
             // click and the card is not selected along with it.
             <div className={styles.raised}>
-              <QualityBar verdicts={verdicts} onOpen={onOpenQa} />
+              <QualityBar
+                verdicts={verdicts}
+                onOpen={onOpenQa}
+                coverage={{ storeMinutes: project.storeMinutes, archiveMinutes: project.archiveMinutes }}
+              />
             </div>
           )}
           <div className={styles.provenance}>{provenanceLabel(project)}</div>

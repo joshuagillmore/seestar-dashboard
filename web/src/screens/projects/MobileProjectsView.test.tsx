@@ -78,6 +78,35 @@ describe('MobileProjectsView', () => {
     expect(screen.queryByTestId('quality-bar')).not.toBeInTheDocument()
   })
 
+  it('says QA covers only the archive for a target with store time too', () => {
+    // M1 on the real install: 167.2 min store + 44.2 min archive, and QA
+    // has seen the archive's subs only.
+    const m1 = project({
+      targetId: 'M1',
+      sources: ['store', 'archive'],
+      storeMinutes: 167.2,
+      archiveMinutes: 44.2,
+      totalMinutes: 211.4,
+    })
+    const qaM1 = {
+      ...qa,
+      targets: [{ ...qa.targets[0], target_id: 'M1', verdicts: { pass: 60, marginal: 53, reject: 152, unknown: 0, total: 265 } }],
+    } as unknown as QaTargets
+    render(<MobileProjectsView projects={[m1]} headline="1 project" qa={qaM1} onOpenQa={vi.fn()} />)
+
+    expect(screen.getByText(/113 of 265 subs keepable/)).toBeInTheDocument()
+    expect(screen.getByTestId('qa-coverage-note')).toHaveTextContent("archive's 44.2 min only")
+  })
+
+  it('adds no coverage note for an archive-only target', () => {
+    render(
+      <MobileProjectsView projects={[project()]} headline="1 project" qa={qa} onOpenQa={vi.fn()} />,
+    )
+
+    expect(screen.getByTestId('quality-bar')).toBeInTheDocument()
+    expect(screen.queryByTestId('qa-coverage-note')).not.toBeInTheDocument()
+  })
+
   it('drops the thumbnail deliberately', () => {
     // 33 images at 90px is most of the payload, for decoration identifying a
     // target the name already names.

@@ -26,6 +26,7 @@ import {
   recordedGuardrails,
   recordedListProjects,
   recordedObservability,
+  recordedParkedViewState,
   recordedPlan,
   recordedProjectsCombined,
   recordedRunState,
@@ -209,6 +210,35 @@ describe('live-session schemas', () => {
     // The point is that it parses *and* reports no view — not that it merely
     // fails to throw.
     expect(parsed.view_state?.result?.View ?? null).toBeNull()
+  })
+
+  it('keeps the View\'s state and mode, which decide whether the scope is observing', () => {
+    // Recorded 2026-09-24 from a parked scope. Without `state` and `mode` in
+    // the schema they were stripped on parse, and the client could not tell
+    // an ended View from a working one.
+    const parked = ViewStateSchema.parse(recordedParkedViewState())
+    expect(parked.view_state?.result?.View?.state).toBe('cancel')
+    expect(parked.view_state?.result?.View?.mode).toBe('none')
+    expect(parked.view_state?.result?.View?.Stack?.stacked_frame).toBe(1003)
+    const working = ViewStateSchema.parse(recordedViewState())
+    expect(working.view_state?.result?.View?.state).toBe('working')
+    expect(working.view_state?.result?.View?.mode).toBe('star')
+  })
+
+  it('accepts seestar-mcp\'s optional top-level observing flag and stack summary, and does without them', () => {
+    // Both sit beside `view_state` in the tool payload. `stack` is null only
+    // for a fresh `result: {}`.
+    const withFields = ViewStateSchema.parse({
+      ...(recordedParkedViewState() as object),
+      observing: false,
+      stack: { target_name: 'M1', stacked: 1003, dropped: 0, state: 'cancel', mode: 'none', frame_errcode: 266 },
+    })
+    expect(withFields.observing).toBe(false)
+    expect(withFields.stack?.stacked).toBe(1003)
+    const without = ViewStateSchema.parse(recordedParkedViewState())
+    expect(without.observing).toBeUndefined()
+    expect(without.stack).toBeUndefined()
+    expect(ViewStateSchema.parse({ ok: true, view_state: { result: {} }, observing: false, stack: null }).stack).toBeNull()
   })
 
   it('parses get_status', () => {

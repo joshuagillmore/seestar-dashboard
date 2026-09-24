@@ -37,6 +37,12 @@ export const recordedProjectsCombined = () => loadFixture('projects_combined')
  * `_live_preview_absent`).
  */
 export const recordedViewState = () => loadFixture('get_view_state')
+/** A REAL recording, 2026-09-24: a parked, folded scope in daylight, hours
+ * after its M1 session ended. It does not answer `result: {}`. It keeps the
+ * ended session's View, with `state: "cancel"`, `mode: "none"`, the last
+ * target and its final 1003 stacked frames. Any View used to read as live
+ * here; see fixtures/README.md and useLiveSession's `isObserving`. */
+export const recordedParkedViewState = () => loadFixture('get_view_state.parked')
 export const recordedStatus = () => loadFixture('get_status')
 export const recordedGuardrails = () => loadFixture('check_night_guardrails')
 export const recordedTier1 = () => loadFixture('qa_tier1')

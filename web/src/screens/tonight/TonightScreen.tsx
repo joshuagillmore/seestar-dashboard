@@ -264,7 +264,16 @@ export function TonightScreen({ view, onNavigate, site, health }: TonightScreenP
                       <PlanCard
                         key={target.id}
                         target={target}
-                        progress={entry ? { totalMinutes: entry.total_minutes, goal: entry.goal } : null}
+                        progress={
+                          entry
+                            ? {
+                                totalMinutes: entry.total_minutes,
+                                storeMinutes: entry.store_minutes,
+                                archiveMinutes: entry.archive_minutes,
+                                goal: entry.goal,
+                              }
+                            : null
+                        }
                         onOpenQa={canReview(entry) ? () => openQa(target.id) : undefined}
                         reviewUnavailable={reviewUnavailable(progressLookup, entry)}
                         verdicts={verdictsById.get(target.id)}

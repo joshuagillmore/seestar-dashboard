@@ -58,6 +58,20 @@ site rather than hand-editing numbers, or the geometry will again point home.
 `get_view_state.json` and `qa_tier1.json` were captured together during one live
 session so their frame counts agree — both read 115 stacked, 0 dropped, and a
 re-recording that breaks that agreement has caught a real bug before.
+`get_view_state.parked.json` is a real recording from 2026-09-24: the sidecar's
+`/api/get_view_state` response, verbatim, from a parked and folded scope in
+daylight, hours after that night's M1 session ended. It matters because it
+contradicts what the Live screen assumed. A parked scope does not answer
+`result: {}` (that only happens on a freshly booted scope). It keeps the ended
+session's View, with `View.state` and `View.Stack.state` both `"cancel"`,
+`View.mode` `"none"`, and the last target, its 1003 stacked frames and
+`frame_errcode` 266 still attached. The dashboard read any View as a live
+session, so this showed a parked scope as M1 stacking, with a false
+`park_and_stop` guardrail. The rule since is that observing means
+`View.state == "working"` and `mode != "none"` (useLiveSession's
+`isObserving`). It was checked for site data when captured and has none:
+`target_ra_dec` is M1's catalogue position, not the observer's.
+
 `synthetic/` holds hand-built payloads for states that cannot be recorded on
 demand — a stale frame, an unreachable share, an absent stack — and is named
 `synthetic/` precisely so nobody mistakes them for recordings.
