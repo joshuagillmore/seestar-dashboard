@@ -38,12 +38,12 @@ IDLE_VIEW_STATE = {"ok": False, "error": "Error: Exceeded allotted wait time for
 #: (live_preview.STALE_AFTER_SECONDS). A 1970 frame is legitimately stale, so
 #: the old constants made the not-stale assertions test the opposite of their
 #: intent. Relative offsets keep the ordering these tests actually care about.
-_NOW = time.time()
-
-
+#: They are taken from the clock at call time, not at import: a stack only
+#: beats a newer sub within live_preview.STACK_FRESH_SECONDS (60 s), which a
+#: long test run can outlast.
 def _ago(seconds: float) -> float:
     """An mtime `seconds` in the past — recent enough to count as current."""
-    return _NOW - seconds
+    return time.time() - seconds
 
 
 def _touch(path, mtime=None):
@@ -169,8 +169,8 @@ def test_share_not_configured_reports_its_own_reason(tmp_path, monkeypatch):
 
 def test_prefers_stacked_thumbnail_over_sub_end_to_end_through_the_route(tmp_path, monkeypatch):
     share = tmp_path / "share"
-    _touch(share / "M27" / "Stacked_M27_10.0s_IRCUT_20260730-030000_thn.jpg", mtime=_ago(60))
-    _touch(share / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg", mtime=_ago(30))
+    _touch(share / "M27" / "Stacked_M27_10.0s_IRCUT_20260730-030000_thn.jpg", mtime=_ago(20))
+    _touch(share / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg", mtime=_ago(10))
     client = _client(tmp_path, share_dir=share, monkeypatch=monkeypatch)
 
     body = client.get("/api/live_preview").json()

@@ -45,6 +45,10 @@ class ShareEntry:
     #: not carry one (the portable path). Read it through entry_mtime().
     mtime: float | None
 
+    @property
+    def name(self) -> str:
+        return self.path.name
+
 
 def entry_mtime(entry: ShareEntry) -> float:
     """`entry`'s mtime: the listing's own when it had one, else one stat."""

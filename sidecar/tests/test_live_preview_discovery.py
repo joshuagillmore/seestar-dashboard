@@ -51,13 +51,14 @@ def test_empty_but_present_root_returns_none(share_root):
 
 def test_prefers_stacked_thumbnail_over_sub_thumbnail_when_BOTH_ARE_FRESH(share_root):
     """A stacked master is the better picture, so it wins — but only while it
-    is actually current. Fixtures must be recent: with the old epoch-relative
-    mtimes both frames were stale and this asserted the wrong branch.
+    is actually current: written within STACK_FRESH_SECONDS, one Live poll.
+    Fixtures must be recent: with the old epoch-relative mtimes both frames
+    were stale and this asserted the wrong branch.
     """
     now = time.time()
     _touch(
         share_root / "M27" / "Stacked_M27_10.0s_IRCUT_20260730-030000_thn.jpg",
-        mtime=now - 60,
+        mtime=now - 30,
     )
     _touch(
         share_root / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg",

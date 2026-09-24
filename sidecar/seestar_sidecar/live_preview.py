@@ -71,6 +71,7 @@ from pathlib import Path
 from seestar_sidecar import env as _env  # noqa: F401 — loads .env before the os.environ.get() below; see env.py
 from seestar_sidecar.archive import _SUB_DIR_SUFFIX, normalize_target_id
 from seestar_sidecar.share_io import run_share_io
+from seestar_sidecar.share_listing import entry_mtime, list_matching
 
 logger = logging.getLogger(__name__)
 
@@ -264,95 +265,106 @@ def _newest_by_filename(paths, pattern) -> "Path | None":
     return newest
 
 
-def _newest_stacked_thumbnail(root: Path, target: str | None = None) -> LiveFrame | None:
-    """The single most recently written `Stacked_..._thn.jpg` under `root`,
-    restricted to `target` when one is given (never a `<target>-sub/`
-    directory — those hold individual FITS/thumbnails, not stacks). `None` if
-    nothing matches.
+#: How recent a stacked master must be to be shown without listing the sub
+#: folder at all: one poll of the Live screen (web/src/screens/live/
+#: useLiveSession.ts POLL_INTERVAL_MS, 60 s). A stack written since the
+#: previous poll is at least as current as anything that poll could have
+#: shown, and it is built from the same session's subs, so it is the better
+#: picture. Anything older than this no longer wins by being a stack: the sub
+#: folder is listed and whichever frame is newer is shown, the stack winning
+#: a tie (it is built from that sub).
+#:
+#: This shortcut is what keeps the sub folder, which grows by a file every
+#: ~10 s, out of the scan whenever a fresh stack exists. The scope has only
+#: been seen writing its stacked master once, at session end (see
+#: discover_frame()), so in practice the sub folder is listed on every poll
+#: of a live session, and share_listing.list_matching() is what keeps that
+#: listing cheap.
+STACK_FRESH_SECONDS = 60.0
 
-    `target` is not optional in practice and the route always passes it: an
-    unscoped scan returns whatever is newest across the WHOLE share, which
-    during a live session is very often a different object from a previous
-    night. Caught against real hardware — the preview reported a week-old
-    M103 while the scope was slewing to NGC 7380.
+
+def _is_newer_than(frame: LiveFrame, seconds: float) -> bool:
+    age = (datetime.now(tz=timezone.utc) - frame.captured_at).total_seconds()
+    return age <= seconds
+
+
+def _target_folders(
+    root: Path, target: str | None
+) -> tuple[list[tuple[Path, str]], list[tuple[Path, str]]]:
+    """(stacked folders, sub folders) under `root`, each as (path, target
+    id), restricted to `target` when one is given.
+
+    ONE listing of the root. The listing says which entries are folders, so
+    nothing is stat-ed per entry: the old scan called `is_dir()` on every
+    root entry, twice (once per pass), which is two SMB round trips per
+    object ever imaged before it looked inside a single folder.
+
+    Raises OSError when the root cannot be listed (missing, or the share
+    unreachable). See discover_frame().
     """
-    newest: LiveFrame | None = None
-    newest_mtime = float("-inf")
-    for entry in sorted(root.iterdir()):
-        if not entry.is_dir() or _SUB_DIR_SUFFIX.search(entry.name):
+    stacked: list[tuple[Path, str]] = []
+    subs: list[tuple[Path, str]] = []
+    for entry in sorted(list_matching(root, "*"), key=lambda e: e.path.name):
+        if not entry.is_dir:
             continue
-        target_id = normalize_target_id(entry.name)
+        name = entry.path.name
+        suffix = _SUB_DIR_SUFFIX.search(name)
+        target_id = normalize_target_id(name[: suffix.start()] if suffix else name)
         if target is not None and target_id != target:
             continue
-        jpg = _newest_by_filename(entry.glob("Stacked_*_thn.jpg"), _STACKED_THUMBNAIL)
-        if jpg is None:
-            continue
-        mtime = jpg.stat().st_mtime
-        if mtime > newest_mtime:
-            newest_mtime = mtime
-            newest = LiveFrame(
-                path=jpg,
-                source="stacked",
-                target=target_id,
-                captured_at=datetime.fromtimestamp(mtime, tz=timezone.utc),
-            )
-    return newest
+        (subs if suffix else stacked).append((entry.path, target_id))
+    return stacked, subs
 
 
-def _newest_sub_thumbnail(root: Path, target: str | None = None) -> LiveFrame | None:
-    """The single most recently written `Light_..._thn.jpg` under `root`,
-    restricted to `target` when one is given. `None` if none exist yet.
-    See _newest_stacked_thumbnail() for why the scoping matters.
+def _newest_frame(
+    folders: list[tuple[Path, str]], pattern: str, name_rule: re.Pattern, source: str
+) -> LiveFrame | None:
+    """The newest file matching `name_rule` across `folders`, as a LiveFrame.
+
+    One pattern-filtered listing per folder (share_listing.list_matching():
+    the share filters by `pattern`, so a folder's other files never cross the
+    link), then the newest picked by the timestamp in its NAME (see
+    _newest_by_filename()), and its mtime taken from the listing itself, so
+    no file is stat-ed on Windows. Across folders (two directory names can
+    normalize to one target) the newest mtime wins.
     """
     newest: LiveFrame | None = None
-    newest_mtime = float("-inf")
-    for entry in sorted(root.iterdir()):
-        if not entry.is_dir():
+    for folder, target_id in folders:
+        pick = _newest_by_filename(
+            (e for e in list_matching(folder, pattern) if not e.is_dir), name_rule
+        )
+        if pick is None:
             continue
-        suffix_match = _SUB_DIR_SUFFIX.search(entry.name)
-        if not suffix_match:
-            continue
-        target_id = normalize_target_id(entry.name[: suffix_match.start()])
-        if target is not None and target_id != target:
-            continue
-        jpg = _newest_by_filename(entry.glob("Light_*_thn.jpg"), _SUB_THUMBNAIL)
-        if jpg is None:
-            continue
-        mtime = jpg.stat().st_mtime
-        if mtime > newest_mtime:
-            newest_mtime = mtime
-            newest = LiveFrame(
-                path=jpg,
-                source="sub",
-                target=target_id,
-                captured_at=datetime.fromtimestamp(mtime, tz=timezone.utc),
-            )
+        captured_at = datetime.fromtimestamp(entry_mtime(pick), tz=timezone.utc)
+        if newest is None or captured_at > newest.captured_at:
+            newest = LiveFrame(path=pick.path, source=source, target=target_id, captured_at=captured_at)
     return newest
 
 
 def discover_frame(root: Path, target: str | None = None) -> LiveFrame | None:
-    """A live stacked thumbnail for `target` if the share has one, else that
-    target's newest per-sub thumbnail, else `None`. With `target=None` the
-    newest per-sub thumbnail, else `None` — "reachable, nothing there yet"
-    (REASON_NO_FRAME at the route), not a failure. Raises OSError (a real
-    filesystem/SMB fault — e.g. a dropped share) rather than degrading it
-    itself; the caller (see discover_frame_within_timeout() below, and
-    routes.py) decides how that becomes ShareUnreachableError / a cached
-    fallback.
+    """The frame the preview should show for `target`: a stacked thumbnail
+    written within STACK_FRESH_SECONDS, else whichever of the newest stacked
+    thumbnail and the newest sub thumbnail is newer, else `None`. With
+    `target=None`, the same across every target on the share. `None` means
+    "reachable, nothing there yet" (REASON_NO_FRAME at the route), not a
+    failure.
 
-    A missing `root` (not `root.is_dir()`) is treated the same as OSError —
-    both mean "could not confirm what's on the share right now" from this
-    function's point of view, which is exactly what ShareUnreachableError
-    means at the route. Whether that specific case should instead read as
-    "not configured" is the ROUTE's call (it already knows whether
-    SEESTAR_LIVE_SHARE_DIR was set at all, and doesn't call this function
-    when it wasn't) — this module has no opinion on configuration, only on
-    what a given root directory currently holds.
+    What it costs over SMB, however long the night: one listing of the
+    root, one pattern-filtered listing of the target's stacked folder, and,
+    unless that found a fresh stack, one of its sub folder. Nothing is
+    stat-ed per entry (see _target_folders() and _newest_frame()).
+
+    Raises OSError (a real filesystem/SMB fault, e.g. a dropped share, or a
+    missing `root`) rather than degrading it itself; the caller (see
+    discover_frame_within_timeout() below, and routes.py) decides how that
+    becomes ShareUnreachableError / a cached fallback. Whether a missing
+    root should instead read as "not configured" is the ROUTE's call: it
+    knows whether SEESTAR_LIVE_SHARE_DIR was set at all, and doesn't call
+    this function when it wasn't.
     """
-    if not root.is_dir():
-        raise OSError(f"live preview share root not found: {root}")
-    stacked = _newest_stacked_thumbnail(root, target)
-    if stacked is not None and not is_frame_stale(stacked):
+    stacked_folders, sub_folders = _target_folders(root, target)
+    stacked = _newest_frame(stacked_folders, "Stacked_*_thn.jpg", _STACKED_THUMBNAIL, "stacked")
+    if stacked is not None and _is_newer_than(stacked, STACK_FRESH_SECONDS):
         return stacked
 
     # A stale stacked frame must not beat a fresh sub. Proven on hardware
@@ -363,17 +375,15 @@ def discover_frame(root: Path, target: str | None = None) -> LiveFrame | None:
     # `<target>-sub/` directory held thumbnails from seconds earlier. Blindly
     # preferring "stacked" served a picture from a previous night as the live
     # view.
-    sub = _newest_sub_thumbnail(root, target)
-    if sub is not None and not is_frame_stale(sub):
-        return sub
+    sub = _newest_frame(sub_folders, "Light_*_thn.jpg", _SUB_THUMBNAIL, "sub")
 
-    # Neither is current. Return the newer of the two so the caller still has
-    # something to show, correctly flagged stale rather than suppressed — an
-    # old frame with an honest timestamp beats an empty panel.
-    candidates = [f for f in (stacked, sub) if f is not None]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda f: f.captured_at)
+    # The newer of the two, so the caller still has something to show when
+    # neither is current, correctly flagged stale by the route rather than
+    # suppressed: an old frame with an honest timestamp beats an empty panel.
+    # A tie goes to the stack, which is built from that sub.
+    if stacked is None or (sub is not None and sub.captured_at > stacked.captured_at):
+        return sub
+    return stacked
 
 
 async def discover_frame_within_timeout(
