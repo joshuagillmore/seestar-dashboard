@@ -236,15 +236,18 @@ def is_observing(view_state_payload: dict) -> bool:
     """
     if not isinstance(view_state_payload, dict):
         return False
-    flag = view_state_payload.get("observing")
-    if isinstance(flag, bool):
-        return flag
     try:
         view = view_state_payload["view_state"]["result"]["View"]
     except (KeyError, TypeError):
         return False
+    # No View is never observing, whatever a flag says: same order as the
+    # web's isObserving, so a stray `observing: true` beside `result: {}`
+    # cannot send the preview scanning every target's folders unscoped.
     if not isinstance(view, dict):
         return False
+    flag = view_state_payload.get("observing")
+    if isinstance(flag, bool):
+        return flag
     return view.get("state") == "working" and view.get("mode") != "none"
 
 
@@ -440,6 +443,14 @@ def _newest_frame(
     return newest
 
 
+#: Characters no Windows file name can hold, plus control characters (NUL
+#: included). A View-named path containing any is not something to stat: on
+#: Windows the stat raises WinError 123, which read as the share dropping, and
+#: a NUL raises ValueError on every OS, which escaped as a 500. Such a name
+#: names nothing, and the caller scans.
+_UNSTATABLE = re.compile(r'[<>"|?*\x00-\x1f]')
+
+
 def _resolve_named_stack(root: Path, target: str, named: str) -> Path | None:
     """Where a View-named stacked thumbnail (see extract_named_stacks()) sits
     under `root`, or `None` unless it is a stacked thumbnail directly inside
@@ -452,6 +463,8 @@ def _resolve_named_stack(root: Path, target: str, named: str) -> Path | None:
     and is not a sub folder, and a `Stacked_..._thn.jpg` name. Anything else,
     `..` and drive letters included, names nothing, and the caller scans.
     """
+    if _UNSTATABLE.search(named):
+        return None
     parts = [part for part in re.split(r"[\\/]+", named) if part]
     if parts and parts[0].casefold() == root.name.casefold():
         parts = parts[1:]
@@ -460,7 +473,7 @@ def _resolve_named_stack(root: Path, target: str, named: str) -> Path | None:
     folder, name = parts
     if folder in (".", "..") or ":" in folder or _SUB_DIR_SUFFIX.search(folder):
         return None
-    if normalize_target_id(folder) != target or not _STACKED_THUMBNAIL.match(name):
+    if normalize_target_id(folder) != target or not _STACKED_THUMBNAIL.fullmatch(name):
         return None
     return root / folder / name
 
@@ -481,7 +494,9 @@ def _named_stack_frame(root: Path, target: str, named_stacks) -> LiveFrame | Non
             continue
         try:
             mtime = path.stat().st_mtime
-        except FileNotFoundError:
+        except (FileNotFoundError, ValueError):
+            # ValueError: a name the OS refuses outright. _UNSTATABLE should
+            # already have turned it away; this keeps it a scan, not a 500.
             continue
         return LiveFrame(
             path=path,

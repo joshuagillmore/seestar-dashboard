@@ -277,6 +277,13 @@ def test_a_payload_without_a_view_names_nothing(payload):
         (f"C:/{STACK_THUMB}", None),
         (f"Other/MyWorks/M1/{STACK_THUMB}", None),
         (STACK_THUMB, None),
+        # Names Windows cannot stat, or that only look valid to a `$` anchor:
+        # these must name nothing (the caller scans), never reach stat().
+        (f"MyWorks/M1/{STACK_THUMB}\n", None),
+        ("MyWorks/M1/Stacked_1003_M1<x>_10.0s_LP_20260924-110824_thn.jpg", None),
+        ("MyWorks/M1/Stacked_1003_M1?_10.0s_LP_20260924-110824_thn.jpg", None),
+        (f"MyWorks/M1 \x00/{STACK_THUMB}", None),
+        (f"MyWorks/M1\x01/{STACK_THUMB}", None),
     ],
 )
 def test_a_named_stack_resolves_only_to_the_targets_own_folder(named, expected):
@@ -301,6 +308,17 @@ def test_a_fresh_stack_named_by_the_view_is_served_without_listing_anything(
     assert (frame.source, frame.target, frame.path) == ("stacked", "M1", long_night / "M1" / STACK_THUMB)
     assert listings == []
     assert len(stats) == 1  # the one named file
+
+
+@pytest.mark.parametrize(
+    "named",
+    [f"MyWorks/M1 \x00/{STACK_THUMB}", "MyWorks/M1/Stacked_1003_M1|_10.0s_LP_20260924-110824_thn.jpg"],
+)
+def test_an_unstat_able_named_stack_falls_back_to_the_scan_instead_of_raising(long_night, named):
+    frame = live_preview.discover_frame(long_night, "M1", named_stacks=(named,))
+
+    assert frame is not None
+    assert frame.target == "M1"
 
 
 def test_an_older_named_stack_is_still_compared_with_the_subs(long_night, listings):

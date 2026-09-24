@@ -329,5 +329,19 @@ def test_a_top_level_observing_bool_decides_when_present(view, flag):
     assert live_preview.is_observing({**view, "observing": flag}) is flag
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"observing": True},
+        {"ok": True, "view_state": {"result": {}}, "observing": True},
+        {"ok": True, "view_state": {"result": {"View": None}}, "observing": True},
+    ],
+)
+def test_the_observing_flag_needs_a_view_to_vouch_for(payload):
+    # Same order as the web's isObserving: no View is never observing, so a
+    # stray flag cannot send the preview scanning every target's folders.
+    assert live_preview.is_observing(payload) is False
+
+
 def test_a_non_bool_observing_field_is_ignored():
     assert live_preview.is_observing({**_view(state="cancel", mode="none"), "observing": "yes"}) is False
