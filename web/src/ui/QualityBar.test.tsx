@@ -86,4 +86,36 @@ describe('QualityBar', () => {
     rerender(<QualityBar verdicts={counts()} />)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
+
+  describe('what the verdicts cover', () => {
+    // The dashboard's Tier-2 runs on archive paths only. M1 on the real
+    // install read "113 of 265 subs keepable" beside 3.5 h, but those 265
+    // subs are the archive's 44.2 min: the store's 167.2 min were never
+    // analysed, and 43% keepable read as applying to all 3.5 h.
+    const m1 = counts({ pass: 60, marginal: 53, reject: 152, unknown: 0, total: 265 })
+
+    it('says QA covers only the archive when the target has store time too', () => {
+      render(<QualityBar verdicts={m1} coverage={{ storeMinutes: 167.2, archiveMinutes: 44.2 }} />)
+
+      expect(screen.getByText(/113 of 265 subs keepable · 152 rejected/)).toBeInTheDocument()
+      expect(screen.getByTestId('qa-coverage-note')).toHaveTextContent(
+        "QA covers the archive's 44.2 min only; the store's 167.2 min is not analysed here",
+      )
+    })
+
+    it('keeps the note inside the report button, so it travels with the caption', () => {
+      render(<QualityBar verdicts={m1} coverage={{ storeMinutes: 167.2, archiveMinutes: 44.2 }} onOpen={vi.fn()} />)
+
+      expect(screen.getByRole('button')).toContainElement(screen.getByTestId('qa-coverage-note'))
+    })
+
+    it.each([
+      ['the archive is all the target has', { storeMinutes: 0, archiveMinutes: 44.2 }],
+      ['the caller says nothing about coverage', undefined],
+    ])('adds no note when %s', (_label, coverage) => {
+      render(<QualityBar verdicts={m1} coverage={coverage} />)
+
+      expect(screen.queryByTestId('qa-coverage-note')).not.toBeInTheDocument()
+    })
+  })
 })

@@ -458,6 +458,45 @@ describe('ProjectCard', () => {
     })
   })
 
+  describe('what the quality bar covers', () => {
+    // QA runs on the archive's subs only. M1: 3.5 h captured, 167.2 min of
+    // it in the store, which the dashboard has never analysed.
+    const m1Verdicts = { pass: 60, marginal: 53, reject: 152, unknown: 0, total: 265 }
+
+    it('says QA covers only the archive for a target with store time too', () => {
+      render(
+        <ProjectCard
+          project={merged({ sources: ['store', 'archive'], storeMinutes: 167.2, archiveMinutes: 44.2, totalMinutes: 211.4 })}
+          selected={false}
+          onSelect={vi.fn()}
+          verdicts={m1Verdicts}
+          onOpenQa={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByText('3.5 h')).toBeInTheDocument()
+      expect(screen.getByText(/113 of 265 subs keepable · 152 rejected/)).toBeInTheDocument()
+      const note = screen.getByTestId('qa-coverage-note')
+      expect(note).toHaveTextContent("archive's 44.2 min only")
+      expect(note).toHaveTextContent("store's 167.2 min is not analysed here")
+    })
+
+    it('adds no note for an archive-only target', () => {
+      render(
+        <ProjectCard
+          project={merged({ sources: ['archive'], store: null, storeMinutes: 0, archiveMinutes: 44.2, totalMinutes: 44.2 })}
+          selected={false}
+          onSelect={vi.fn()}
+          verdicts={m1Verdicts}
+          onOpenQa={vi.fn()}
+        />,
+      )
+
+      expect(screen.getByTestId('quality-bar')).toBeInTheDocument()
+      expect(screen.queryByTestId('qa-coverage-note')).not.toBeInTheDocument()
+    })
+  })
+
   it('reflects the selected prop via aria-pressed on the card, not the doubling toggle', () => {
     const { rerender } = render(<ProjectCard project={merged()} selected={false} onSelect={vi.fn()} />)
     expect(screen.getByTestId('project-card')).toHaveAttribute('aria-pressed', 'false')

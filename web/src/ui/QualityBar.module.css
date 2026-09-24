@@ -34,10 +34,15 @@
    colouring it as any of the others would hide that the vocabulary moved. */
 .unknown { background: var(--chart-rail-empty); }
 
-.caption {
+.caption,
+.note {
   font-family: var(--font-mono);
   font-weight: 400;
   font-size: 10px;
   line-height: 1.4;
   color: var(--text-dimmer);
 }
+
+/* What the verdicts do not cover. Same type as the caption, since it
+   qualifies it; brighter, so the qualification is not the part that fades. */
+.note { color: var(--text-secondary); }

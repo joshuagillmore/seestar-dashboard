@@ -21,6 +21,14 @@ const goal = (overrides: Partial<IntegrationGoal> = {}): IntegrationGoal => ({
   ...overrides,
 })
 
+/** Captured time that is all in the archive, which QA covers in full. */
+const archiveOnly = (totalMinutes: number, g: IntegrationGoal | null): PlanCardProgress => ({
+  totalMinutes,
+  storeMinutes: 0,
+  archiveMinutes: totalMinutes,
+  goal: g,
+})
+
 describe('PlanCard', () => {
   it('shows the id, name and score', () => {
     render(<PlanCard target={target} />)
@@ -106,7 +114,7 @@ describe('PlanCard', () => {
   })
 
   it('renders a progress row with the real hours captured and an empty rail when there is no numeric goal', () => {
-    const progress: PlanCardProgress = { totalMinutes: 89.1667, goal: null }
+    const progress: PlanCardProgress = archiveOnly(89.1667, null)
     render(<PlanCard target={target} progress={progress} />)
     expect(screen.getByText('TIME CAPTURED')).toBeInTheDocument()
     expect(screen.getByText('1.5 h')).toBeInTheDocument()
@@ -115,7 +123,7 @@ describe('PlanCard', () => {
   })
 
   it('renders a proportional fill and the suggested-hours label when a real goal exists', () => {
-    const progress: PlanCardProgress = { totalMinutes: 90, goal: goal({ suggested_hours: 3.0 }) } // 90/180=50%
+    const progress: PlanCardProgress = archiveOnly(90, goal({ suggested_hours: 3.0 })) // 90/180=50%
     render(<PlanCard target={target} progress={progress} />)
     expect(screen.getByText('1.5 h')).toBeInTheDocument()
     expect(screen.getByText('of 3.0 h suggested')).toBeInTheDocument()
@@ -124,7 +132,7 @@ describe('PlanCard', () => {
   })
 
   it('never renders the doubling control here — that is a Projects-screen-only concept', () => {
-    const progress: PlanCardProgress = { totalMinutes: 90, goal: goal({ suggested_hours: 3.0 }) }
+    const progress: PlanCardProgress = archiveOnly(90, goal({ suggested_hours: 3.0 }))
     render(<PlanCard target={target} progress={progress} />)
     expect(screen.queryByRole('button', { name: /Double/ })).not.toBeInTheDocument()
   })
@@ -189,19 +197,41 @@ describe('PlanCard', () => {
     it('shows how much of the captured time is keepable', () => {
       // The hours bar says "you have 3.3 h of a 1.2 h goal". It cannot say
       // that 30% of it is unusable. That is this bar's whole job.
-      render(<PlanCard target={target} progress={{ totalMinutes: 90, goal: goal() }} verdicts={counts} />)
+      render(<PlanCard target={target} progress={archiveOnly(90, goal())} verdicts={counts} />)
       expect(screen.getByTestId('quality-bar')).toBeInTheDocument()
     })
 
     it('renders NO bar for a target that was never analysed', () => {
       // Absent, not empty. An empty bar reads as "nothing passed", when the
       // truth is nobody measured.
-      render(<PlanCard target={target} progress={{ totalMinutes: 90, goal: goal() }} />)
+      render(<PlanCard target={target} progress={archiveOnly(90, goal())} />)
       expect(screen.queryByTestId('quality-bar')).not.toBeInTheDocument()
     })
 
+    it('says QA covers only the archive when the captured time includes store time', () => {
+      // QA runs on the archive's subs only. M1: 3.5 h captured, 167.2 min
+      // of it in the store, never analysed here.
+      const m1 = { pass: 60, marginal: 53, reject: 152, unknown: 0, total: 265 }
+      render(
+        <PlanCard
+          target={target}
+          progress={{ totalMinutes: 211.4, storeMinutes: 167.2, archiveMinutes: 44.2, goal: goal() }}
+          verdicts={m1}
+        />,
+      )
+
+      expect(screen.getByText('3.5 h')).toBeInTheDocument()
+      expect(screen.getByText(/113 of 265 subs keepable/)).toBeInTheDocument()
+      expect(screen.getByTestId('qa-coverage-note')).toHaveTextContent("store's 167.2 min is not analysed here")
+    })
+
+    it('adds no coverage note when all the captured time is in the archive', () => {
+      render(<PlanCard target={target} progress={archiveOnly(90, goal())} verdicts={counts} />)
+      expect(screen.queryByTestId('qa-coverage-note')).not.toBeInTheDocument()
+    })
+
     it('is not clickable here — Detail is the single route to the report', () => {
-      render(<PlanCard target={target} progress={{ totalMinutes: 90, goal: goal() }} verdicts={counts} />)
+      render(<PlanCard target={target} progress={archiveOnly(90, goal())} verdicts={counts} />)
       const bar = screen.getByTestId('quality-bar')
       expect(bar.closest('button')).toBeNull()
     })

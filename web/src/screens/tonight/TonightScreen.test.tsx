@@ -428,3 +428,36 @@ describe('Detail hands a target to Review & QA', () => {
     expect(detailFor('C14').title).not.toMatch(/No subs on disk for C14/)
   })
 })
+
+describe('the quality bar on a plan card', () => {
+  it('passes the store/archive split through, so the card can say QA covers the archive only', async () => {
+    // QA runs on the archive's subs only; a card showing the whole captured
+    // time beside the verdicts has to say so when some of it is in the store.
+    const [a] = plan.targets
+    stubApi({
+      '/api/projects_combined': {
+        ok: true,
+        count: 1,
+        totals: { store_minutes: 167.2, archive_minutes: 44.2, total_minutes: 211.4 },
+        projects: [
+          { target_id: a.id, target_name: a.id, store_minutes: 167.2, archive_minutes: 44.2,
+            sources: ['store', 'archive'], nights: [], total_minutes: 211.4, goal: null },
+        ],
+      },
+      '/api/qa_targets': {
+        ok: true,
+        archive_status: { configured: true, path: null, exists: true, target_count: 1 },
+        targets: [
+          { target_id: a.id, display_name: a.id, sub_count: 265, status: 'complete', analysed_at: null,
+            verdicts: { pass: 60, marginal: 53, reject: 152, unknown: 0, total: 265 } },
+        ],
+      },
+    })
+    stubMatchMedia(false)
+
+    render(<TonightScreen view="tonight" onNavigate={vi.fn()} site={site} health={notReplaying} />)
+
+    await waitFor(() => expect(screen.getByTestId('qa-coverage-note')).toBeInTheDocument())
+    expect(screen.getByTestId('qa-coverage-note')).toHaveTextContent("store's 167.2 min is not analysed here")
+  })
+})
