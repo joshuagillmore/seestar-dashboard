@@ -66,14 +66,17 @@ nobody has to rediscover it independently the next time a share gets large.
 """
 import asyncio
 import re
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 from seestar_sidecar.archive import _SUB_DIR_SUFFIX, normalize_target_id
 from seestar_sidecar.share_io import run_share_io
+from seestar_sidecar.share_listing import entry_mtime, list_matching
 from seestar_sidecar.live_preview import (
     SHARE_SCAN_TIMEOUT_SECONDS,
+    ShareScanSlowError,
     ShareUnreachableError,
     _newest_by_filename,
 )
@@ -90,9 +93,10 @@ from seestar_sidecar.live_preview import (
 #: REASON_IDLE), and routes.py reuses those directly rather than duplicating
 #: them here: they mean the same thing regardless of which panel is asking
 #: (SEESTAR_LIVE_SHARE_DIR never set; the MCP call itself failing; the scope
-#: answering "idle"). REASON_SHARE_UNREACHABLE is reused the same way, for
-#: the same failure — a directory scan of this same share raising or running
-#: past SHARE_SCAN_TIMEOUT_SECONDS. This one token is new because none of
+#: answering "idle"). REASON_SHARE_UNREACHABLE and REASON_SCAN_SLOW are
+#: reused the same way, for the same failures on this same share: it did not
+#: answer, or it answered and the scan ran past SHARE_SCAN_TIMEOUT_SECONDS.
+#: This one token is new because none of
 #: those describe "reached the share fine, scoped correctly, and there is
 #: genuinely nothing there yet" for a completed stack specifically.
 REASON_NO_STACK = "no_stack"
@@ -129,7 +133,9 @@ class LastStack:
     captured_at: datetime  # aware UTC, captured once at discovery time
 
 
-def discover_last_stack(root: Path, target: str) -> LastStack | None:
+def discover_last_stack(
+    root: Path, target: str, answered: threading.Event | None = None
+) -> LastStack | None:
     """The `target`'s most recently completed stack under `root`, or `None`
     if nothing matches — either no directory on the share normalizes to
     `target` at all, or one does but holds no `Stacked_*.jpg`.
@@ -140,27 +146,36 @@ def discover_last_stack(root: Path, target: str) -> LastStack | None:
     target id, and picking the overall newest across all of them is strictly
     more correct than assuming there is only ever one.
 
+    One listing of the root and one pattern-filtered listing per matching
+    folder (share_listing.list_matching(), as live_preview.discover_frame()
+    does): the listing says which entries are folders and carries the
+    winner's mtime, so nothing is stat-ed per entry. `answered` is set once
+    the root has been listed; see live_preview.discover_frame().
+
     Raises OSError for a missing/unreachable `root` — same discipline as
     live_preview.discover_frame(); the caller
     (discover_last_stack_within_timeout(), and routes.py above it) decides
     how that becomes ShareUnreachableError / REASON_SHARE_UNREACHABLE.
     """
-    if not root.is_dir():
-        raise OSError(f"last stack share root not found: {root}")
+    root_entries = list_matching(root, "*")
+    if answered is not None:
+        answered.set()
     newest: LastStack | None = None
-    for entry in sorted(root.iterdir()):
-        if not entry.is_dir() or _SUB_DIR_SUFFIX.search(entry.name):
+    for entry in sorted(root_entries, key=lambda e: e.name):
+        if not entry.is_dir or _SUB_DIR_SUFFIX.search(entry.name):
             continue  # the "-sub"/"_sub" sibling holds individual frames, not stacks
         if normalize_target_id(entry.name) != target:
             continue
-        jpg = _newest_by_filename(entry.glob("Stacked_*.jpg"), _STACKED_FULL)
+        jpg = _newest_by_filename(
+            (e for e in list_matching(entry.path, "Stacked_*.jpg") if not e.is_dir), _STACKED_FULL
+        )
         if jpg is None:
             continue
         match = _STACKED_FULL.match(jpg.name)
-        mtime = jpg.stat().st_mtime
+        mtime = entry_mtime(jpg)
         if newest is None or mtime > newest.captured_at.timestamp():
             newest = LastStack(
-                path=jpg,
+                path=jpg.path,
                 target=target,
                 frame_count=int(match["frame_count"]),
                 captured_at=datetime.fromtimestamp(mtime, tz=timezone.utc),
@@ -188,15 +203,19 @@ async def discover_last_stack_within_timeout(
     the client's own next request rather than this function hammering a share
     that just showed signs of being starved.
 
-    Raises ShareUnreachableError uniformly for a real OSError and for a
-    timeout, reusing live_preview.py's exception class directly rather than a
-    parallel one for the same condition over the same share.
+    Raises ShareUnreachableError for a real OSError and for a timeout before
+    the root was listed, and ShareScanSlowError for a timeout after it was,
+    reusing live_preview.py's exception classes directly rather than
+    parallel ones for the same conditions over the same share.
     """
+    answered = threading.Event()
     try:
         return await asyncio.wait_for(
-            run_share_io(discover_last_stack, root, target), timeout=timeout_s
+            run_share_io(discover_last_stack, root, target, answered), timeout=timeout_s
         )
     except asyncio.TimeoutError as exc:
+        if answered.is_set():
+            raise ShareScanSlowError(f"scan of {root} answered but exceeded {timeout_s}s") from exc
         raise ShareUnreachableError(f"scan of {root} exceeded {timeout_s}s") from exc
     except OSError as exc:
         raise ShareUnreachableError(str(exc)) from exc

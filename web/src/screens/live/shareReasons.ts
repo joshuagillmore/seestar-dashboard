@@ -3,8 +3,9 @@
  * routes that read the scope's share:
  *
  * - `/api/live_preview` (live_preview.py's REASON_* constants): `idle`,
- *   `bridge_down`, `not_configured`, `share_unreachable`, `no_frame`
- * - `/api/last_stack` (last_stack.py reuses the first four, adds `no_stack`)
+ *   `bridge_down`, `not_configured`, `share_unreachable`, `scan_slow`,
+ *   `no_frame`
+ * - `/api/last_stack` (last_stack.py reuses the first five, adds `no_stack`)
  *
  * Both modules say so explicitly: "the wording a user reads is the UI's
  * job, never this module's." PreviewCard and MobileLiveView used to render
@@ -17,6 +18,11 @@
  * again): one is "nothing written yet, give it a moment", the other "go check
  * the network". An unrecognised future token falls back to itself rather
  * than disappearing — loud, not blank.
+ *
+ * `scan_slow` is not `share_unreachable` either: the share answered, and
+ * only the search for the newest file ran past the sidecar's budget. After a
+ * 1003-sub night the real share listed its root in 0.08 s while that search
+ * took seconds, and the panel said "unreachable".
  */
 const SHARE_REASON_LABELS: Record<string, string> = {
   no_stack: 'No completed stack yet for this target.',
@@ -25,6 +31,7 @@ const SHARE_REASON_LABELS: Record<string, string> = {
   bridge_down: 'Bridge unreachable — the same connection the rest of this screen depends on.',
   not_configured: 'Live share not configured on the sidecar.',
   share_unreachable: 'Live share unreachable right now.',
+  scan_slow: 'Live share answered, but searching it took too long.',
 }
 
 export function shareReasonLabel(reason: string): string {

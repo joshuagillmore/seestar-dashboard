@@ -48,14 +48,18 @@ from seestar_sidecar.live_preview import (
     REASON_IDLE,
     REASON_NO_FRAME,
     REASON_NOT_CONFIGURED,
+    REASON_SCAN_SLOW,
     REASON_SHARE_UNREACHABLE,
     SHARE_SCAN_TIMEOUT_SECONDS,
     LiveFrame,
-    ShareUnreachableError,
+    ShareScanError,
+    ShareScanSlowError,
     discover_frame_within_timeout,
+    extract_named_stacks,
     extract_stack_count,
     extract_target_name,
     is_frame_stale,
+    is_observing,
 )
 from seestar_sidecar.mcp_proxy import LONG_RUNNING_TOOLS, ProxyTransportError, effective_client_id
 from seestar_sidecar.host_check import LOOPBACK_HOSTS, normalise_host
@@ -700,12 +704,16 @@ async def live_preview(request: Request) -> JSONResponse:
     `{"ok": false, ...}` response (the scope answering "idle") are reported as
     distinct reasons — REASON_BRIDGE_DOWN vs. REASON_IDLE — per CLAUDE.md's
     "bridge-down and scope-idle are first-class UI states", not the same one.
+
+    An `ok` answer is not enough on its own: a parked scope keeps the ended
+    session's View, and that session's frames are not live. So the View
+    must pass live_preview.is_observing() too, or this is REASON_IDLE.
     """
     try:
         view = await _fetch(request, "get_view_state", {})
     except (ProxyTransportError, FileNotFoundError):
         return JSONResponse(_live_preview_absent(REASON_BRIDGE_DOWN))
-    if not view.get("ok"):
+    if not view.get("ok") or not is_observing(view):
         return JSONResponse(_live_preview_absent(REASON_IDLE))
 
     stack_count = extract_stack_count(view)
@@ -732,11 +740,16 @@ async def live_preview(request: Request) -> JSONResponse:
         request.app.state.live_preview_cache = None
         cache = None
     try:
-        frame = await discover_frame_within_timeout(share_dir, target=active_target)
-    except ShareUnreachableError:
+        frame = await discover_frame_within_timeout(
+            share_dir, target=active_target, named_stacks=extract_named_stacks(view)
+        )
+    except ShareScanError as exc:
         if cache is not None:
             return JSONResponse(_live_preview_frame(cache, stack_count, stale=True))
-        return JSONResponse(_live_preview_absent(REASON_SHARE_UNREACHABLE))
+        # Slow is not unreachable: the share answered and only the search
+        # ran long. See live_preview.REASON_SCAN_SLOW.
+        reason = REASON_SCAN_SLOW if isinstance(exc, ShareScanSlowError) else REASON_SHARE_UNREACHABLE
+        return JSONResponse(_live_preview_absent(reason))
 
     if frame is None:
         if cache is not None:
@@ -834,12 +847,16 @@ def _last_stack_payload(stack: LastStack) -> dict:
 async def last_stack(request: Request) -> JSONResponse:
     """Metadata only — no image bytes; see last_stack.py's module docstring.
 
-    Never touches SEESTAR_LIVE_SHARE_DIR unless get_view_state confirms the
-    scope is observing AND names a target, matching live_preview's "a
-    timeout means not observing; there is nothing to fetch" rule. `reason`
+    Never touches SEESTAR_LIVE_SHARE_DIR unless get_view_state answers (`ok`)
+    AND names a target, matching live_preview's "a timeout means not
+    observing; there is nothing to fetch" rule. Unlike live_preview it does
+    NOT require live_preview.is_observing(): a parked scope keeps the ended
+    session's View, which names the target just finished, and that
+    session's completed stack is exactly what this panel is for. `reason`
     values: REASON_BRIDGE_DOWN / REASON_IDLE / REASON_NOT_CONFIGURED /
-    REASON_SHARE_UNREACHABLE are the exact tokens live_preview.py defines for
-    the same underlying conditions, reused rather than duplicated;
+    REASON_SHARE_UNREACHABLE / REASON_SCAN_SLOW are the exact tokens
+    live_preview.py defines for the same underlying conditions, reused
+    rather than duplicated;
     REASON_NO_STACK is new to this route (see last_stack.py).
 
     `app.state.last_stack_cache` is always overwritten to match THIS call's
@@ -877,9 +894,10 @@ async def last_stack(request: Request) -> JSONResponse:
 
     try:
         stack = await discover_last_stack_within_timeout(share_dir, active_target)
-    except ShareUnreachableError:
+    except ShareScanError as exc:
         request.app.state.last_stack_cache = None
-        return JSONResponse(_last_stack_absent(REASON_SHARE_UNREACHABLE))
+        reason = REASON_SCAN_SLOW if isinstance(exc, ShareScanSlowError) else REASON_SHARE_UNREACHABLE
+        return JSONResponse(_last_stack_absent(reason))
 
     if stack is None:
         request.app.state.last_stack_cache = None

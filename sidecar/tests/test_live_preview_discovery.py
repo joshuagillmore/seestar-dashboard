@@ -9,13 +9,17 @@ scan_stacked_images() preference. See live_preview.py's module docstring for
 why that's deliberate, not a bug: 476 KB (measured) on a polling path would
 be exactly the offload this feature was built to avoid.
 """
+import json
 from datetime import timezone
+from pathlib import Path
 
 import time
 
 import pytest
 
 from seestar_sidecar import live_preview
+
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 
 
 @pytest.fixture
@@ -51,13 +55,14 @@ def test_empty_but_present_root_returns_none(share_root):
 
 def test_prefers_stacked_thumbnail_over_sub_thumbnail_when_BOTH_ARE_FRESH(share_root):
     """A stacked master is the better picture, so it wins — but only while it
-    is actually current. Fixtures must be recent: with the old epoch-relative
-    mtimes both frames were stale and this asserted the wrong branch.
+    is actually current: written within STACK_FRESH_SECONDS, one Live poll.
+    Fixtures must be recent: with the old epoch-relative mtimes both frames
+    were stale and this asserted the wrong branch.
     """
     now = time.time()
     _touch(
         share_root / "M27" / "Stacked_M27_10.0s_IRCUT_20260730-030000_thn.jpg",
-        mtime=now - 60,
+        mtime=now - 30,
     )
     _touch(
         share_root / "M27-sub" / "Light_M27_10.0s_IRCUT_20260730-030500_thn.jpg",
@@ -245,7 +250,7 @@ async def test_discover_frame_within_timeout_raises_share_unreachable_on_real_ti
 
     share_root.mkdir()
 
-    def hangs_forever(root, target=None):
+    def hangs_forever(root, target=None, named_stacks=(), answered=None):
         # A `to_thread` work item can't truly be cancelled once started — it
         # keeps the underlying thread busy for its full duration regardless
         # of asyncio.wait_for's timeout. Long enough to comfortably outlast
@@ -271,3 +276,58 @@ async def test_discover_frame_within_timeout_returns_the_frame_on_success(share_
     frame = await live_preview.discover_frame_within_timeout(share_root)
     assert frame is not None
     assert frame.source == "sub"
+
+
+# --- is_observing(): the View-state rule --------------------------------------
+#
+# Hardware, 2026-09-24: a parked scope keeps the ended session's View
+# (`state: "cancel"`, `mode: "none"`), so "a View is present" is not
+# "observing". Rule, per the seestar-mcp session: observing <=> View.state ==
+# "working" and View.mode != "none", or the payload's own top-level
+# `observing` bool when it has one.
+
+
+def _view(**fields):
+    return {"ok": True, "view_state": {"result": {"View": {"target_name": "M1", **fields}}}}
+
+
+def test_the_july_working_fixture_is_observing():
+    working = json.loads((FIXTURES / "get_view_state.json").read_text(encoding="utf-8"))
+
+    assert live_preview.is_observing(working) is True
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        _view(state="cancel", mode="none"),  # ended or stopped; persists after a park
+        _view(state="working", mode="none"),
+        _view(state="complete", mode="star"),
+        _view(state="fail", mode="star"),
+        _view(mode="star"),  # no state at all
+        {"ok": True, "view_state": {"result": {}}},  # a freshly booted scope
+        {"ok": True, "view_state": {"result": {"View": None}}},
+        {"ok": False},
+        {},
+        None,
+    ],
+)
+def test_anything_but_a_working_view_is_not_observing(payload):
+    assert live_preview.is_observing(payload) is False
+
+
+def test_a_working_view_in_any_mode_but_none_is_observing():
+    assert live_preview.is_observing(_view(state="working", mode="star")) is True
+    assert live_preview.is_observing(_view(state="working")) is True
+
+
+@pytest.mark.parametrize(
+    ("view", "flag"),
+    [(_view(state="cancel", mode="none"), True), (_view(state="working", mode="star"), False)],
+)
+def test_a_top_level_observing_bool_decides_when_present(view, flag):
+    assert live_preview.is_observing({**view, "observing": flag}) is flag
+
+
+def test_a_non_bool_observing_field_is_ignored():
+    assert live_preview.is_observing({**_view(state="cancel", mode="none"), "observing": "yes"}) is False

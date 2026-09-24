@@ -21,7 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from seestar_sidecar import main, routes
-from seestar_sidecar.last_stack import ShareUnreachableError
+from seestar_sidecar.last_stack import ShareScanSlowError, ShareUnreachableError
 from seestar_sidecar.main import create_app
 from seestar_sidecar.mcp_proxy import ProxyTransportError
 
@@ -196,6 +196,22 @@ def test_a_single_failed_attempt_does_not_retry(tmp_path, monkeypatch):
     assert len(calls) == 1
 
 
+def test_a_slow_scan_reports_scan_slow_not_share_unreachable(tmp_path, monkeypatch):
+    """The share answered and only the search ran long, which is not what
+    `share_unreachable` tells the user. Same token as the live preview's."""
+
+    async def slow(root, target, timeout_s=None):
+        raise ShareScanSlowError("the share answered, then the scan ran long")
+
+    client = _client(tmp_path, share_dir=tmp_path / "share", monkeypatch=monkeypatch)
+    monkeypatch.setattr(routes, "discover_last_stack_within_timeout", slow)
+
+    body = client.get("/api/last_stack").json()
+
+    assert (body["target"], body["reason"]) == (None, "scan_slow")
+    assert client.get("/api/last_stack/image").status_code == 404
+
+
 # --- reachable, but nothing for this target yet -----------------------------
 
 
@@ -240,6 +256,36 @@ def test_finds_the_stack_for_the_active_target_end_to_end(tmp_path, monkeypatch)
     assert body["reason"] is None
     assert body["captured_at"] is not None
     assert body["url"] == "/api/last_stack/image"
+
+
+def test_a_parked_scope_still_gets_the_stack_its_ended_session_left(tmp_path, monkeypatch):
+    """Unlike the live preview, this panel does not need a session running:
+    the View a parked scope keeps names the target it just finished, and its
+    completed stack is exactly what this panel shows. Worked on hardware on
+    2026-09-24; kept working when /api/live_preview started treating that
+    same View as not observing."""
+    parked_m1 = {
+        "ok": True,
+        "view_state": {
+            "result": {
+                "View": {
+                    "state": "cancel",
+                    "mode": "none",
+                    "target_name": "M1",
+                    "Stack": {"state": "cancel", "stacked_frame": 1003},
+                }
+            }
+        },
+    }
+    share = tmp_path / "MyWorks"
+    _touch(share / "M1" / "Stacked_1003_M1_10.0s_LP_20260924-110824.jpg", mtime=_ago(3600))
+    _touch(share / "M1_sub" / "Light_M1_10.0s_LP_20260924-110710.fit", mtime=_ago(3700))
+    client = _client(tmp_path, share_dir=share, view_state=parked_m1, monkeypatch=monkeypatch)
+
+    body = client.get("/api/last_stack").json()
+
+    assert (body["target"], body["frame_count"], body["reason"]) == ("M1", 1003, None)
+    assert client.get("/api/last_stack/image").status_code == 200
 
 
 def test_returns_the_newest_of_several_stacks_end_to_end(tmp_path, monkeypatch):
