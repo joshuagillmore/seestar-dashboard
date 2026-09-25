@@ -32,7 +32,7 @@ def sub_folder(tmp_path):
     """A sub folder as the scope writes it: a .fit, a .jpg and a _thn.jpg per sub."""
     folder = tmp_path / "M1_sub"
     for i in range(50):
-        stem = f"Light_M1_10.0s_LP_20260924-01{i // 60:02d}{i % 60:02d}"
+        stem = f"Light_M1_10.0s_LP_20260924-07{i // 60:02d}{i % 60:02d}"
         for suffix in (".fit", ".jpg", "_thn.jpg"):
             _touch(folder / f"{stem}{suffix}", mtime=1_800_000_000 + i)
     return folder

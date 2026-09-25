@@ -23,7 +23,7 @@ import pytest
 from seestar_sidecar import live_preview
 
 SUBS = 2000
-#: The newest sub by name: 2,000 subs 10 s apart from 00:00:00.
+#: The newest sub by name: 2,000 subs 10 s apart from 07:00:00.
 NEWEST_SUB = "Light_M1_10.0s_LP_20260924-123310_thn.jpg"
 STACK_THUMB = "Stacked_1003_M1_10.0s_LP_20260924-110824_thn.jpg"
 
